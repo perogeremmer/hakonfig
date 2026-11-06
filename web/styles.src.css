@@ -2,6 +2,7 @@
 
 @source "./index.html";
 @source "./main.js";
+@source "./diff.js";
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;

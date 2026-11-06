@@ -10,21 +10,7 @@ use crate::commands;
 use crate::engine::adapters;
 use crate::engine::doc::Docs;
 use crate::engine::model::{EditOp, KeyMode, ModelDraft, ProviderDraft};
-
-/// `REKONFIG_ROOT` bersifat process-global, jadi test yang memakainya harus
-/// berjalan bergantian lewat mutex ini.
-static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-fn sandbox(name: &str) -> (std::sync::MutexGuard<'static, ()>, PathBuf) {
-    let guard = ENV_LOCK
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let dir = std::env::temp_dir().join(format!("rekonfig-test-{}-{}", std::process::id(), name));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).unwrap();
-    std::env::set_var("REKONFIG_ROOT", &dir);
-    (guard, dir)
-}
+use crate::engine::testutil::sandbox;
 
 fn write(path: &Path, contents: &str) {
     fs::create_dir_all(path.parent().unwrap()).unwrap();

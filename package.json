@@ -6,11 +6,15 @@
   "scripts": {
     "css": "tailwindcss -i ./web/styles.src.css -o ./web/styles.css --minify",
     "css:watch": "tailwindcss -i ./web/styles.src.css -o ./web/styles.css --watch",
-    "dev": "bun run css && cargo tauri dev",
-    "build": "bun run css && cargo tauri build"
+    "dev": "bun run css && tauri dev",
+    "build": "bun run css && tauri build",
+    "test": "bun run test:rust && bun run test:js",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:js": "node --test web/diff.test.js"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4",
+    "@tauri-apps/cli": "^2",
     "tailwindcss": "^4"
   }
 }

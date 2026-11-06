@@ -39,3 +39,54 @@ pub fn atomic_write(path: &Path, contents: &str, sensitive: bool) -> Result<()> 
 pub fn read_to_string(path: &Path) -> Result<String> {
     std::fs::read_to_string(path).with_context(|| format!("gagal membaca {}", path.display()))
 }
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use crate::engine::testutil::temp_dir;
+
+    #[test]
+    fn menulis_dan_membuat_direktori_induk() {
+        let dir = temp_dir("write-basic");
+        let path = dir.join("a/b/c.json");
+        atomic_write(&path, "{\"x\":1}", false).unwrap();
+        assert_eq!(read_to_string(&path).unwrap(), "{\"x\":1}");
+    }
+
+    #[test]
+    fn menimpa_file_lama_dan_tidak_meninggalkan_file_sementara() {
+        let dir = temp_dir("write-overwrite");
+        let path = dir.join("config.json");
+        atomic_write(&path, "lama", false).unwrap();
+        atomic_write(&path, "baru", false).unwrap();
+        assert_eq!(read_to_string(&path).unwrap(), "baru");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn permission_ketat_untuk_file_sensitif() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = temp_dir("write-perms");
+
+        let pub_path = dir.join("models.json");
+        atomic_write(&pub_path, "{}", false).unwrap();
+        assert_eq!(
+            std::fs::metadata(&pub_path).unwrap().permissions().mode() & 0o777,
+            0o644
+        );
+
+        let secret = dir.join("auth.json");
+        atomic_write(&secret, "{}", true).unwrap();
+        assert_eq!(
+            std::fs::metadata(&secret).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+    }
+
+    #[test]
+    fn membaca_file_yang_tidak_ada_mengembalikan_error() {
+        let dir = temp_dir("write-missing");
+        assert!(read_to_string(&dir.join("nope")).is_err());
+    }
+}

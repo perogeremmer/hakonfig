@@ -491,6 +491,12 @@ pub fn mask_key(key: &str) -> String {
     }
 }
 
+/// Validasi ID provider.
+///
+/// Sengaja **permisif terhadap huruf besar**: config yang sudah ada di mesin
+/// pengguna bisa saja punya ID seperti `Groq`, dan menolaknya akan membuat
+/// provider tersebut tidak bisa diubah sama sekali. Huruf kecil untuk provider
+/// *baru* ditegakkan di UI (`^[a-z0-9][a-z0-9._-]*$`).
 pub fn is_slug(value: &str) -> bool {
     !value.is_empty()
         && value
@@ -515,4 +521,288 @@ pub fn env_name_from(id: &str) -> String {
         })
         .collect();
     format!("{}_API_KEY", upper.trim_matches('_'))
+}
+
+// ============================================================================
+// Unit test untuk fungsi murni di modul ini.
+// ============================================================================
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use crate::engine::testutil::temp_dir;
+
+    fn spec(path: PathBuf, format: Format) -> FileSpec {
+        FileSpec {
+            role: "config",
+            path,
+            format,
+            sensitive: false,
+        }
+    }
+
+    // ------------------------------------------------------------- parsing
+
+    #[test]
+    fn parse_json_like_menerima_komentar_dan_trailing_comma() {
+        let text = r#"{
+            // komentar baris
+            /* komentar blok */
+            "a": 1,
+            "b": [1, 2, 3,],
+        }"#;
+        let value = parse_json_like(text).unwrap();
+        assert_eq!(value["a"], 1);
+        assert_eq!(value["b"][2], 3);
+    }
+
+    #[test]
+    fn parse_json_like_menangani_kosong_dan_rusak() {
+        assert!(parse_json_like("").unwrap().is_object());
+        assert!(parse_json_like("   \n\t ").unwrap().is_object());
+        assert!(parse_json_like("{ ini bukan json }").is_err());
+    }
+
+    #[test]
+    fn parse_yaml_menangani_kosong_null_dan_isi() {
+        assert!(parse_yaml("").unwrap().is_object());
+        assert!(parse_yaml("null").unwrap().is_object());
+        assert!(parse_yaml("~\n").unwrap().is_object());
+        let value = parse_yaml("providers:\n  a:\n    baseUrl: https://x/v1\n").unwrap();
+        assert_eq!(value["providers"]["a"]["baseUrl"], "https://x/v1");
+        assert!(parse_yaml("a: [1, 2").is_err());
+    }
+
+    // -------------------------------------------------- deteksi komentar
+
+    #[test]
+    fn deteksi_komentar_json() {
+        assert!(has_json_comments("{ // x\n }"));
+        assert!(has_json_comments("{ /* x */ }"));
+        assert!(!has_json_comments(r#"{"url": "https://api.example.com/v1"}"#));
+        assert!(!has_json_comments(r#"{"a": "teks // bukan komentar"}"#));
+        assert!(!has_json_comments(r#"{"a": 1}"#));
+    }
+
+    #[test]
+    fn deteksi_komentar_yaml() {
+        assert!(has_yaml_comments("# komentar\n"));
+        assert!(has_yaml_comments("  # komentar menjorok\n"));
+        assert!(has_yaml_comments("color: #fff\n"));
+        assert!(!has_yaml_comments("color: \"#fff\"\n"));
+        assert!(!has_yaml_comments("url: https://x/v1#anchor\n"));
+        assert!(!has_yaml_comments("key: value\n"));
+    }
+
+    // ------------------------------------------------------------ masking
+
+    #[test]
+    fn mask_key_tidak_pernah_membocorkan_utuh() {
+        assert_eq!(mask_key("$GROQ_API_KEY"), "$GROQ_API_KEY");
+        assert_eq!(mask_key("${GROQ_API_KEY}"), "${GROQ_API_KEY}");
+        assert_eq!(mask_key("sk-abcdefghijklmnop"), "•••• mnop");
+        assert_eq!(mask_key("pendek"), "••••");
+        assert_eq!(mask_key(""), "••••");
+        assert!(!mask_key("sk-abcdefghijklmnop").contains("sk-abc"));
+    }
+
+    #[test]
+    fn slug_validation() {
+        for ok in ["groq", "opencode-go", "a.b_c", "x1", "1a", "Groq"] {
+            assert!(is_slug(ok), "{ok} seharusnya valid");
+        }
+        for bad in ["", "-groq", ".groq", "groq ok", "groq/ok", "é", "groq#1"] {
+            assert!(!is_slug(bad), "{bad} seharusnya ditolak");
+        }
+    }
+
+    #[test]
+    fn env_name_dari_id() {
+        assert_eq!(env_name_from("groq"), "GROQ_API_KEY");
+        assert_eq!(env_name_from("opencode-go"), "OPENCODE_GO_API_KEY");
+        assert_eq!(env_name_from("a.b_c"), "A_B_C_API_KEY");
+        assert_eq!(env_name_from("-x-"), "X_API_KEY");
+    }
+
+    // ------------------------------------------------------------ redaksi
+
+    #[test]
+    fn redaksi_menyamarkan_field_rahasia() {
+        let input = serde_json::json!({
+            "apiKey": "VALUE-apiKey",
+            "key": "VALUE-key",
+            "token": "VALUE-token",
+            "refresh": "VALUE-refresh",
+            "password": "VALUE-password",
+            "name": "boleh terlihat",
+            "baseUrl": "https://x/v1",
+            "nested": { "client_secret": "VALUE-client-secret", "api": "openai-completions" },
+            "list": [{ "key": "VALUE-dalam-array" }],
+            "angka": 42
+        });
+        let out = redact_secrets(&input);
+        let teks = serde_json::to_string(&out).unwrap();
+
+        for bocor in [
+            "VALUE-apiKey",
+            "VALUE-key",
+            "VALUE-token",
+            "VALUE-refresh",
+            "VALUE-password",
+            "VALUE-client-secret",
+            "VALUE-dalam-array",
+        ] {
+            assert!(!teks.contains(bocor), "{bocor} bocor di pratinjau");
+        }
+        assert_eq!(out["name"], "boleh terlihat");
+        assert_eq!(out["baseUrl"], "https://x/v1");
+        assert_eq!(out["nested"]["api"], "openai-completions");
+        assert_eq!(out["angka"], 42);
+        assert_eq!(out["apiKey"], MASK);
+        assert_eq!(out["list"][0]["key"], MASK);
+    }
+
+    #[test]
+    fn redaksi_env_menjaga_komentar_dan_nama() {
+        let text = "# komentar\nA=rahasia\nB = \"dua kata\"\nTANPA_SAMA_DENGAN\n";
+        let out = redact_env_text(text);
+        assert!(out.contains("# komentar"));
+        assert!(out.contains(&format!("A={MASK}")));
+        assert!(!out.contains("rahasia"));
+        assert!(!out.contains("dua kata"));
+        assert!(out.contains("TANPA_SAMA_DENGAN"));
+    }
+
+    // ------------------------------------------------------- dokumen .env
+
+    #[test]
+    fn env_set_update_tidak_menduplikasi_dan_komentar_awet() {
+        let dir = temp_dir("dotenv");
+        let path = dir.join(".env");
+        std::fs::write(&path, "# kredensial\nA=lama\nB=biarkan\n").unwrap();
+
+        let mut doc = Doc::load(&spec(path.clone(), Format::DotEnv)).unwrap();
+        assert!(!doc.is_changed());
+
+        doc.env_set("A", "baru");
+        let rendered = doc.render();
+        assert_eq!(rendered.matches("A=").count(), 1, "{rendered}");
+        assert!(rendered.contains("A=baru"));
+        assert!(rendered.contains("# kredensial"));
+        assert!(rendered.contains("B=biarkan"));
+        assert!(doc.is_changed());
+    }
+
+    #[test]
+    fn env_set_menambah_key_baru_di_akhir() {
+        let dir = temp_dir("dotenv-add");
+        let path = dir.join(".env");
+        std::fs::write(&path, "A=1\n").unwrap();
+
+        let mut doc = Doc::load(&spec(path, Format::DotEnv)).unwrap();
+        doc.env_set("Z", "9");
+        let rendered = doc.render();
+        assert!(rendered.contains("A=1"));
+        assert!(rendered.trim_end().ends_with("Z=9"), "{rendered}");
+    }
+
+    #[test]
+    fn env_set_mengutip_nilai_ber_spasi_dan_menghapus() {
+        let dir = temp_dir("dotenv-quote");
+        let path = dir.join(".env");
+        std::fs::write(&path, "A=1\nB=2\n").unwrap();
+
+        let mut doc = Doc::load(&spec(path, Format::DotEnv)).unwrap();
+        doc.env_set("A", "dua kata");
+        assert_eq!(doc.env_get("A").as_deref(), Some("dua kata"));
+        assert!(doc.render().contains("A=\"dua kata\""));
+
+        doc.env_remove("B");
+        let rendered = doc.render();
+        assert!(!rendered.contains("B=2"), "{rendered}");
+        assert_eq!(doc.env_get("B"), None);
+    }
+
+    #[test]
+    fn env_file_tidak_ada_dianggap_kosong() {
+        let dir = temp_dir("dotenv-missing");
+        let doc = Doc::load(&spec(dir.join(".env"), Format::DotEnv)).unwrap();
+        assert!(!doc.exists);
+        assert!(!doc.is_changed());
+        assert_eq!(doc.render(), "");
+        assert_eq!(doc.env_get("APA"), None);
+    }
+
+    // -------------------------------------------------- dokumen JSON/YAML
+
+    #[test]
+    fn dokumen_json_render_pretty_dan_is_changed_akurat() {
+        let dir = temp_dir("json-doc");
+        let path = dir.join("config.json");
+        std::fs::write(&path, "{\"a\":1}").unwrap();
+
+        let mut doc = Doc::load(&spec(path, Format::Json)).unwrap();
+        let rendered = doc.render();
+        assert!(rendered.ends_with('\n'));
+        assert!(rendered.contains("\n  \"a\": 1"));
+
+        // render identik dengan file → belum dianggap berubah
+        std::fs::write(&dir.join("config.json"), rendered.clone()).unwrap();
+        let mut reloaded = Doc::load(&spec(dir.join("config.json"), Format::Json)).unwrap();
+        assert!(!reloaded.is_changed());
+        reloaded.object_at("x").insert("y".into(), 1.into());
+        assert!(reloaded.is_changed());
+
+        // mutasi basi tanpa perubahan isi tidak boleh dianggap berubah
+        let mut same = Doc::load(&spec(dir.join("config.json"), Format::Json)).unwrap();
+        same.dirty = true;
+        assert!(!same.is_changed());
+
+        doc.tree_mut(); // memastikan akses tree tidak panik
+    }
+
+    #[test]
+    fn dokumen_missing_tidak_pernah_dianggap_berubah_tanpa_mutasi() {
+        let dir = temp_dir("json-missing");
+        let doc = Doc::load(&spec(dir.join("x.json"), Format::Json)).unwrap();
+        assert!(!doc.exists);
+        assert!(!doc.is_changed());
+        assert_eq!(doc.render(), "{}\n");
+        assert!(!doc.is_changed(), "render saja tidak boleh menandai dirty");
+    }
+
+    #[test]
+    fn object_at_membuat_subobject_dan_mempertahankan_field_lain() {
+        let dir = temp_dir("json-object-at");
+        let path = dir.join("c.json");
+        std::fs::write(&path, r#"{"providers":{"a":{"custom":1}}}"#).unwrap();
+
+        let mut doc = Doc::load(&spec(path, Format::Json)).unwrap();
+        doc.object_at("providers").insert("b".into(), serde_json::json!({}));
+        let value: serde_json::Value = serde_json::from_str(&doc.render()).unwrap();
+        assert_eq!(value["providers"]["a"]["custom"], 1);
+        assert!(value["providers"]["b"].is_object());
+    }
+
+    #[test]
+    fn before_redacted_aman_untuk_file_rusak() {
+        let dir = temp_dir("before-redacted");
+        let path = dir.join("a.json");
+        std::fs::write(&path, r#"{"key":"sk-rahasia"}"#).unwrap();
+        let doc = Doc::load(&spec(path, Format::Json)).unwrap();
+        let before = doc.before_redacted();
+        assert!(!before.contains("sk-rahasia"));
+        assert!(before.contains(MASK));
+
+    }
+
+    #[test]
+    fn file_rusak_gagal_dimuat_bukan_ditimpa() {
+        // Keputusan desain: file yang tidak bisa diparse tidak boleh ditulis
+        // ulang secara diam-diam — lebih baik gagal keras dan biarkan pengguna
+        // memperbaikinya.
+        let dir = temp_dir("json-rusak");
+        let path = dir.join("rusak.json");
+        std::fs::write(&path, "bukan json {").unwrap();
+        assert!(Doc::load(&spec(path, Format::Json)).is_err());
+    }
 }

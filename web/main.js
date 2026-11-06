@@ -3,6 +3,8 @@
 // Kontrak dengan backend: docs/UI-CONTRACT.md
 // =============================================================================
 
+import { esc, renderDiff } from "./diff.js";
+
 const invoke = window.__TAURI__?.core?.invoke;
 
 // ----------------------------------------------------------------- konstanta
@@ -22,20 +24,9 @@ const API_OPTIONS = [
   ["google-generative-ai", "google-generative-ai"],
 ];
 
-const MAX_DIFF_LINES = 400;
-
 // ------------------------------------------------------------------- helper
 
 const $ = (selector, root = document) => root.querySelector(selector);
-
-function esc(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
 
 function fmtTokens(value) {
   if (!value) return "—";
@@ -175,107 +166,6 @@ function confirmModal({ title, message, confirmLabel = "Lanjutkan", danger = fal
       resolve(true);
     });
   });
-}
-
-// -------------------------------------------------------------------- diff
-
-function lcsDiff(before, after) {
-  const n = before.length;
-  const m = after.length;
-  const table = Array.from({ length: n + 1 }, () => new Uint32Array(m + 1));
-
-  for (let i = n - 1; i >= 0; i -= 1) {
-    for (let j = m - 1; j >= 0; j -= 1) {
-      table[i][j] =
-        before[i] === after[j]
-          ? table[i + 1][j + 1] + 1
-          : Math.max(table[i + 1][j], table[i][j + 1]);
-    }
-  }
-
-  const ops = [];
-  let i = 0;
-  let j = 0;
-  while (i < n && j < m) {
-    if (before[i] === after[j]) {
-      ops.push({ type: "ctx", text: before[i] });
-      i += 1;
-      j += 1;
-    } else if (table[i + 1][j] >= table[i][j + 1]) {
-      ops.push({ type: "del", text: before[i] });
-      i += 1;
-    } else {
-      ops.push({ type: "add", text: after[j] });
-      j += 1;
-    }
-  }
-  while (i < n) ops.push({ type: "del", text: before[i++] });
-  while (j < m) ops.push({ type: "add", text: after[j++] });
-  return ops;
-}
-
-/** Diff hemat memori: potong konteks yang sama di awal & akhir lebih dulu. */
-function diffLines(beforeText, afterText) {
-  const before = String(beforeText ?? "").split("\n");
-  const after = String(afterText ?? "").split("\n");
-
-  let start = 0;
-  while (start < before.length && start < after.length && before[start] === after[start]) {
-    start += 1;
-  }
-  let endBefore = before.length - 1;
-  let endAfter = after.length - 1;
-  while (endBefore >= start && endAfter >= start && before[endBefore] === after[endAfter]) {
-    endBefore -= 1;
-    endAfter -= 1;
-  }
-
-  const contextBefore = before.slice(Math.max(0, start - 3), start);
-  const contextAfter = before.slice(endBefore + 1, Math.min(before.length, endBefore + 4));
-  const midBefore = before.slice(start, endBefore + 1);
-  const midAfter = after.slice(start, endAfter + 1);
-
-  const trimmed = midBefore.length === 0 && midAfter.length === 0;
-  let middle;
-  if (trimmed) {
-    middle = [];
-  } else if (midBefore.length * midAfter.length > 250000) {
-    middle = [
-      ...midBefore.map((text) => ({ type: "del", text })),
-      ...midAfter.map((text) => ({ type: "add", text })),
-    ];
-  } else {
-    middle = lcsDiff(midBefore, midAfter);
-  }
-
-  const ops = [
-    ...contextBefore.map((text) => ({ type: "ctx", text })),
-    ...middle,
-    ...contextAfter.map((text) => ({ type: "ctx", text })),
-  ];
-  return { ops, truncated: false };
-}
-
-function renderDiff(beforeText, afterText) {
-  const { ops } = diffLines(beforeText, afterText);
-  const shown = ops.slice(0, MAX_DIFF_LINES);
-  const className = { add: "diff-add", del: "diff-del", ctx: "diff-ctx" };
-  const body = shown
-    .map(
-      (op) =>
-        `<span class="diff-line ${className[op.type]}">${esc(op.text) || " "}</span>`,
-    )
-    .join("");
-  const note =
-    ops.length > MAX_DIFF_LINES
-      ? `<p class="mt-2 text-[11px] text-amber-400/90">… diff dipotong pada ${MAX_DIFF_LINES} baris dari total ${ops.length} baris.</p>`
-      : "";
-  const changes = ops.filter((op) => op.type !== "ctx").length;
-  return `<pre class="selectable overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 py-2 font-mono text-[11px] leading-relaxed">${body}</pre>${note}${
-    changes === 0
-      ? `<p class="mt-2 text-[11px] text-amber-400/90">Tidak ada baris yang berubah pada pratinjau — kemungkinan hanya nilai rahasia (disamarkan).</p>`
-      : ""
-  }`;
 }
 
 // ============================================================================

@@ -104,3 +104,37 @@ pub fn opencode_config_file(dir: &PathBuf) -> PathBuf {
     }
     dir.join("opencode.json")
 }
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use crate::engine::testutil::sandbox;
+
+    #[test]
+    fn override_root_mengalihkan_semua_direktori_harness() {
+        let (_lock, root) = sandbox("paths-override");
+        assert_eq!(override_root().as_deref(), Some(root.as_path()));
+        assert_eq!(pi_dir(), root.join("pi"));
+        assert_eq!(omp_dir(), root.join("omp"));
+        assert_eq!(hermes_dir(), root.join("hermes"));
+        assert_eq!(opencode_config_dir(), root.join("opencode/config"));
+        assert_eq!(opencode_data_dir(), root.join("opencode/data"));
+    }
+
+    #[test]
+    fn opencode_memilih_ekstensi_yang_benar_benar_ada() {
+        let (_lock, root) = sandbox("paths-opencode-ext");
+        let dir = root.join("opencode/config");
+
+        // belum ada file → default .json
+        assert_eq!(opencode_config_file(&dir).file_name().unwrap(), "opencode.json");
+
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("opencode.jsonc"), "{}").unwrap();
+        assert_eq!(
+            opencode_config_file(&dir).file_name().unwrap(),
+            "opencode.jsonc",
+            "jsonc harus didahulukan bila ada"
+        );
+    }
+}
