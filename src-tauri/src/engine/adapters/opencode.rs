@@ -1,7 +1,7 @@
 //! Adapter OpenCode (`~/.config/opencode`).
 //!
 //! * `opencode.json` : provider berada di map `provider` (lama) atau
-//!   `providers` (baru). Rekonfig memakai map yang sudah ada di file.
+//!   `providers` (baru). Hakonfig memakai map yang sudah ada di file.
 //! * `~/.local/share/opencode/auth.json` : `{ "<id>": { "type": "api", "key": ... } }`
 //!
 //! Bentuk provider OpenCode berbeda dari Pi: model berupa objek berkunci id,

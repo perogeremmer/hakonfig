@@ -15,7 +15,7 @@ pub fn atomic_write(path: &Path, contents: &str, sensitive: bool) -> Result<()> 
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "config".to_string());
-    let tmp = path.with_file_name(format!(".{}.rekonfig-tmp", file_name));
+    let tmp = path.with_file_name(format!(".{}.hakonfig-tmp", file_name));
 
     {
         let mut file = std::fs::File::create(&tmp)

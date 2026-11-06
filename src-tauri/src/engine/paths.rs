@@ -7,10 +7,10 @@ use std::path::PathBuf;
 
 /// Override root untuk pengujian/portable mode.
 ///
-/// Bila `REKONFIG_ROOT` diset, seluruh direktori harness di-resolve di bawah
+/// Bila `HAKONFIG_ROOT` diset, seluruh direktori harness di-resolve di bawah
 /// root tersebut, sehingga pengujian tidak pernah menyentuh config asli.
 pub fn override_root() -> Option<PathBuf> {
-    env::var_os("REKONFIG_ROOT").map(PathBuf::from)
+    env::var_os("HAKONFIG_ROOT").map(PathBuf::from)
 }
 
 pub fn home() -> PathBuf {

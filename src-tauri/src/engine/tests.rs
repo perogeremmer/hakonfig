@@ -1,4 +1,4 @@
-//! Test integrasi engine pada sandbox (`REKONFIG_ROOT`), sehingga config asli
+//! Test integrasi engine pada sandbox (`HAKONFIG_ROOT`), sehingga config asli
 //! di mesin tidak pernah tersentuh.
 #![cfg(test)]
 

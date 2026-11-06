@@ -7,7 +7,7 @@ pub fn all() -> Vec<ProviderPreset> {
     match serde_json::from_str::<Vec<ProviderPreset>>(PRESETS) {
         Ok(list) => list,
         Err(err) => {
-            eprintln!("[rekonfig] presets/providers.json tidak valid: {}", err);
+            eprintln!("[hakonfig] presets/providers.json tidak valid: {}", err);
             Vec::new()
         }
     }

@@ -30,7 +30,7 @@ struct Manifest {
 }
 
 fn backups_root(base: &Path) -> PathBuf {
-    base.join(".rekonfig").join("backups")
+    base.join(".hakonfig").join("backups")
 }
 
 /// Simpan snapshot file-file yang akan diubah. Mengembalikan direktori backup.

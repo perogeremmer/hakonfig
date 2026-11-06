@@ -1,4 +1,4 @@
-// Rekonfig — kelola konfigurasi provider AI coding harness.
+// Hakonfig — kelola konfigurasi provider AI coding harness.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
@@ -18,5 +18,5 @@ fn main() {
             commands::open_in_file_manager,
         ])
         .run(tauri::generate_context!())
-        .expect("gagal menjalankan Rekonfig");
+        .expect("gagal menjalankan Hakonfig");
 }

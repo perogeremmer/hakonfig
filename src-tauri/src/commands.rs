@@ -213,7 +213,7 @@ pub async fn test_connection(
 
     let client = match reqwest::Client::builder()
         .timeout(Duration::from_secs(25))
-        .user_agent("rekonfig/0.1")
+        .user_agent("hakonfig/0.1")
         .build()
     {
         Ok(client) => client,

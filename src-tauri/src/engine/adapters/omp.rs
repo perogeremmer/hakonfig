@@ -70,7 +70,7 @@ impl Adapter for OmpAdapter {
         let mut warnings = Vec::new();
         if models.has_comments {
             warnings.push(
-                "models.yml memuat komentar. Komentar tidak dipertahankan saat Rekonfig menulis (backup otomatis dibuat)."
+                "models.yml memuat komentar. Komentar tidak dipertahankan saat Hakonfig menulis (backup otomatis dibuat)."
                     .to_string(),
             );
         }

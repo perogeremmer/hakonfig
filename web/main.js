@@ -1,5 +1,5 @@
 // =============================================================================
-// Rekonfig — frontend (vanilla JS, tanpa framework)
+// Hakonfig — frontend (vanilla JS, tanpa framework)
 // Kontrak dengan backend: docs/UI-CONTRACT.md
 // =============================================================================
 
@@ -220,7 +220,7 @@ function renderHomeHeader() {
     <div class="mx-auto flex max-w-5xl items-center gap-3 px-6 py-3">
       <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-white shadow-sm">${LOGO_SVG}</div>
       <div class="min-w-0">
-        <h1 class="text-base font-semibold tracking-tight text-ink">Rekonfig</h1>
+        <h1 class="text-base font-semibold tracking-tight text-ink">Hakonfig</h1>
         <p class="text-xs text-sub">Kelola provider AI-mu</p>
       </div>
     </div>`;
@@ -326,7 +326,7 @@ function renderHome() {
         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-peach text-xl">🔍</div>
         <p class="text-sm font-medium text-ink">Tidak ada harness yang dikenali</p>
         <p class="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-sub">
-          Rekonfig belum menemukan konfigurasi harness apa pun. Jalankan salah satunya sekali, lalu muat ulang.
+          Hakonfig belum menemukan konfigurasi harness apa pun. Jalankan salah satunya sekali, lalu muat ulang.
         </p>
       </div>`;
     return;
@@ -345,7 +345,7 @@ function renderHome() {
       ${harnessSection(
         "Belum terpasang",
         missing,
-        "Semua harness yang didukung Rekonfig sudah terpasang.",
+        "Semua harness yang didukung Hakonfig sudah terpasang.",
       )}
     </div>`;
 
@@ -451,7 +451,7 @@ function renderContent() {
            <p class="text-sm font-medium text-ink">Belum ada provider di harness ini</p>
            <p class="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-sub">
              Tambahkan provider gratis seperti Groq, Gemini, atau Cerebras —
-             cukup tempel API key, Rekonfig menulis file konfigurasinya.
+             cukup tempel API key, Hakonfig menulis file konfigurasinya.
            </p>
            <button data-action data-add-empty class="mt-4 rounded-xl bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand/90">
              + Tambah Provider
@@ -1076,7 +1076,7 @@ async function openBackups() {
 
   const { overlay, close } = openModal({
     title: "Backup",
-    subtitle: "Rekonfig menyimpan salinan setiap file sebelum menulis.",
+    subtitle: "Hakonfig menyimpan salinan setiap file sebelum menulis.",
     body: list,
     footer: `<button data-action data-cancel class="rounded-xl border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-sand">Tutup</button>`,
   });
@@ -1116,14 +1116,14 @@ function renderFatal(message) {
     <div class="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-5">
       <p class="text-sm font-medium text-rose-800">${esc(message)}</p>
       <p class="mt-2 text-xs leading-relaxed text-rose-700/80">
-        Rekonfig perlu dijalankan sebagai aplikasi desktop (Tauri), bukan dibuka langsung di browser.
+        Hakonfig perlu dijalankan sebagai aplikasi desktop (Tauri), bukan dibuka langsung di browser.
       </p>
     </div>`;
 }
 
 async function init() {
   if (!invoke) {
-    renderFatal("Rekonfig harus dijalankan sebagai aplikasi desktop.");
+    renderFatal("Hakonfig harus dijalankan sebagai aplikasi desktop.");
     renderHomeHeader();
     return;
   }

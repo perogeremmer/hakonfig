@@ -1,14 +1,16 @@
-# Rekonfig
+# Hakonfig
+
+> **Hakonfig** = **Ha**rness **Konfig**uration — aplikasi desktop untuk mengelola konfigurasi provider AI di harness coding agent, tanpa mengedit file JSON/YAML manual.
 
 Aplikasi desktop untuk **membaca, mengubah, dan menulis konfigurasi provider AI** pada harness AI coding — **Pi**, **oh-my-pi**, **OpenCode**, dan **Hermes** — tanpa mengedit file JSON/YAML secara manual.
 
-Masalah yang dipecahkan: mahasiswa/pengguna punya API key gratis (Groq, Gemini, Cerebras, …) tapi tidak tahu **di mana** harus menaruhnya, **dalam format apa**, dan bahwa API key kadang disimpan di **file berbeda** dari katalog model. Rekonfig menyelesaikannya: pilih harness → pilih preset → tempel key → lihat diff → tulis.
+Masalah yang dipecahkan: mahasiswa/pengguna punya API key gratis (Groq, Gemini, Cerebras, …) tapi tidak tahu **di mana** harus menaruhnya, **dalam format apa**, dan bahwa API key kadang disimpan di **file berbeda** dari katalog model. Hakonfig menyelesaikannya: pilih harness → pilih preset → tempel key → lihat diff → tulis.
 
-Rekonfig **bukan** proxy/gateway dan **tidak** menyimpan key di tempat sendiri. Ia hanya menulis ke file yang memang dibaca harness kamu.
+Hakonfig **bukan** proxy/gateway dan **tidak** menyimpan key di tempat sendiri. Ia hanya menulis ke file yang memang dibaca harness kamu.
 
 - **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS — tanpa framework frontend
 - **Ukuran:** biner 5,3 MB · paket `.deb` 2,4 MB
-- **Test:** 54 test (34 Rust + 20 JS), tanpa jaringan
+- **Test:** 56 test (36 Rust + 20 JS), tanpa jaringan
 
 ---
 
@@ -22,7 +24,7 @@ Rekonfig **bukan** proxy/gateway dan **tidak** menyimpan key di tempat sendiri. 
 - [Test](#test)
 - [Cara pakai](#cara-pakai)
 - [Struktur repo](#struktur-repo)
-- [Konfigurasi lewat `REKONFIG_ROOT`](#konfigurasi-lewat-rekonfig_root)
+- [Konfigurasi lewat `HAKONFIG_ROOT`](#konfigurasi-lewat-hakonfig_root)
 - [Menambah harness baru](#menambah-harness-baru)
 - [Model keamanan](#model-keamanan)
 - [Batasan yang diketahui](#batasan-yang-diketahui)
@@ -128,7 +130,7 @@ Tauri **menyematkan aset `web/` saat compile**, jadi tidak ada hot reload:
 
 Watcher `tauri dev` hanya memantau `src-tauri`, jadi perubahan di `web/` tidak memicu restart otomatis. Ini konsekuensi memilih tanpa bundler/dev-server.
 
-Kalau ingin mencoba tanpa menyentuh config asli, lihat [REKONFIG_ROOT](#konfigurasi-lewat-rekonfig_root).
+Kalau ingin mencoba tanpa menyentuh config asli, lihat [HAKONFIG_ROOT](#konfigurasi-lewat-hakonfig_root).
 
 ---
 
@@ -141,7 +143,7 @@ bun run build          # = bun run css && tauri build
 Hasilnya:
 
 ```
-src-tauri/target/release/rekonfig                      # biner (~5,3 MB)
+src-tauri/target/release/hakonfig                      # biner (~5,3 MB)
 src-tauri/target/release/bundle/                       # installer
 ```
 
@@ -166,9 +168,9 @@ bunx tauri build --bundles nsis    # Windows
 Contoh hasil `bun run build` di Linux:
 
 ```
-bundle/deb/Rekonfig_0.1.0_amd64.deb          2,4 MB
-bundle/rpm/Rekonfig-0.1.0-1.x86_64.rpm       2,4 MB
-bundle/appimage/Rekonfig_0.1.0_amd64.AppImage 84 MB
+bundle/deb/Hakonfig_0.1.0_amd64.deb          2,4 MB
+bundle/rpm/Hakonfig-0.1.0-1.x86_64.rpm       2,4 MB
+bundle/appimage/Hakonfig_0.1.0_amd64.AppImage 84 MB
 ```
 
 > **Catatan cross-compile:** Tauri **tidak** bisa cross-compile. Untuk rilis 3 OS, pakai matriks CI (mis. GitHub Actions dengan runner `ubuntu-latest`, `macos-latest`, `windows-latest`), atau build di tiap OS.
@@ -185,19 +187,19 @@ Untuk pemakaian kelas/kelas internal, aplikasi unsigned biasanya cukup.
 ## Test
 
 ```bash
-bun run test        # 34 test Rust + 20 test JS
+bun run test        # 36 test Rust + 20 test JS
 bun run test:rust   # cargo test
 bun run test:js     # node --test web/diff.test.js
 ```
 
-Semua test berjalan **offline** dan tidak menyentuh config asli (Rust memakai sandbox `REKONFIG_ROOT`).
+Semua test berjalan **offline** dan tidak menyentuh config asli (Rust memakai sandbox `HAKONFIG_ROOT`).
 
 | Lapisan | Jumlah | Cakupan |
 |---|---|---|
 | Unit — `engine/doc.rs` | 16 | parse JSONC (komentar + trailing comma), YAML (kosong/null/rusak), deteksi komentar, `mask_key`, `is_slug`, `env_name_from`, redaksi rahasia, edit `.env`, `is_changed` |
 | Unit — `engine/backup.rs` | 4 | backup kosong, roundtrip create→list→restore, manifest rusak, urutan terbaru |
-| Unit — `engine/write.rs` | 4 | direktori induk, overwrite, tanpa sisa `.rekonfig-tmp`, permission `0644` vs `0600` |
-| Unit — `engine/paths.rs` | 2 | override `REKONFIG_ROOT`, pemilihan `opencode.jsonc` vs `.json` |
+| Unit — `engine/write.rs` | 4 | direktori induk, overwrite, tanpa sisa `.hakonfig-tmp`, permission `0644` vs `0600` |
+| Unit — `engine/paths.rs` | 2 | override `HAKONFIG_ROOT`, pemilihan `opencode.jsonc` vs `.json` |
 | Unit — `web/diff.js` | 20 | `lcsDiff`, pemotongan konteks, file kosong, blok raksasa (anti-hang), escaping XSS, pemotongan output |
 | Integrasi — `engine/tests.rs` | 5 | merge field tak dikenal, key ke file yang benar, mode `$ENV`, remove, no-op remove, backup/restore, redaksi pratinjau, validasi input |
 
@@ -205,7 +207,7 @@ Semua test berjalan **offline** dan tidak menyentuh config asli (Rust memakai sa
 
 ## Cara pakai
 
-1. Buka Rekonfig — harness yang terpasang langsung terdeteksi beserta path-nya.
+1. Buka Hakonfig — harness yang terpasang langsung terdeteksi beserta path-nya.
 2. Pilih harness di sidebar (mis. **Pi**).
 3. Klik **+ Tambah Provider** → pilih preset (mis. **Groq**) → tempel API key → klik **Test koneksi** (opsional).
 4. **Simpan** → muncul **pratinjau diff** → klik **Tulis ke disk**.
@@ -217,7 +219,7 @@ Selesai. Kalau ada yang salah, buka **Backup** → **Pulihkan**.
 ## Struktur repo
 
 ```
-rekonfig/
+hakonfig/
 ├── web/                          # frontend: HTML + Tailwind + vanilla JS (tanpa framework)
 │   ├── index.html
 │   ├── main.js                   # UI + alur kerja
@@ -257,16 +259,16 @@ Engine (`src-tauri/src/engine/`) **tidak mengimpor Tauri sama sekali** — ia pu
 
 ---
 
-## Konfigurasi lewat `REKONFIG_ROOT`
+## Konfigurasi lewat `HAKONFIG_ROOT`
 
 Untuk pengembangan dan pengujian, seluruh direktori harness bisa dialihkan ke satu root:
 
 ```bash
 ./scripts/make-demo-sandbox.sh /tmp/rk-demo
-REKONFIG_ROOT=/tmp/rk-demo bun run dev
+HAKONFIG_ROOT=/tmp/rk-demo bun run dev
 ```
 
-Pemetaan: `$REKONFIG_ROOT/pi`, `/omp`, `/hermes`, `/opencode/config`, `/opencode/data`.
+Pemetaan: `$HAKONFIG_ROOT/pi`, `/omp`, `/hermes`, `/opencode/config`, `/opencode/data`.
 
 Ini dipakai oleh test Rust sehingga config asli di mesin tidak pernah tersentuh.
 
@@ -285,10 +287,10 @@ UI **tidak perlu diubah**: daftar harness, tabel provider, dan form semuanya dir
 
 ## Model keamanan
 
-- Key tetap tinggal di file harness (memang begitu cara harness bekerja). Rekonfig tidak menyalin key ke penyimpanannya sendiri.
+- Key tetap tinggal di file harness (memang begitu cara harness bekerja). Hakonfig tidak menyalin key ke penyimpanannya sendiri.
 - Key tidak pernah ditulis ke log.
 - Pratinjau menyamarkan nilai rahasia — termasuk saat menampilkan diff.
-- Selalu **backup dulu** sebelum menulis: `<dir harness>/.rekonfig/backups/<timestamp>/` + `manifest.json`.
+- Selalu **backup dulu** sebelum menulis: `<dir harness>/.hakonfig/backups/<timestamp>/` + `manifest.json`.
 - Penulisan atomik: file sementara di direktori yang sama, lalu `rename`.
 - File berisi kredensial ditulis dengan permission `0600`.
 
@@ -296,7 +298,7 @@ UI **tidak perlu diubah**: daftar harness, tabel provider, dan form semuanya dir
 
 ## Batasan yang diketahui
 
-1. **Komentar hilang pada file JSON/JSONC/YAML.** Menulis ulang `models.json`, `models.yml`, `opencode.json`, atau `config.yaml` menghapus komentar di dalamnya. Rekonfig **memberi peringatan** dan selalu membuat backup. File `.env` **tidak** terkena (diedit baris-per-baris, komentar tetap).
+1. **Komentar hilang pada file JSON/JSONC/YAML.** Menulis ulang `models.json`, `models.yml`, `opencode.json`, atau `config.yaml` menghapus komentar di dalamnya. Hakonfig **memberi peringatan** dan selalu membuat backup. File `.env` **tidak** terkena (diedit baris-per-baris, komentar tetap).
 2. **Hermes masih eksperimental.** Hanya provider + API key yang ditulis; daftar model diambil Hermes sendiri dari endpoint.
 3. **oh-my-pi tidak punya file auth terpisah yang stabil**, jadi key ditulis sebagai `apiKey` plaintext di `models.yml` (permission `0600`).
 4. **Path OpenCode di macOS/Windows** memakai beberapa kandidat (XDG, `Library/Application Support`, `%APPDATA%`). Instalasi dengan lokasi tak lazim mungkin perlu penyesuaian di `engine/paths.rs`.
@@ -317,13 +319,32 @@ UI **tidak perlu diubah**: daftar harness, tabel provider, dan form semuanya dir
 | Jendela putih / UI kosong | Aset `web/` belum di-build ulang → `bun run css && bun run dev` |
 | `styles.css` 404 / tampilan tanpa gaya | `bun run css` belum dijalankan |
 | AppImage gagal dibuat | Butuh unduh tool dari internet → pakai `--bundles deb` |
-| `identifier` berakhiran `.app` | Sudah diperbaiki (`dev.hudya.rekonfig`); identifier tidak boleh berakhiran `.app` karena bentrok dengan bundle macOS |
+| `identifier` berakhiran `.app` | Sudah diperbaiki (`dev.hudya.hakonfig`); identifier tidak boleh berakhiran `.app` karena bentrok dengan bundle macOS |
 | Provider tidak muncul di harness | Cek path yang ditampilkan di sidebar; pastikan harness sudah pernah dijalankan minimal sekali |
-| `file config tidak bisa diparse` | Rekonfig sengaja gagal keras daripada menimpa file rusak. Perbaiki JSON/YAML-nya dulu (backup tersedia) |
-| Ingin coba tanpa risiko | Pakai `REKONFIG_ROOT=/tmp/rk-demo` |
+| `file config tidak bisa diparse` | Hakonfig sengaja gagal keras daripada menimpa file rusak. Perbaiki JSON/YAML-nya dulu (backup tersedia) |
+| Ingin coba tanpa risiko | Pakai `HAKONFIG_ROOT=/tmp/rk-demo` |
+
+---
+
+## Kontribusi
+
+Pull request, issue, dan adapter harness baru sangat diterima. Untuk menambah
+harness, lihat [Menambah harness baru](#menambah-harness-baru) — cukup satu file
+adapter, UI tidak perlu diubah.
+
+Sebelum mengirim PR:
+
+```bash
+bun run test     # 36 test Rust + 20 test JS harus hijau
+```
 
 ---
 
 ## Lisensi
 
-Belum ditentukan. Tambahkan file `LICENSE` (mis. MIT) sebelum dipublikasikan.
+[MIT](LICENSE) © 2026 perogeremmer dan kontributor.
+
+Artinya: siapa pun bebas memakai, menyalin, mengubah, menggabungkan,
+menerbitkan, mendistribusikan, mensublisensikan, dan/atau menjual salinan
+perangkat lunak ini, dengan tetap menyertakan pemberitahuan hak cipta dan izin
+di atas. Perangkat lunak diberikan **tanpa jaminan** apa pun.

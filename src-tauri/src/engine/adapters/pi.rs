@@ -6,7 +6,7 @@
 //!   * kredensial: `auth.json.<id>` = { type: "api_key", key }
 //!
 //! Pi mendahulukan kredensial tersimpan di atas referensi environment, jadi
-//! Rekonfig tidak pernah menulis keduanya sekaligus.
+//! Hakonfig tidak pernah menulis keduanya sekaligus.
 use anyhow::Result;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -35,7 +35,7 @@ impl Adapter for PiAdapter {
     }
 
     fn notes(&self) -> &'static str {
-        "Katalog di models.json, API key di auth.json. Rekonfig menulis keduanya sekaligus."
+        "Katalog di models.json, API key di auth.json. Hakonfig menulis keduanya sekaligus."
     }
 
     fn specs(&self) -> Vec<FileSpec> {
@@ -74,7 +74,7 @@ impl Adapter for PiAdapter {
         let mut warnings = Vec::new();
         if models.has_comments {
             warnings.push(
-                "models.json memuat komentar. Komentar tidak dipertahankan saat Rekonfig menulis (backup otomatis dibuat)."
+                "models.json memuat komentar. Komentar tidak dipertahankan saat Hakonfig menulis (backup otomatis dibuat)."
                     .to_string(),
             );
         }

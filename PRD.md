@@ -1,6 +1,6 @@
-# PRD — Rekonfig
+# PRD — Hakonfig
 
-> **Rekonfig** — Aplikasi desktop untuk membaca, mengubah, dan menulis konfigurasi provider/model pada AI coding harness (OpenCode, Pi, Hermes, oh-my-pi, dll) tanpa harus "akrobat" edit file di file explorer.
+> **Hakonfig** — Aplikasi desktop untuk membaca, mengubah, dan menulis konfigurasi provider/model pada AI coding harness (OpenCode, Pi, Hermes, oh-my-pi, dll) tanpa harus "akrobat" edit file di file explorer.
 
 - **Status:** Draft v1
 - **Stack final:** Tauri v2 (Rust) + HTML + Tailwind CSS (tanpa frontend framework) + vanilla JS
@@ -16,7 +16,7 @@ Mahasiswa/pengguna sering mendapat API key gratis (Groq, Gemini, DeepSeek, dll),
 2. Konfigurasi tersebar di **beberapa file** (bukan satu file): misal Pi memisahkan `models.json` (pakai referensi `$ENV_VAR`) dari `auth.json` (key asli).
 3. Pengguna akhirnya mengedit file JSON/YAML secara manual, yang rawan merusak konfigurasi — dibuktikan dengan banyaknya file backup manual (`.bak`, `.bak2`, `.bak.peer-*`).
 
-**Rekonfig** adalah GUI yang membaca konfigurasi saat ini, menampilkannya dalam bentuk yang mudah dipahami, dan menulis perubahan dengan aman (merge + backup otomatis).
+**Hakonfig** adalah GUI yang membaca konfigurasi saat ini, menampilkannya dalam bentuk yang mudah dipahami, dan menulis perubahan dengan aman (merge + backup otomatis).
 
 ---
 
@@ -101,7 +101,7 @@ Mahasiswa/pengguna sering mendapat API key gratis (Groq, Gemini, DeepSeek, dll),
 | ID | Fitur | Deskripsi |
 |---|---|---|
 | F11 | Edit `settings.json`/default | Ubah default provider/model, enabled models, tema. |
-| F12 | Mode kelas | Import preset massal dari file `.rekonfig` ke banyak mesin. |
+| F12 | Mode kelas | Import preset massal dari file `.hakonfig` ke banyak mesin. |
 | F13 | Editor mode | UI non-GUI (CLI) untuk otomasi. |
 
 ---
@@ -178,7 +178,7 @@ Setiap preset menyimpan **daftar model** dengan: `id`, `name`, `context_window`,
 ### 8.2 Struktur repo
 
 ```
-rekonfig/
+hakonfig/
 ├── index.html               # UI (vanilla)
 ├── src/                     # frontend vanilla
 │   ├── main.js              # boot + invoke commands
@@ -277,7 +277,7 @@ struct Defaults {
 
 ### 9.1 Tambah provider gratis (alur inti)
 
-1. Buka Rekonfig → otomatis **deteksi harness** dan tampilkan daftar + path.
+1. Buka Hakonfig → otomatis **deteksi harness** dan tampilkan daftar + path.
 2. Pilih harness (mis. Pi) → tampil daftar provider saat ini.
 3. Klik **"Tambah Provider"** → pilih preset (mis. Groq) → tempel API key.
 4. Klik **"Test connection"** (opsional) → status OK/error.
@@ -324,8 +324,8 @@ struct Defaults {
 - Token tetap disimpan **di file harness** (plaintext — memang begitu cara kerja harness), aplikasi tidak menyalin ke lokasi sendiri.
 - Tidak menulis token ke **log** atau telemetri.
 - File yang ditulis diberi permission ketat (`0600`) untuk `auth.json` bila memungkinkan.
-- Token hanya dikirim saat `test_connection` ke endpoint provider terkait, tidak ke server Rekonfig.
-- **Selalu backup sebelum menulis**; jangan menimpa file `.bak` milik pengguna (pakai folder backup sendiri: `.rekonfig/backups/<harness>/`).
+- Token hanya dikirim saat `test_connection` ke endpoint provider terkait, tidak ke server Hakonfig.
+- **Selalu backup sebelum menulis**; jangan menimpa file `.bak` milik pengguna (pakai folder backup sendiri: `.hakonfig/backups/<harness>/`).
 
 ---
 

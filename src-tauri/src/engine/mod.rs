@@ -1,4 +1,4 @@
-//! Inti Rekonfig: seluruh logika baca/ubah/tulis konfigurasi harness.
+//! Inti Hakonfig: seluruh logika baca/ubah/tulis konfigurasi harness.
 //! Modul ini tidak tahu apa-apa soal UI.
 pub mod adapters;
 pub mod backup;

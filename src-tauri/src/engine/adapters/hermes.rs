@@ -4,7 +4,7 @@
 //! * `.env`        : nilai API key yang dirujuk `key_env`
 //!
 //! Hermes tidak menyimpan daftar model di config; ia mengambilnya dari endpoint
-//! provider. Karena itu Rekonfig hanya menulis provider + kredensial.
+//! provider. Karena itu Hakonfig hanya menulis provider + kredensial.
 use anyhow::Result;
 use serde_json::Value;
 use std::path::PathBuf;
@@ -73,7 +73,7 @@ impl Adapter for HermesAdapter {
         ];
         if config.has_comments {
             warnings.push(
-                "config.yaml memuat komentar. Komentar tidak dipertahankan saat Rekonfig menulis (backup otomatis dibuat)."
+                "config.yaml memuat komentar. Komentar tidak dipertahankan saat Hakonfig menulis (backup otomatis dibuat)."
                     .to_string(),
             );
         }
