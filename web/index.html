@@ -8,75 +8,8 @@
   </head>
   <body class="h-full bg-cream font-sans text-ink antialiased">
     <div class="flex h-full flex-col">
-      <div class="flex min-h-0 flex-1">
-        <!-- ============================ SIDEBAR ============================ -->
-        <aside
-          class="flex w-72 shrink-0 flex-col border-r border-line bg-white"
-        >
-          <div class="flex items-center gap-3 border-b border-line px-4 py-4">
-            <div
-              class="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-white shadow-sm"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                class="h-5 w-5"
-              >
-                <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h9M17 18h3" />
-                <circle cx="15" cy="6" r="2" fill="currentColor" stroke="none" />
-                <circle cx="9" cy="12" r="2" fill="currentColor" stroke="none" />
-                <circle cx="15" cy="18" r="2" fill="currentColor" stroke="none" />
-              </svg>
-            </div>
-            <div class="min-w-0">
-              <h1 class="truncate text-base font-semibold tracking-tight text-ink">
-                Rekonfig
-              </h1>
-              <p class="truncate text-xs text-sub">Kelola provider AI-mu</p>
-            </div>
-          </div>
-
-          <div class="px-4 pt-4 pb-2 text-[11px] font-semibold tracking-wider text-mute uppercase">
-            Harness
-          </div>
-          <div id="harness-list" class="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-3 pb-3">
-            <p class="px-2 py-4 text-xs text-mute">Memuat…</p>
-          </div>
-
-          <div class="border-t border-line p-3">
-            <p class="text-[11px] leading-relaxed text-mute">
-              Setiap perubahan selalu membuat backup otomatis lebih dulu.
-            </p>
-          </div>
-        </aside>
-
-        <!-- ============================= MAIN ============================= -->
-        <main class="flex min-w-0 flex-1 flex-col">
-          <header
-            id="topbar"
-            class="flex shrink-0 items-center justify-between gap-4 border-b border-line bg-sand px-6 py-3 backdrop-blur"
-          >
-            <div class="min-w-0">
-              <h2 id="active-name" class="truncate text-base font-semibold text-ink">
-                Pilih harness
-              </h2>
-              <p id="active-notes" class="truncate text-xs text-sub">
-                Deteksi konfigurasi harness di mesin ini.
-              </p>
-            </div>
-            <div id="topbar-actions" class="flex shrink-0 items-center gap-2"></div>
-          </header>
-
-          <div id="content" class="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-            <div class="mx-auto max-w-5xl">
-              <p class="text-sm text-sub">Memuat konfigurasi…</p>
-            </div>
-          </div>
-        </main>
-      </div>
+      <header id="topbar" class="shrink-0 border-b border-line bg-sand"></header>
+      <main id="content" class="min-h-0 flex-1 overflow-y-auto px-6 py-6"></main>
     </div>
 
     <div id="modal-root"></div>

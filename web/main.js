@@ -91,6 +91,7 @@ const api = {
 // -------------------------------------------------------------------- state
 
 const state = {
+  view: "home", // "home" | "harness"
   harnesses: [],
   activeId: null,
   snapshot: null,
@@ -193,60 +194,121 @@ function confirmModal({ title, message, confirmLabel = "Lanjutkan", danger = fal
 // RENDER
 // ============================================================================
 
-function renderSidebar() {
-  const container = $("#harness-list");
+const LOGO_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="h-5 w-5"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h9M17 18h3"/><circle cx="15" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="2" fill="currentColor" stroke="none"/></svg>`;
+const ARROW_LEFT_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4"><path d="M19 12H5m0 0l6-6m-6 6l6 6"/></svg>`;
+
+function renderHomeHeader() {
+  $("#topbar").innerHTML = `
+    <div class="mx-auto flex max-w-5xl items-center gap-3 px-6 py-3">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-white shadow-sm">${LOGO_SVG}</div>
+      <div class="min-w-0">
+        <h1 class="text-base font-semibold tracking-tight text-ink">Rekonfig</h1>
+        <p class="text-xs text-sub">Kelola provider AI-mu</p>
+      </div>
+    </div>`;
+}
+
+function renderHarnessHeader() {
+  const harness = state.harnesses.find((item) => item.id === state.activeId);
+  $("#topbar").innerHTML = `
+    <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
+      <div class="flex min-w-0 items-center gap-2.5">
+        <button data-action data-home title="Kembali ke daftar harness"
+          class="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-line bg-white text-sub transition hover:bg-sand hover:text-ink">${ARROW_LEFT_SVG}</button>
+        <div class="min-w-0">
+          <h2 class="truncate text-base font-semibold text-ink">${esc(harness?.name ?? "…")}</h2>
+          <p class="truncate text-xs text-sub">${esc(harness?.notes ?? "")}</p>
+        </div>
+      </div>
+      <div class="flex shrink-0 items-center gap-2">
+        <button data-action data-refresh class="rounded-xl border border-stone-300 px-2.5 py-1.5 text-xs text-stone-700 hover:bg-sand">Muat ulang</button>
+        <button data-action data-backups class="rounded-xl border border-stone-300 px-2.5 py-1.5 text-xs text-stone-700 hover:bg-sand">Backup</button>
+        <button data-action data-add class="rounded-xl bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand/90">+ Tambah Provider</button>
+      </div>
+    </div>`;
+
+  $("[data-home]", $("#topbar")).addEventListener("click", goHome);
+  $("[data-refresh]", $("#topbar")).addEventListener("click", () => loadSnapshot(state.activeId));
+  $("[data-backups]", $("#topbar")).addEventListener("click", () => openBackups());
+  $("[data-add]", $("#topbar")).addEventListener("click", () => openProviderForm("add"));
+}
+
+function harnessCard(harness) {
+  const [tint, tintText] = avatarTint(harness.id);
+  const badge = harness.installed
+    ? `<span class="rounded-full bg-tint-ok px-2 py-0.5 text-[10px] font-medium text-emerald-700">terpasang</span>`
+    : `<span class="rounded-full bg-sand px-2 py-0.5 text-[10px] font-medium text-sub">belum ada</span>`;
+  const experimental = harness.experimental
+    ? `<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">eksperimental</span>`
+    : "";
+
+  const files = harness.files
+    .map(
+      (file) => `
+      <div class="flex items-center gap-1.5">
+        <span class="h-1.5 w-1.5 shrink-0 rounded-full ${file.exists ? "bg-brand" : "bg-mute"}"></span>
+        <span class="min-w-0 flex-1 truncate font-mono text-[10px] ${file.exists ? "text-sub" : "text-mute"}" title="${esc(file.path)}">${esc(file.path)}</span>
+        <button data-action data-reveal="${esc(file.path)}" title="Buka folder"
+          class="shrink-0 rounded p-0.5 text-mute hover:bg-sand hover:text-ink">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+        </button>
+      </div>`,
+    )
+    .join("");
+
+  return `
+    <div data-harness="${esc(harness.id)}" role="button" tabindex="0"
+      class="group cursor-pointer rounded-2xl border border-line bg-white p-4 shadow-sm transition hover:border-brand/40 hover:shadow-md">
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint} text-xs font-semibold ${tintText}">${esc(
+            avatarInitials(harness.id),
+          )}</div>
+          <div class="min-w-0">
+            <p class="truncate text-sm font-medium text-ink">${esc(harness.name)}</p>
+            <p class="truncate text-[11px] text-sub">${esc(harness.notes || "Baca & tulis konfigurasi")}</p>
+          </div>
+        </div>
+        <span class="mt-1 text-mute transition group-hover:translate-x-0.5 group-hover:text-brand">→</span>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-1.5">${badge}${experimental}</div>
+      <div class="mt-3 space-y-1 rounded-xl bg-sand p-2">${files}</div>
+    </div>`;
+}
+
+function renderHome() {
+  const container = $("#content");
+
   if (state.loadError) {
-    container.innerHTML = `<p class="px-2 py-4 text-xs text-rose-600">${esc(state.loadError)}</p>`;
+    container.innerHTML = `<div class="mx-auto max-w-5xl rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">${esc(
+      state.loadError,
+    )}</div>`;
     return;
   }
 
-  container.innerHTML = state.harnesses
-    .map((harness) => {
-      const active = harness.id === state.activeId;
-      const files = harness.files
-        .map(
-          (file) => `
-          <div class="flex items-start gap-1.5">
-            <span class="mt-1.5 h-1 w-1 shrink-0 rounded-full ${
-              file.exists ? "bg-tint-ok0" : "bg-mute"
-            }"></span>
-            <span class="min-w-0 flex-1 truncate font-mono text-[10px] leading-relaxed ${
-              file.exists ? "text-sub" : "text-mute line-through"
-            }">${esc(file.path)}</span>
-            <button data-action data-reveal="${esc(file.path)}" title="Buka folder"
-              class="shrink-0 rounded p-0.5 text-sub hover:bg-sand hover:text-ink">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                class="h-3 w-3"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-            </button>
-          </div>`,
-        )
-        .join("");
+  if (state.harnesses.length === 0) {
+    container.innerHTML = `
+      <div class="mx-auto max-w-lg rounded-2xl border border-line bg-white p-6 text-center">
+        <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-peach text-xl">🔍</div>
+        <p class="text-sm font-medium text-ink">Tidak ada harness yang dikenali</p>
+        <p class="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-sub">
+          Rekonfig belum menemukan konfigurasi Pi, oh-my-pi, OpenCode, atau Hermes.
+          Jalankan salah satunya sekali, lalu muat ulang.
+        </p>
+      </div>`;
+    return;
+  }
 
-      const badge = harness.installed
-        ? `<span class="rounded-full bg-tint-ok px-2 py-0.5 text-[10px] font-medium text-emerald-700">terpasang</span>`
-        : `<span class="rounded-full bg-sand px-2 py-0.5 text-[10px] font-medium text-sub">belum ada</span>`;
-      const experimental = harness.experimental
-        ? `<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">eksperimental</span>`
-        : "";
-
-      return `
-        <div data-harness="${esc(harness.id)}" role="button" tabindex="0"
-          class="w-full cursor-pointer rounded-xl border px-2.5 py-2 text-left transition ${
-            active
-              ? "border-brand/30 bg-peach shadow-sm"
-              : "border-line bg-white hover:border-stone-300 hover:shadow-sm"
-          }">
-          <div class="flex items-center gap-1.5">
-            <span class="truncate text-xs font-medium ${
-              active ? "text-brand" : "text-ink"
-            }">${esc(harness.name)}</span>
-            ${badge}
-          </div>
-          <div class="mt-1.5 space-y-1">${files}</div>
-          ${experimental ? `<div class="mt-1.5">${experimental}</div>` : ""}
-        </div>`;
-    })
-    .join("");
+  container.innerHTML = `
+    <div class="mx-auto max-w-5xl">
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold tracking-tight text-ink">Pilih harness</h2>
+        <p class="text-xs text-sub">Klik kotak di bawah untuk melihat dan mengelola provider-nya.</p>
+      </div>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        ${state.harnesses.map(harnessCard).join("")}
+      </div>
+    </div>`;
 
   container.querySelectorAll("[data-harness]").forEach((card) => {
     card.addEventListener("click", () => selectHarness(card.dataset.harness));
@@ -267,28 +329,6 @@ function renderSidebar() {
       }
     });
   });
-}
-
-function renderTopbar() {
-  const harness = state.harnesses.find((item) => item.id === state.activeId);
-  $("#active-name").textContent = harness ? harness.name : "Pilih harness";
-  $("#active-notes").textContent = harness
-    ? harness.notes
-    : "Deteksi konfigurasi harness di mesin ini.";
-
-  const actions = $("#topbar-actions");
-  if (!harness) {
-    actions.innerHTML = "";
-    return;
-  }
-  actions.innerHTML = `
-    <button data-action data-refresh class="rounded-xl border border-stone-300 px-2.5 py-1.5 text-xs text-stone-700 hover:bg-sand">Muat ulang</button>
-    <button data-action data-backups class="rounded-xl border border-stone-300 px-2.5 py-1.5 text-xs text-stone-700 hover:bg-sand">Backup</button>
-    <button data-action data-add class="rounded-xl bg-brand px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-brand/90">+ Tambah Provider</button>`;
-
-  $("[data-refresh]", actions).addEventListener("click", () => loadSnapshot(state.activeId));
-  $("[data-backups]", actions).addEventListener("click", () => openBackups());
-  $("[data-add]", actions).addEventListener("click", () => openProviderForm("add"));
 }
 
 function providerCard(provider) {
@@ -480,10 +520,22 @@ function renderContent() {
   if (addEmpty) addEmpty.addEventListener("click", () => openProviderForm("add"));
 }
 
-function renderAll() {
-  renderSidebar();
-  renderTopbar();
-  renderContent();
+function render() {
+  if (state.view === "home") {
+    renderHomeHeader();
+    renderHome();
+  } else {
+    renderHarnessHeader();
+    renderContent();
+  }
+}
+
+function goHome() {
+  state.view = "home";
+  state.activeId = null;
+  state.snapshot = null;
+  state.expanded.clear();
+  render();
 }
 
 // ============================================================================
@@ -498,7 +550,7 @@ async function loadHarnesses() {
     state.harnesses = [];
     state.loadError = `Gagal memuat daftar harness: ${String(error)}`;
   }
-  renderSidebar();
+  render();
 }
 
 async function loadSnapshot(harnessId) {
@@ -517,14 +569,14 @@ async function loadSnapshot(harnessId) {
 
 async function selectHarness(harnessId) {
   state.activeId = harnessId;
-  renderAll();
+  state.view = "harness";
+  render();
   await loadSnapshot(harnessId);
 }
 
 async function refreshEverything() {
   await loadHarnesses();
-  if (state.activeId) await loadSnapshot(state.activeId);
-  else renderTopbar();
+  if (state.view === "harness" && state.activeId) await loadSnapshot(state.activeId);
 }
 
 // ============================================================================
@@ -1033,7 +1085,7 @@ function renderFatal(message) {
 async function init() {
   if (!invoke) {
     renderFatal("Rekonfig harus dijalankan sebagai aplikasi desktop.");
-    renderSidebar();
+    renderHomeHeader();
     return;
   }
 
@@ -1044,24 +1096,8 @@ async function init() {
     toast("Preset provider tidak bisa dimuat", "err", String(error));
   }
 
+  // Muat daftar harness dan tampilkan grid pilihan (view "home").
   await loadHarnesses();
-
-  if (state.harnesses.length === 0) {
-    renderTopbar();
-    $("#content").innerHTML = `
-      <div class="mx-auto max-w-lg rounded-2xl border border-line bg-white p-5">
-        <p class="text-sm font-medium text-ink">Tidak ada harness yang dikenali</p>
-        <p class="mt-1 text-xs leading-relaxed text-sub">
-          Rekonfig belum menemukan konfigurasi Pi, oh-my-pi, OpenCode, atau Hermes di mesin ini.
-          Pastikan salah satu harness sudah pernah dijalankan minimal sekali.
-        </p>
-      </div>`;
-    return;
-  }
-
-  // pilih harness terpasang pertama, atau yang pertama di daftar
-  const installed = state.harnesses.find((harness) => harness.installed);
-  await selectHarness((installed ?? state.harnesses[0]).id);
 }
 
 init();
