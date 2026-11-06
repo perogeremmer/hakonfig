@@ -233,11 +233,10 @@ function renderHarnessHeader() {
   $("[data-add]", $("#topbar")).addEventListener("click", () => openProviderForm("add"));
 }
 
-function harnessCard(harness) {
+function harnessTile(harness) {
   const [tint, tintText] = avatarTint(harness.id);
   const configured = harness.connectedCount > 0;
 
-  // Badge: hijau bila sudah dikonfigurasi, abu bila belum.
   const badge = configured
     ? `<span class="inline-flex items-center gap-1 rounded-full bg-tint-ok px-2 py-0.5 text-[10px] font-medium text-emerald-700">
          <span class="h-1.5 w-1.5 rounded-full bg-brand"></span>terkonfigurasi
@@ -246,40 +245,51 @@ function harnessCard(harness) {
          <span class="h-1.5 w-1.5 rounded-full bg-mute"></span>belum disetel
        </span>`;
 
-  const experimental = harness.experimental
-    ? `<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">eksperimental</span>`
-    : "";
-
-  // Keterangan singkat di bawah nama.
   let caption;
   if (harness.readError) {
     caption = `<span class="text-rose-600">config tidak terbaca</span>`;
   } else if (!harness.installed) {
-    caption = `Belum ada file config`;
+    caption = "Belum ada file config";
   } else if (harness.connectedCount > 0) {
     caption = `${harness.connectedCount} provider terhubung`;
   } else if (harness.providerCount > 0) {
-    caption = `${harness.providerCount} provider, belum ada API key`;
+    caption = `${harness.providerCount} provider, tanpa API key`;
   } else {
-    caption = `Belum ada provider`;
+    caption = "Belum ada provider";
   }
 
   return `
     <div data-harness="${esc(harness.id)}" role="button" tabindex="0"
-      class="group flex cursor-pointer items-center gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm transition hover:border-brand/40 hover:shadow-md">
-      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tint} text-sm font-semibold ${tintText}">
+      class="group flex cursor-pointer flex-col items-center justify-center gap-2.5 rounded-2xl border border-line bg-white px-3 py-6 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md">
+      <div class="flex h-14 w-14 items-center justify-center rounded-2xl ${tint} text-base font-semibold ${tintText}">
         ${esc(avatarInitials(harness.id))}
       </div>
-      <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-medium text-ink">${esc(harness.name)}</p>
-        <p class="truncate text-[11px] text-sub">${caption}</p>
-      </div>
-      <div class="flex shrink-0 flex-col items-end gap-1">
+      <p class="w-full truncate text-[15px] font-medium text-ink">${esc(harness.name)}</p>
+      <p class="w-full truncate text-[11px] text-sub">${caption}</p>
+      <div class="flex flex-wrap items-center justify-center gap-1">
         ${badge}
-        ${experimental}
+        ${harness.experimental ? `<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">eksperimental</span>` : ""}
       </div>
-      <span class="shrink-0 text-mute transition group-hover:translate-x-0.5 group-hover:text-brand">→</span>
     </div>`;
+}
+
+function harnessSection(title, items, hint) {
+  return `
+    <section class="mb-6">
+      <div class="mb-3 flex items-baseline gap-2">
+        <h3 class="text-sm font-semibold text-ink">${esc(title)}</h3>
+        <span class="rounded-full bg-sand px-2 py-0.5 text-[10px] font-medium text-sub">${items.length}</span>
+      </div>
+      ${
+        items.length
+          ? `<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+               ${items.map(harnessTile).join("")}
+             </div>`
+          : `<div class="rounded-2xl border border-dashed border-stone-300 bg-white px-4 py-8 text-center text-xs text-sub">${esc(
+              hint,
+            )}</div>`
+      }
+    </section>`;
 }
 
 function renderHome() {
@@ -298,29 +308,27 @@ function renderHome() {
         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-peach text-xl">🔍</div>
         <p class="text-sm font-medium text-ink">Tidak ada harness yang dikenali</p>
         <p class="mx-auto mt-1 max-w-sm text-xs leading-relaxed text-sub">
-          Rekonfig belum menemukan konfigurasi Pi, oh-my-pi, OpenCode, atau Hermes.
-          Jalankan salah satunya sekali, lalu muat ulang.
+          Rekonfig belum menemukan konfigurasi harness apa pun. Jalankan salah satunya sekali, lalu muat ulang.
         </p>
       </div>`;
     return;
   }
 
+  const installed = state.harnesses.filter((harness) => harness.installed);
+  const missing = state.harnesses.filter((harness) => !harness.installed);
+
   container.innerHTML = `
     <div class="mx-auto max-w-5xl">
-      <div class="mb-4">
+      <div class="mb-5">
         <h2 class="text-lg font-semibold tracking-tight text-ink">Pilih harness</h2>
         <p class="text-xs text-sub">Klik salah satu untuk melihat provider yang terpasang.</p>
       </div>
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        ${state.harnesses.map(harnessCard).join("")}
-      </div>
-
-      <div class="mt-5 rounded-2xl border border-line bg-white p-4 shadow-sm">
-        <p class="text-xs leading-relaxed text-sub">
-          Harness yang belum terpasang tetap bisa dipilih untuk menyiapkan config baru.
-          Setiap penulisan selalu membuat backup otomatis.
-        </p>
-      </div>
+      ${harnessSection("Terpasang", installed, "Belum ada harness yang terdeteksi di mesin ini.")}
+      ${harnessSection(
+        "Belum terpasang",
+        missing,
+        "Semua harness yang didukung Rekonfig sudah terpasang.",
+      )}
     </div>`;
 
   container.querySelectorAll("[data-harness]").forEach((card) => {
@@ -329,16 +337,6 @@ function renderHome() {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         selectHarness(card.dataset.harness);
-      }
-    });
-  });
-  container.querySelectorAll("[data-reveal]").forEach((button) => {
-    button.addEventListener("click", async (event) => {
-      event.stopPropagation();
-      try {
-        await api.reveal(button.dataset.reveal);
-      } catch (error) {
-        toast("Gagal membuka folder", "err", String(error));
       }
     });
   });
