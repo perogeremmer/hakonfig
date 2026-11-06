@@ -1,0 +1,16 @@
+{
+  "name": "rekonfig",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "css": "tailwindcss -i ./web/styles.src.css -o ./web/styles.css --minify",
+    "css:watch": "tailwindcss -i ./web/styles.src.css -o ./web/styles.css --watch",
+    "dev": "bun run css && cargo tauri dev",
+    "build": "bun run css && cargo tauri build"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4",
+    "tailwindcss": "^4"
+  }
+}

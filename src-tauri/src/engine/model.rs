@@ -1,0 +1,201 @@
+//! Tipe data bersama antara backend dan frontend.
+use serde::{Deserialize, Serialize};
+
+// ---------------------------------------------------------------- discovery
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigFileInfo {
+    pub path: String,
+    pub role: String,
+    pub exists: bool,
+    pub sensitive: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessInfo {
+    pub id: String,
+    pub name: String,
+    pub installed: bool,
+    pub experimental: bool,
+    pub files: Vec<ConfigFileInfo>,
+    pub notes: String,
+}
+
+// ---------------------------------------------------------------- snapshot
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelSummary {
+    pub id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub context_window: Option<u64>,
+    #[serde(default)]
+    pub max_tokens: Option<u64>,
+    #[serde(default)]
+    pub reasoning: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderSummary {
+    pub id: String,
+    pub name: String,
+    pub base_url: Option<String>,
+    pub api: Option<String>,
+    pub has_key: bool,
+    pub key_display: Option<String>,
+    pub models: Vec<ModelSummary>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessSnapshot {
+    pub harness: String,
+    pub files: Vec<ConfigFileInfo>,
+    pub providers: Vec<ProviderSummary>,
+    pub default_provider: Option<String>,
+    pub default_model: Option<String>,
+    pub warnings: Vec<String>,
+}
+
+// ---------------------------------------------------------------- edit input
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum KeyMode {
+    #[default]
+    Inline,
+    Env,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelDraft {
+    pub id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub context_window: Option<u64>,
+    #[serde(default)]
+    pub max_tokens: Option<u64>,
+    #[serde(default)]
+    pub reasoning: bool,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderDraft {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub api: String,
+    #[serde(default)]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub key_mode: Option<KeyMode>,
+    #[serde(default)]
+    pub models: Vec<ModelDraft>,
+}
+
+impl ProviderDraft {
+    pub fn key_mode(&self) -> KeyMode {
+        self.key_mode.unwrap_or_default()
+    }
+    /// Key yang benar-benar diisi user (bukan string kosong).
+    pub fn key_value(&self) -> Option<&str> {
+        self.key.as_deref().map(str::trim).filter(|k| !k.is_empty())
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+pub enum EditOp {
+    Upsert(ProviderDraft),
+    Remove { provider_id: String },
+}
+
+// ---------------------------------------------------------------- results
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FileDiff {
+    pub path: String,
+    pub role: String,
+    pub sensitive: bool,
+    pub before: Option<String>,
+    pub after: Option<String>,
+    pub changed: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreviewResult {
+    pub files: Vec<FileDiff>,
+    pub warnings: Vec<String>,
+    pub will_create: Vec<String>,
+    pub will_modify: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyResult {
+    pub files_written: Vec<String>,
+    pub backup_dir: Option<String>,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupFile {
+    pub path: String,
+    pub role: String,
+    pub exists: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupInfo {
+    pub id: String,
+    pub created_at: String,
+    pub dir: String,
+    pub files: Vec<BackupFile>,
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestResult {
+    pub ok: bool,
+    pub status: Option<u16>,
+    pub message: String,
+    pub latency_ms: Option<u64>,
+    pub models_sample: Vec<String>,
+}
+
+// ---------------------------------------------------------------- presets
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderPreset {
+    pub id: String,
+    pub name: String,
+    pub base_url: String,
+    pub api: String,
+    #[serde(default)]
+    pub env_var: Option<String>,
+    #[serde(default)]
+    pub docs_url: Option<String>,
+    #[serde(default)]
+    pub key_required: bool,
+    #[serde(default)]
+    pub notes: String,
+    #[serde(default)]
+    pub models: Vec<ModelSummary>,
+}

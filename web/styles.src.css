@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+@source "./index.html";
+@source "./main.js";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+/* Kontrol native (select, checkbox, scrollbar) mengikuti tema gelap. */
+html {
+  color-scheme: dark;
+}
+
+/* WebKitGTK merender <select> dengan gaya terang bawaan; reset agar token
+   Tailwind (bg-zinc-950 / text-zinc-100) benar-benar berlaku. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a1a1aa' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1rem 1rem;
+  padding-right: 1.9rem;
+}
+
+select option {
+  background-color: #18181b;
+  color: #f4f4f5;
+}
+
+body {
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* ---- scrollbars ---- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3f3f46 transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+  background-clip: content-box;
+}
+
+/* ---- diff view ---- */
+.diff-line {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding-left: 1.25rem;
+  position: relative;
+}
+.diff-add {
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+}
+.diff-add::before {
+  content: "+";
+  position: absolute;
+  left: 0.25rem;
+  color: #22c55e;
+}
+.diff-del {
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+.diff-del::before {
+  content: "-";
+  position: absolute;
+  left: 0.25rem;
+  color: #ef4444;
+}
+.diff-ctx {
+  color: #a1a1aa;
+}
+.diff-ctx::before {
+  content: " ";
+  position: absolute;
+  left: 0.25rem;
+}

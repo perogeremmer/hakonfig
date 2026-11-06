@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="id" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rekonfig</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="h-full bg-zinc-950 font-sans text-zinc-100 antialiased">
+    <div class="flex h-full flex-col">
+      <!-- ============================ SIDEBAR + MAIN ============================ -->
+      <div class="flex min-h-0 flex-1">
+        <aside
+          class="flex w-72 shrink-0 flex-col border-r border-zinc-800 bg-zinc-900/50"
+        >
+          <div class="flex items-center gap-3 border-b border-zinc-800 px-4 py-4">
+            <div
+              class="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                class="h-5 w-5"
+              >
+                <path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h9M17 18h3" />
+                <circle cx="15" cy="6" r="2" fill="currentColor" stroke="none" />
+                <circle cx="9" cy="12" r="2" fill="currentColor" stroke="none" />
+                <circle cx="15" cy="18" r="2" fill="currentColor" stroke="none" />
+              </svg>
+            </div>
+            <div class="min-w-0">
+              <h1 class="truncate text-sm font-semibold tracking-tight">Rekonfig</h1>
+              <p class="truncate text-xs text-zinc-500">
+                Kelola provider harness
+              </p>
+            </div>
+          </div>
+
+          <div class="px-4 pt-4 pb-2 text-[11px] font-semibold tracking-wider text-zinc-500 uppercase">
+            Harness
+          </div>
+          <div id="harness-list" class="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 pb-3">
+            <p class="px-2 py-4 text-xs text-zinc-500">Memuat…</p>
+          </div>
+
+          <div class="border-t border-zinc-800 p-3">
+            <p class="text-[11px] leading-relaxed text-zinc-600">
+              Setiap perubahan selalu membuat backup otomatis lebih dulu.
+            </p>
+          </div>
+        </aside>
+
+        <main class="flex min-w-0 flex-1 flex-col">
+          <header
+            id="topbar"
+            class="flex shrink-0 items-center justify-between gap-4 border-b border-zinc-800 bg-zinc-900/30 px-6 py-3"
+          >
+            <div class="min-w-0">
+              <h2 id="active-name" class="truncate text-sm font-semibold">Pilih harness</h2>
+              <p id="active-notes" class="truncate text-xs text-zinc-500">
+                Deteksi konfigurasi harness di mesin ini.
+              </p>
+            </div>
+            <div id="topbar-actions" class="flex shrink-0 items-center gap-2"></div>
+          </header>
+
+          <div id="content" class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+            <div class="mx-auto max-w-5xl">
+              <p class="text-sm text-zinc-500">Memuat konfigurasi…</p>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <div id="modal-root"></div>
+    <div
+      id="toast-root"
+      class="pointer-events-none fixed right-4 bottom-4 z-[100] flex w-96 flex-col gap-2"
+    ></div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

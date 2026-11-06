@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Izin dasar untuk jendela utama Rekonfig",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}
