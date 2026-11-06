@@ -7,6 +7,18 @@
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  /* Design token hasil ekstraksi dari referensi visual (tema terang & hangat) */
+  --color-cream: #fdfaf6;      /* latar halaman */
+  --color-sand: #faf7f3;       /* permukaan hangat: sidebar, header, hover */
+  --color-line: #f1f1f3;       /* garis kartu */
+  --color-brand: #1eaf5d;      /* aksi utama, status sukses */
+  --color-peach: #fbefe9;      /* item terpilih / hover hangat */
+  --color-tint-ok: #e6f9ef;    /* pil sukses */
+  --color-tint-info: #f0f3ff;  /* pil info */
+  --color-ink: #0a0a0a;        /* teks utama */
+  --color-sub: #6c7481;        /* teks sekunder */
+  --color-mute: #b4b8be;       /* teks redup */
 }
 
 html,
@@ -35,7 +47,7 @@ body {
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%2378716c' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236c7481' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 0.5rem center;
   background-size: 1rem 1rem;
@@ -44,26 +56,26 @@ select {
 
 select option {
   background-color: #ffffff;
-  color: #292524;
+  color: #0a0a0a;
 }
 
 /* ---- scrollbars ---- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #d6d3d1 transparent;
+  scrollbar-color: #e7e2dc transparent;
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #d6d3d1;
+  background: #e7e2dc;
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #a8a29e;
+  background: #c9c3bb;
   background-clip: content-box;
 }
 
@@ -76,8 +88,8 @@ select option {
   position: relative;
 }
 .diff-add {
-  background: #dcfce7;
-  color: #166534;
+  background: #e6f9ef;
+  color: #10693a;
 }
 .diff-add::before {
   content: "+";
@@ -86,8 +98,8 @@ select option {
   color: #16a34a;
 }
 .diff-del {
-  background: #fee2e2;
-  color: #991b1b;
+  background: #fdeaea;
+  color: #9b1c1c;
 }
 .diff-del::before {
   content: "-";
@@ -96,7 +108,7 @@ select option {
   color: #dc2626;
 }
 .diff-ctx {
-  color: #78716c;
+  color: #6c7481;
 }
 .diff-ctx::before {
   content: " ";
