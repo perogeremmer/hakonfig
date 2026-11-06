@@ -21,6 +21,11 @@ pub trait Adapter {
         false
     }
 
+    /// Apakah harness punya daftar provider nonaktif (toggle reversible).
+    fn supports_toggle(&self) -> bool {
+        false
+    }
+
     /// Seluruh file yang relevan untuk harness ini (urutan menentukan tampilan).
     fn specs(&self) -> Vec<FileSpec>;
 

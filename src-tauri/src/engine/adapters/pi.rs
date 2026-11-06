@@ -101,6 +101,8 @@ impl Adapter for PiAdapter {
                     has_key,
                     key_display,
                     models: shared::models_from_pi_style(entry),
+                    enabled: true,
+                    can_toggle: self.supports_toggle(),
                 });
             }
         }
@@ -194,6 +196,11 @@ impl Adapter for PiAdapter {
                 }
 
                 Ok(warnings)
+            }
+            EditOp::SetEnabled { .. } => {
+                anyhow::bail!(
+                    "Pi tidak punya daftar provider nonaktif. Nonaktifkan provider dengan menghapusnya."
+                )
             }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();

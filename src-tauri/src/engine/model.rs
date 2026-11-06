@@ -55,6 +55,11 @@ pub struct ProviderSummary {
     pub has_key: bool,
     pub key_display: Option<String>,
     pub models: Vec<ModelSummary>,
+    /// false bila provider dinonaktifkan lewat daftar disable milik harness.
+    pub enabled: bool,
+    /// true bila harness punya daftar disable (nonaktif = reversible).
+    /// Bila false, menonaktifkan berarti menghapus entry dari config.
+    pub can_toggle: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize)]
@@ -125,7 +130,14 @@ impl ProviderDraft {
 )]
 pub enum EditOp {
     Upsert(ProviderDraft),
-    Remove { provider_id: String },
+    Remove {
+        provider_id: String,
+    },
+    /// Hanya berlaku untuk harness yang punya daftar disable.
+    SetEnabled {
+        provider_id: String,
+        enabled: bool,
+    },
 }
 
 // ---------------------------------------------------------------- results

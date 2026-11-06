@@ -4,7 +4,7 @@
 
 use serde_json::Value;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::commands;
 use crate::engine::adapters;
@@ -296,6 +296,86 @@ providers:
 }
 
 #[test]
+fn omp_toggle_nonaktif_reversible() {
+    let (_lock, root) = sandbox("omp-toggle");
+    let dir = root.join("omp/agent");
+
+    write(
+        &dir.join("models.yml"),
+        "providers:\n  groq:\n    baseUrl: https://api.groq.com/openai/v1\n    api: openai-completions\n",
+    );
+    write(&dir.join("config.yml"), "modelRoles:\n  default: groq/m\n");
+
+    // semua provider aktif secara default
+    let snap = snapshot("omp");
+    assert!(snap.providers[0].enabled);
+    assert!(snap.providers[0].can_toggle);
+
+    // nonaktifkan → tercatat di disabledProviders, entry tetap ada
+    commands::apply_edit(
+        "omp".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    let settings = yaml(&dir.join("config.yml"));
+    assert_eq!(settings["disabledProviders"][0], "groq");
+    let models = yaml(&dir.join("models.yml"));
+    assert!(models["providers"].get("groq").is_some(), "entry tidak boleh hilang");
+    assert!(!snapshot("omp").providers[0].enabled);
+
+    // nonaktifkan dua kali tidak menduplikasi
+    commands::apply_edit(
+        "omp".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    let settings = yaml(&dir.join("config.yml"));
+    assert_eq!(settings["disabledProviders"].as_array().unwrap().len(), 1);
+
+    // aktifkan lagi → daftar bersih
+    commands::apply_edit(
+        "omp".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: true,
+        },
+    )
+    .unwrap();
+    let settings = yaml(&dir.join("config.yml"));
+    assert_eq!(settings["disabledProviders"].as_array().unwrap().len(), 0);
+    assert!(snapshot("omp").providers[0].enabled);
+}
+
+#[test]
+fn harness_tanpa_daftar_disable_menolak_toggle() {
+    let (_lock, root) = sandbox("no-toggle");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"a":{"name":"A","baseUrl":"https://x/v1","api":"openai-completions"}}}"#,
+    );
+
+    let snap = snapshot("pi");
+    assert!(snap.providers[0].enabled);
+    assert!(!snap.providers[0].can_toggle, "Pi tidak mendukung toggle");
+
+    let result = commands::preview_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "a".to_string(),
+            enabled: false,
+        },
+    );
+    assert!(result.is_err(), "Pi harus menolak, bukan menghapus diam-diam");
+}
+
+#[test]
 fn opencode_provider_dan_auth() {
     let (_lock, root) = sandbox("pi_merge_backup_dan_redaksi");
     let config_dir = root.join("opencode/config");
@@ -366,6 +446,38 @@ fn opencode_provider_dan_auth() {
     assert_eq!(auth["groq"]["type"], "api");
     assert_eq!(auth["groq"]["key"], "gsk-oc-rahasia");
     assert_eq!(auth["existing"]["key"], "key-lama-jangan-hilang");
+
+    // toggle nonaktif: entry tetap ada, tercatat di disabled_providers
+    assert!(snapshot("opencode").providers.iter().all(|p| p.enabled));
+    commands::apply_edit(
+        "opencode".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    let config = json(&config_dir.join("opencode.json"));
+    assert_eq!(config["disabled_providers"][0], "groq");
+    assert!(config["provider"].get("groq").is_some());
+    let groq = snapshot("opencode")
+        .providers
+        .into_iter()
+        .find(|p| p.id == "groq")
+        .unwrap();
+    assert!(!groq.enabled);
+    assert!(groq.can_toggle);
+
+    commands::apply_edit(
+        "opencode".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: true,
+        },
+    )
+    .unwrap();
+    let config = json(&config_dir.join("opencode.json"));
+    assert_eq!(config["disabled_providers"].as_array().unwrap().len(), 0);
 
     // hapus
     commands::apply_edit(

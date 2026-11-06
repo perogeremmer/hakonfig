@@ -48,6 +48,8 @@ type ProviderSummary = {
   hasKey: boolean;
   keyDisplay: string | null; // mis. "$GROQ_API_KEY", "•••• 1234", "oauth", null
   models: ModelSummary[];
+  enabled: boolean;    // false bila dinonaktifkan lewat daftar disable harness
+  canToggle: boolean;  // true = nonaktif reversible; false = nonaktif berarti hapus
 };
 
 type HarnessSnapshot = {
@@ -91,7 +93,8 @@ type ProviderDraft = {
 
 type EditOp =
   | ({ kind: "upsert" } & ProviderDraft)
-  | { kind: "remove"; providerId: string };
+  | { kind: "remove"; providerId: string }
+  | { kind: "set_enabled"; providerId: string; enabled: boolean };
 
 type FileDiff = {
   path: string;
@@ -155,4 +158,7 @@ type TestResult = {
 - `open_in_file_manager` membuka folder induk dari `path`.
 - **`PreviewResult.files` hanya mengisi `before`/`after` untuk file yang berubah**; file lain tetap dikirim dengan `changed: false` dan isi `null` (agar payload tidak membengkak oleh katalog model yang besar).
 - Untuk file dengan `sensitive: true`, isi `before`/`after` **sudah disamarkan backend**: nilai field `key`, `apiKey`, `token`, `access`, `refresh`, `secret`, `password`, `authorization` diganti `••••••••`. UI hanya menampilkan, tidak perlu menyamarkan sendiri.
+- `set_enabled` hanya berlaku untuk harness dengan daftar disable (oh-my-pi:
+  `disabledProviders`, OpenCode: `disabled_providers`); harness lain menolak
+  lewat error, jadi UI harus memakai alur `remove` (dengan konfirmasi).
 - `apply_edit` boleh dipanggil walau tidak ada perubahan; ia mengembalikan `filesWritten: []` tanpa membuat backup.

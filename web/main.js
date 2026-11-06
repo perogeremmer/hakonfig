@@ -28,6 +28,25 @@ const API_OPTIONS = [
 
 const $ = (selector, root = document) => root.querySelector(selector);
 
+// Badge jenis API. OpenAI-compatible ditandai biru sesuai permintaan.
+function apiBadge(api) {
+  const value = String(api ?? "").trim();
+  if (!value) return "";
+  if (/openai/i.test(value)) {
+    return `<span class="rounded-full bg-tint-info px-2 py-0.5 text-[10px] font-medium text-blue-700" title="${esc(
+      value,
+    )}">openai-compatible</span>`;
+  }
+  const tone = value.startsWith("anthropic")
+    ? "bg-amber-100 text-amber-700"
+    : value.startsWith("google")
+      ? "bg-tint-ok text-emerald-700"
+      : "bg-sand text-sub";
+  return `<span class="rounded-full ${tone} px-2 py-0.5 text-[10px] font-medium" title="${esc(
+    value,
+  )}">${esc(value)}</span>`;
+}
+
 // Warna avatar provider — deterministik dari id, supaya stabil antar render.
 const AVATAR_TINTS = [
   ["bg-tint-ok", "text-emerald-700"],
@@ -98,7 +117,6 @@ const state = {
   presets: [],
   backups: [],
   busy: false,
-  expanded: new Set(),
   loadError: null,
 };
 
@@ -343,73 +361,48 @@ function renderHome() {
 }
 
 function providerCard(provider) {
-  const expanded = state.expanded.has(provider.id);
   const [tint, tintText] = avatarTint(provider.id);
+  const on = provider.enabled !== false;
 
-  const status = provider.hasKey
-    ? `<span class="inline-flex items-center gap-1 rounded-full bg-tint-ok px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-         <span class="h-1.5 w-1.5 rounded-full bg-brand"></span>terhubung
-       </span>`
-    : `<span class="inline-flex items-center gap-1 rounded-full bg-sand px-2 py-0.5 text-[10px] font-medium text-sub">
-         belum ada key
-       </span>`;
+  // Harness tanpa daftar disable: mematikan toggle berarti menghapus entry.
+  const toggleTitle = provider.canToggle
+    ? on
+      ? "Nonaktifkan provider"
+      : "Aktifkan provider"
+    : on
+      ? "Nonaktifkan = hapus dari config (backup otomatis)"
+      : "Aktifkan provider";
 
-  const models = expanded
-    ? `<div class="mt-3 rounded-xl border border-line bg-sand p-2.5">
-         ${
-           provider.models.length
-             ? `<div class="max-h-56 space-y-1 overflow-y-auto">
-                  ${provider.models
-                    .map(
-                      (model) => `<div class="flex items-baseline gap-2 rounded-lg bg-white px-2 py-1">
-                        <span class="selectable truncate font-mono text-[11px] text-ink">${esc(model.id)}</span>
-                        <span class="ml-auto shrink-0 font-mono text-[10px] text-mute">${fmtTokens(
-                          model.contextWindow,
-                        )}${model.reasoning ? " · 🧠" : ""}</span>
-                      </div>`,
-                    )
-                    .join("")}
-                </div>`
-             : `<p class="px-1 py-1 text-[11px] text-sub">Tidak ada model di config ini.</p>`
-         }
-       </div>`
-    : "";
+  const toggle = `
+    <button data-action data-toggle="${esc(provider.id)}" title="${esc(toggleTitle)}"
+      role="switch" aria-checked="${on ? "true" : "false"}"
+      class="relative h-5 w-9 shrink-0 rounded-full transition ${
+        on ? "bg-brand" : "bg-stone-300"
+      }">
+      <span class="absolute top-0.5 ${on ? "left-4.5" : "left-0.5"} h-4 w-4 rounded-full bg-white shadow transition-all"></span>
+    </button>`;
 
   return `
-    <div class="flex flex-col rounded-2xl border border-line bg-white p-4 shadow-sm transition hover:border-stone-300 hover:shadow-md">
-      <div class="flex items-start gap-3">
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint} text-xs font-semibold ${tintText}">
+    <div class="flex h-full flex-col rounded-2xl border border-line bg-white p-3 shadow-sm transition ${
+      on ? "hover:border-brand/40 hover:shadow-md" : "opacity-70"
+    }">
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tint} text-[11px] font-semibold ${tintText}">
           ${esc(avatarInitials(provider.id))}
         </div>
-        <div class="min-w-0 flex-1">
-          <p class="truncate text-sm font-medium text-ink">${esc(provider.name)}</p>
-          <p class="selectable truncate font-mono text-[10px] text-mute">${esc(provider.id)}</p>
-        </div>
-        ${status}
+        ${toggle}
       </div>
-
-      <p class="selectable mt-3 truncate font-mono text-[11px] text-sub" title="${esc(
-        provider.baseUrl ?? "",
-      )}">${esc(provider.baseUrl ?? "—")}</p>
-      <p class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-mute">
-        ${provider.api ? `<span class="font-mono">${esc(provider.api)}</span>` : ""}
-        ${provider.keyDisplay ? `<span>·</span><span class="font-mono">${esc(provider.keyDisplay)}</span>` : ""}
-      </p>
-
-      <div class="mt-3 flex items-center justify-between gap-2 border-t border-line pt-2.5">
-        <button data-action data-expand="${esc(provider.id)}"
-          class="rounded-lg px-2 py-1 text-[11px] text-sub hover:bg-peach hover:text-ink">
-          ${provider.models.length} model ${expanded ? "▴" : "▾"}
-        </button>
-        <div class="flex items-center gap-1">
-          <button data-action data-edit="${esc(provider.id)}"
-            class="rounded-lg px-2 py-1 text-[11px] text-sub hover:bg-sand hover:text-ink">Ubah</button>
-          <button data-action data-remove="${esc(provider.id)}"
-            class="rounded-lg px-2 py-1 text-[11px] text-rose-600 hover:bg-rose-50">Hapus</button>
-        </div>
+      <p class="mt-2 truncate text-[13px] font-medium text-ink" title="${esc(provider.name)}">${esc(
+        provider.name,
+      )}</p>
+      <p class="selectable truncate font-mono text-[10px] text-mute" title="${esc(provider.id)}">${esc(
+        provider.id,
+      )}</p>
+      <div class="mt-1.5 min-h-4">${apiBadge(provider.api)}</div>
+      <div class="mt-auto flex items-center justify-end gap-2 border-t border-line pt-1.5 text-[10px]">
+        <button data-action data-edit="${esc(provider.id)}" class="rounded px-1 py-0.5 text-sub hover:bg-sand hover:text-ink">Ubah</button>
+        <button data-action data-remove="${esc(provider.id)}" class="rounded px-1 py-0.5 text-rose-600 hover:bg-rose-50">Hapus</button>
       </div>
-
-      ${models}
     </div>`;
 }
 
@@ -464,7 +457,7 @@ function renderContent() {
              + Tambah Provider
            </button>
          </div>`
-      : `<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      : `<div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
            ${snapshot.providers.map(providerCard).join("")}
          </div>`;
 
@@ -501,13 +494,8 @@ function renderContent() {
       </div>
     </div>`;
 
-  container.querySelectorAll("[data-expand]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const id = button.dataset.expand;
-      if (state.expanded.has(id)) state.expanded.delete(id);
-      else state.expanded.add(id);
-      renderContent();
-    });
+  container.querySelectorAll("[data-toggle]").forEach((button) => {
+    button.addEventListener("click", () => toggleProvider(button.dataset.toggle));
   });
   container.querySelectorAll("[data-edit]").forEach((button) => {
     button.addEventListener("click", () => {
@@ -545,7 +533,6 @@ function goHome() {
   state.view = "home";
   state.activeId = null;
   state.snapshot = null;
-  state.expanded.clear();
   render();
 }
 
@@ -566,7 +553,6 @@ async function loadHarnesses() {
 
 async function loadSnapshot(harnessId) {
   state.snapshot = null;
-  state.expanded.clear();
   renderContent();
   try {
     state.snapshot = await api.read(harnessId);
@@ -993,6 +979,48 @@ async function showPreview(op) {
       busy(false);
     }
   });
+}
+
+async function toggleProvider(providerId) {
+  const provider = state.snapshot?.providers.find((item) => item.id === providerId);
+  if (!provider) return;
+
+  const currentlyOn = provider.enabled !== false;
+
+  // Harness tanpa daftar disable: mematikan = hapus entry dari config.
+  if (!provider.canToggle) {
+    if (currentlyOn) {
+      await removeProvider(providerId);
+    } else {
+      toast("Provider ini nonaktif karena tidak ada di config", "info");
+    }
+    return;
+  }
+
+  const op = { kind: "set_enabled", providerId, enabled: !currentlyOn };
+
+  busy(true);
+  try {
+    const preview = await api.preview(state.activeId, op);
+    const changed = preview.files.filter((file) => file.changed);
+
+    if (changed.length === 0) {
+      toast("Tidak ada perubahan", "info");
+      return;
+    }
+
+    const result = await api.apply(state.activeId, op);
+    toast(
+      currentlyOn ? "Provider dinonaktifkan" : "Provider diaktifkan",
+      "ok",
+      result.warnings[0] ?? "",
+    );
+    await refreshEverything();
+  } catch (error) {
+    toast("Gagal mengubah status provider", "err", String(error));
+  } finally {
+    busy(false);
+  }
 }
 
 async function removeProvider(providerId) {

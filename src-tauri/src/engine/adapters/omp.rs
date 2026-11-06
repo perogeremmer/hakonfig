@@ -37,6 +37,10 @@ impl Adapter for OmpAdapter {
         "Katalog di models.yml. Key ditulis pada field apiKey (tidak ada auth.json terpisah)."
     }
 
+    fn supports_toggle(&self) -> bool {
+        true
+    }
+
     fn specs(&self) -> Vec<FileSpec> {
         let dir = Self::agent_dir();
         vec![
@@ -71,6 +75,18 @@ impl Adapter for OmpAdapter {
             );
         }
 
+        let disabled: Vec<String> = settings
+            .and_then(|doc| doc.data().get("disabledProviders"))
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+
         let mut providers = Vec::new();
         if let Some(map) = models.data().get("providers").and_then(Value::as_object) {
             for (id, entry) in map {
@@ -83,6 +99,8 @@ impl Adapter for OmpAdapter {
                     has_key: api_key.is_some(),
                     key_display: api_key.map(|k| mask_key(&k)),
                     models: shared::models_from_pi_style(entry),
+                    enabled: !disabled.iter().any(|d| d == id),
+                    can_toggle: self.supports_toggle(),
                 });
             }
         }
@@ -167,6 +185,37 @@ impl Adapter for OmpAdapter {
                 }
 
                 Ok(warnings)
+            }
+            EditOp::SetEnabled {
+                provider_id,
+                enabled,
+            } => {
+                let target = provider_id.trim().to_string();
+                let known = docs
+                    .require("models")?
+                    .data()
+                    .get("providers")
+                    .and_then(|p| p.get(&target))
+                    .is_some();
+                if !known {
+                    anyhow::bail!("Provider '{}' tidak ditemukan di models.yml.", target);
+                }
+
+                let settings = docs.require_mut("settings")?;
+                let list = settings.array_at("disabledProviders");
+                list.retain(|item| item.as_str() != Some(target.as_str()));
+                if !*enabled {
+                    list.push(Value::String(target.clone()));
+                }
+
+                Ok(vec![if *enabled {
+                    format!("Provider '{}' diaktifkan kembali.", target)
+                } else {
+                    format!(
+                        "Provider '{}' dinonaktifkan (entry tetap ada di models.yml).",
+                        target
+                    )
+                }])
             }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();

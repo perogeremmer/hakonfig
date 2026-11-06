@@ -125,6 +125,10 @@ impl Adapter for OpenCodeAdapter {
         "Provider di opencode.json, API key di auth.json milik OpenCode."
     }
 
+    fn supports_toggle(&self) -> bool {
+        true
+    }
+
     fn specs(&self) -> Vec<FileSpec> {
         let config_dir = paths::opencode_config_dir();
         vec![
@@ -161,6 +165,18 @@ impl Adapter for OpenCodeAdapter {
                 }
             }
         }
+
+        let disabled: Vec<String> = data
+            .get("disabled_providers")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
 
         let mut providers = Vec::new();
         for (id, entry) in &merged {
@@ -210,6 +226,8 @@ impl Adapter for OpenCodeAdapter {
                 has_key,
                 key_display,
                 models,
+                enabled: !disabled.iter().any(|d| d == id),
+                can_toggle: self.supports_toggle(),
             });
         }
         providers.sort_by(|a, b| a.id.cmp(&b.id));
@@ -343,6 +361,44 @@ impl Adapter for OpenCodeAdapter {
                 }
 
                 Ok(warnings)
+            }
+            EditOp::SetEnabled {
+                provider_id,
+                enabled,
+            } => {
+                let target = provider_id.trim().to_string();
+                let container = providers_key(docs.require("config")?.data());
+                let known = docs
+                    .require("config")?
+                    .data()
+                    .get(container)
+                    .and_then(|m| m.get(&target))
+                    .is_some()
+                    || docs
+                        .require("config")?
+                        .data()
+                        .get("providers")
+                        .and_then(|m| m.get(&target))
+                        .is_some();
+                if !known {
+                    anyhow::bail!("Provider '{}' tidak ditemukan di opencode.json.", target);
+                }
+
+                let config = docs.require_mut("config")?;
+                let list = config.array_at("disabled_providers");
+                list.retain(|item| item.as_str() != Some(target.as_str()));
+                if !*enabled {
+                    list.push(Value::String(target.clone()));
+                }
+
+                Ok(vec![if *enabled {
+                    format!("Provider '{}' diaktifkan kembali.", target)
+                } else {
+                    format!(
+                        "Provider '{}' dinonaktifkan (entry tetap ada di opencode.json).",
+                        target
+                    )
+                }])
             }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();

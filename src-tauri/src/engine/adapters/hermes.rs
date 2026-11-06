@@ -98,6 +98,8 @@ impl Adapter for HermesAdapter {
                     has_key: stored.is_some(),
                     key_display,
                     models: Vec::new(),
+                    enabled: true,
+                    can_toggle: self.supports_toggle(),
                 });
             }
         }
@@ -206,6 +208,11 @@ impl Adapter for HermesAdapter {
                 }
 
                 Ok(warnings)
+            }
+            EditOp::SetEnabled { .. } => {
+                anyhow::bail!(
+                    "Hermes tidak punya daftar provider nonaktif. Nonaktifkan provider dengan menghapusnya."
+                )
             }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();

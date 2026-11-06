@@ -129,6 +129,18 @@ impl Doc {
 
     /// Akses mutable ke pohon data. Tidak membuat apa pun; dipakai untuk
     /// operasi hapus supaya file yang belum ada tidak ikut terbuat.
+    /// Array pada `key` di root. Dibuat bila belum ada.
+    pub fn array_at(&mut self, key: &str) -> &mut Vec<Value> {
+        self.dirty = true;
+        let root = self.root_object();
+        if !root.get(key).map(Value::is_array).unwrap_or(false) {
+            root.insert(key.to_string(), Value::Array(Vec::new()));
+        }
+        root.get_mut(key)
+            .and_then(Value::as_array_mut)
+            .expect("baru saja dipastikan array")
+    }
+
     pub fn tree_mut(&mut self) -> &mut Value {
         self.dirty = true;
         match &mut self.payload {
