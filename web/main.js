@@ -85,12 +85,12 @@ const state = {
 function toast(message, variant = "ok", detail = "") {
   const root = $("#toast-root");
   const palette = {
-    ok: "border-emerald-500/40 bg-emerald-500/10 text-emerald-100",
-    err: "border-red-500/40 bg-red-500/10 text-red-100",
-    info: "border-zinc-600/60 bg-zinc-800/90 text-zinc-100",
+    ok: "border-emerald-300 bg-emerald-50 text-emerald-800",
+    err: "border-rose-300 bg-rose-50 text-rose-800",
+    info: "border-stone-300 bg-white text-stone-800",
   };
   const element = document.createElement("div");
-  element.className = `pointer-events-auto selectable rounded-lg border px-3 py-2 text-xs shadow-lg backdrop-blur ${
+  element.className = `pointer-events-auto selectable rounded-xl border px-3 py-2 text-xs shadow-lg backdrop-blur ${
     palette[variant] ?? palette.info
   }`;
   element.innerHTML = `<p class="font-medium">${esc(message)}</p>${
@@ -106,21 +106,21 @@ function openModal({ title, subtitle = "", body, footer, wide = false }) {
   const root = $("#modal-root");
   const overlay = document.createElement("div");
   overlay.className =
-    "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-6 backdrop-blur-sm";
+    "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-stone-900/40 p-6 backdrop-blur-sm";
 
   overlay.innerHTML = `
     <div class="my-6 w-full ${
       wide ? "max-w-4xl" : "max-w-2xl"
-    } rounded-xl border border-zinc-700/80 bg-zinc-900 shadow-2xl">
-      <div class="flex items-start justify-between gap-4 border-b border-zinc-800 px-5 py-4">
+    } rounded-2xl border border-stone-200 bg-white shadow-xl">
+      <div class="flex items-start justify-between gap-4 border-b border-stone-200 px-5 py-4">
         <div class="min-w-0">
           <h3 class="text-sm font-semibold">${esc(title)}</h3>
-          ${subtitle ? `<p class="mt-0.5 text-xs text-zinc-500">${esc(subtitle)}</p>` : ""}
+          ${subtitle ? `<p class="mt-0.5 text-xs text-stone-500">${esc(subtitle)}</p>` : ""}
         </div>
-        <button data-action class="rounded px-2 py-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" data-close>✕</button>
+        <button data-action class="rounded px-2 py-1 text-stone-500 hover:bg-stone-100 hover:text-stone-800" data-close>✕</button>
       </div>
       <div class="max-h-[64vh] overflow-y-auto px-5 py-4">${body}</div>
-      <div class="flex items-center justify-end gap-2 border-t border-zinc-800 px-5 py-3">${footer}</div>
+      <div class="flex items-center justify-end gap-2 border-t border-stone-200 px-5 py-3">${footer}</div>
     </div>`;
 
   root.append(overlay);
@@ -150,11 +150,11 @@ function confirmModal({ title, message, confirmLabel = "Lanjutkan", danger = fal
   return new Promise((resolve) => {
     const { close, overlay } = openModal({
       title,
-      body: `<p class="selectable text-sm leading-relaxed text-zinc-300">${esc(message)}</p>`,
+      body: `<p class="selectable text-sm leading-relaxed text-stone-700">${esc(message)}</p>`,
       footer: `
-        <button data-action class="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800" data-cancel>Batal</button>
-        <button data-action class="rounded-lg px-3 py-1.5 text-xs font-medium text-white ${
-          danger ? "bg-red-600 hover:bg-red-500" : "bg-emerald-600 hover:bg-emerald-500"
+        <button data-action class="rounded-xl border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100" data-cancel>Batal</button>
+        <button data-action class="rounded-xl px-3 py-1.5 text-xs font-medium text-white ${
+          danger ? "bg-rose-600 hover:bg-rose-500" : "bg-violet-600 hover:bg-violet-500"
         }" data-confirm>${esc(confirmLabel)}</button>`,
     });
     overlay.querySelector("[data-cancel]").addEventListener("click", () => {
@@ -175,7 +175,7 @@ function confirmModal({ title, message, confirmLabel = "Lanjutkan", danger = fal
 function renderSidebar() {
   const container = $("#harness-list");
   if (state.loadError) {
-    container.innerHTML = `<p class="px-2 py-4 text-xs text-red-300">${esc(state.loadError)}</p>`;
+    container.innerHTML = `<p class="px-2 py-4 text-xs text-rose-600">${esc(state.loadError)}</p>`;
     return;
   }
 
@@ -187,13 +187,13 @@ function renderSidebar() {
           (file) => `
           <div class="flex items-start gap-1.5">
             <span class="mt-1.5 h-1 w-1 shrink-0 rounded-full ${
-              file.exists ? "bg-emerald-400" : "bg-zinc-600"
+              file.exists ? "bg-emerald-500" : "bg-stone-300"
             }"></span>
             <span class="min-w-0 flex-1 font-mono text-[10px] leading-relaxed break-all ${
-              file.exists ? "text-zinc-400" : "text-zinc-600 line-through"
+              file.exists ? "text-stone-600" : "text-stone-400 line-through"
             }">${esc(file.path)}</span>
             <button data-action data-reveal="${esc(file.path)}" title="Buka folder"
-              class="shrink-0 rounded p-0.5 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200">
+              class="shrink-0 rounded p-0.5 text-stone-500 hover:bg-stone-100 hover:text-stone-800">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 class="h-3 w-3"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
             </button>
@@ -202,22 +202,22 @@ function renderSidebar() {
         .join("");
 
       const badge = harness.installed
-        ? `<span class="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">terpasang</span>`
-        : `<span class="rounded bg-zinc-700/40 px-1.5 py-0.5 text-[10px] font-medium text-zinc-400">belum ada</span>`;
+        ? `<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">terpasang</span>`
+        : `<span class="rounded-full bg-stone-200 px-2 py-0.5 text-[10px] font-medium text-stone-500">belum ada</span>`;
       const experimental = harness.experimental
-        ? `<span class="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">eksperimental</span>`
+        ? `<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">eksperimental</span>`
         : "";
 
       return `
         <div data-harness="${esc(harness.id)}" role="button" tabindex="0"
-          class="w-full cursor-pointer rounded-lg border px-2.5 py-2 text-left transition ${
+          class="w-full cursor-pointer rounded-xl border px-2.5 py-2 text-left transition ${
             active
-              ? "border-emerald-500/50 bg-emerald-500/10"
-              : "border-transparent hover:border-zinc-700 hover:bg-zinc-800/60"
+              ? "border-violet-500 bg-violet-50"
+              : "border-transparent hover:border-stone-300 hover:bg-white"
           }">
           <div class="flex items-center gap-1.5">
             <span class="truncate text-xs font-medium ${
-              active ? "text-emerald-200" : "text-zinc-200"
+              active ? "text-violet-700" : "text-stone-800"
             }">${esc(harness.name)}</span>
             ${badge}
           </div>
@@ -261,9 +261,9 @@ function renderTopbar() {
     return;
   }
   actions.innerHTML = `
-    <button data-action data-refresh class="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800">Muat ulang</button>
-    <button data-action data-backups class="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800">Backup</button>
-    <button data-action data-add class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500">+ Tambah Provider</button>`;
+    <button data-action data-refresh class="rounded-xl border border-stone-300 px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-100">Muat ulang</button>
+    <button data-action data-backups class="rounded-xl border border-stone-300 px-2.5 py-1.5 text-xs text-stone-700 hover:bg-stone-100">Backup</button>
+    <button data-action data-add class="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-violet-500">+ Tambah Provider</button>`;
 
   $("[data-refresh]", actions).addEventListener("click", () => loadSnapshot(state.activeId));
   $("[data-backups]", actions).addEventListener("click", () => openBackups());
@@ -273,61 +273,61 @@ function renderTopbar() {
 function providerRow(provider) {
   const expanded = state.expanded.has(provider.id);
   const modelsDetail = expanded
-    ? `<tr class="bg-zinc-900/60">
+    ? `<tr class="bg-stone-50">
          <td colspan="7" class="px-4 py-3">
            ${
              provider.models.length
                ? `<div class="grid grid-cols-1 gap-1 sm:grid-cols-2">
                     ${provider.models
                       .map(
-                        (model) => `<div class="flex items-baseline gap-2 rounded bg-zinc-800/50 px-2 py-1">
-                          <span class="selectable font-mono text-[11px] text-zinc-200">${esc(model.id)}</span>
-                          <span class="ml-auto shrink-0 font-mono text-[10px] text-zinc-500">${fmtTokens(
+                        (model) => `<div class="flex items-baseline gap-2 rounded bg-stone-100 px-2 py-1">
+                          <span class="selectable font-mono text-[11px] text-stone-800">${esc(model.id)}</span>
+                          <span class="ml-auto shrink-0 font-mono text-[10px] text-stone-500">${fmtTokens(
                             model.contextWindow,
                           )} · out ${fmtTokens(model.maxTokens)}${model.reasoning ? " · reasoning" : ""}</span>
                         </div>`,
                       )
                       .join("")}
                   </div>`
-               : `<p class="text-xs text-zinc-500">Tidak ada model yang didefinisikan di config ini.</p>`
+               : `<p class="text-xs text-stone-500">Tidak ada model yang didefinisikan di config ini.</p>`
            }
          </td>
        </tr>`
     : "";
 
   return `
-    <tr class="border-b border-zinc-800/70 hover:bg-zinc-800/30">
+    <tr class="border-b border-stone-200 hover:bg-stone-50">
       <td class="px-4 py-2.5">
-        <div class="selectable font-mono text-xs text-zinc-200">${esc(provider.id)}</div>
-        <div class="text-[11px] text-zinc-500">${esc(provider.name)}</div>
+        <div class="selectable font-mono text-xs text-stone-800">${esc(provider.id)}</div>
+        <div class="text-[11px] text-stone-500">${esc(provider.name)}</div>
       </td>
       <td class="max-w-[16rem] truncate px-4 py-2.5">
-        <span class="selectable font-mono text-[11px] text-zinc-400" title="${esc(
+        <span class="selectable font-mono text-[11px] text-stone-600" title="${esc(
           provider.baseUrl ?? "",
         )}">${esc(provider.baseUrl ?? "—")}</span>
       </td>
-      <td class="px-4 py-2.5 font-mono text-[11px] text-zinc-400">${esc(provider.api ?? "—")}</td>
+      <td class="px-4 py-2.5 font-mono text-[11px] text-stone-600">${esc(provider.api ?? "—")}</td>
       <td class="px-4 py-2.5">
         ${
           provider.hasKey
-            ? `<span class="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] text-emerald-300">${esc(
+            ? `<span class="rounded-full bg-emerald-100 px-2 py-0.5 font-mono text-[10px] text-emerald-700">${esc(
                 provider.keyDisplay ?? "ada",
               )}</span>`
-            : `<span class="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">belum ada</span>`
+            : `<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700">belum ada</span>`
         }
       </td>
       <td class="px-4 py-2.5">
         <button data-action data-expand="${esc(provider.id)}"
-          class="rounded px-1.5 py-0.5 text-[11px] text-zinc-400 hover:bg-zinc-700/60 hover:text-zinc-200">
+          class="rounded px-1.5 py-0.5 text-[11px] text-stone-600 hover:bg-stone-200/60 hover:text-stone-800">
           ${provider.models.length} model ${expanded ? "▾" : "▸"}
         </button>
       </td>
       <td class="px-4 py-2.5">
         <div class="flex items-center justify-end gap-1">
           <button data-action data-edit="${esc(provider.id)}"
-            class="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800">Ubah</button>
+            class="rounded border border-stone-300 px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-100">Ubah</button>
           <button data-action data-remove="${esc(provider.id)}"
-            class="rounded border border-red-900/60 px-2 py-1 text-[11px] text-red-300 hover:bg-red-950/50">Hapus</button>
+            class="rounded-xl border border-rose-200 px-2 py-1 text-[11px] text-rose-600 hover:bg-rose-50">Hapus</button>
         </div>
       </td>
     </tr>
@@ -339,48 +339,48 @@ function renderContent() {
   const snapshot = state.snapshot;
 
   if (state.loadError) {
-    container.innerHTML = `<div class="mx-auto max-w-5xl rounded-lg border border-red-900/50 bg-red-950/30 p-4 text-sm text-red-200">${esc(
+    container.innerHTML = `<div class="mx-auto max-w-5xl rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">${esc(
       state.loadError,
     )}</div>`;
     return;
   }
   if (!snapshot) {
-    container.innerHTML = `<p class="text-sm text-zinc-500">Memuat konfigurasi…</p>`;
+    container.innerHTML = `<p class="text-sm text-stone-500">Memuat konfigurasi…</p>`;
     return;
   }
 
   const warnings = snapshot.warnings.length
-    ? `<div class="mb-4 space-y-1 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3">
+    ? `<div class="mb-4 space-y-1 rounded-xl border border-amber-300 bg-amber-50 p-3">
          ${snapshot.warnings
-           .map((warning) => `<p class="text-xs leading-relaxed text-amber-200">• ${esc(warning)}</p>`)
+           .map((warning) => `<p class="text-xs leading-relaxed text-amber-800">• ${esc(warning)}</p>`)
            .join("")}
        </div>`
     : "";
 
   const defaults =
     snapshot.defaultProvider || snapshot.defaultModel
-      ? `<div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-xs">
-           <span class="text-zinc-500">Default aktif:</span>
-           <span class="selectable font-mono text-zinc-300">${esc(snapshot.defaultProvider ?? "—")}</span>
-           <span class="selectable font-mono text-zinc-300">${esc(snapshot.defaultModel ?? "—")}</span>
+      ? `<div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-1 rounded-xl border border-stone-200 bg-white px-3 py-2 text-xs">
+           <span class="text-stone-500">Default aktif:</span>
+           <span class="selectable font-mono text-stone-700">${esc(snapshot.defaultProvider ?? "—")}</span>
+           <span class="selectable font-mono text-stone-700">${esc(snapshot.defaultModel ?? "—")}</span>
          </div>`
       : "";
 
   const table =
     snapshot.providers.length === 0
-      ? `<div class="rounded-xl border border-dashed border-zinc-700 px-6 py-12 text-center">
-           <p class="text-sm font-medium text-zinc-300">Belum ada provider di harness ini</p>
-           <p class="mx-auto mt-1 max-w-md text-xs leading-relaxed text-zinc-500">
+      ? `<div class="rounded-2xl border border-dashed border-stone-300 px-6 py-12 text-center">
+           <p class="text-sm font-medium text-stone-700">Belum ada provider di harness ini</p>
+           <p class="mx-auto mt-1 max-w-md text-xs leading-relaxed text-stone-500">
              Tambahkan provider gratis (Groq, Gemini, Cerebras, dan lainnya) dengan menempel API key —
              Rekonfig menulis konfigurasi ke file yang benar untukmu.
            </p>
-           <button data-action data-add-empty class="mt-4 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500">
+           <button data-action data-add-empty class="mt-4 rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-violet-500">
              + Tambah Provider
            </button>
          </div>`
-      : `<div class="overflow-hidden rounded-xl border border-zinc-800">
+      : `<div class="overflow-hidden rounded-2xl border border-stone-200">
            <table class="w-full text-left text-sm">
-             <thead class="bg-zinc-900/70 text-[11px] tracking-wide text-zinc-500 uppercase">
+             <thead class="bg-stone-50 text-[11px] tracking-wide text-stone-500 uppercase">
                <tr>
                  <th class="px-4 py-2 font-medium">Provider</th>
                  <th class="px-4 py-2 font-medium">Base URL</th>
@@ -397,15 +397,15 @@ function renderContent() {
   const fileList = snapshot.files
     .map(
       (file) => `
-      <div class="flex items-center gap-2 border-b border-zinc-800/60 px-3 py-1.5 last:border-0">
-        <span class="w-32 shrink-0 text-[11px] text-zinc-500">${esc(
+      <div class="flex items-center gap-2 border-b border-stone-200 px-3 py-1.5 last:border-0">
+        <span class="w-32 shrink-0 text-[11px] text-stone-500">${esc(
           ROLE_LABEL[file.role] ?? file.role,
         )}</span>
-        <span class="min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-400">${esc(file.path)}</span>
-        <span class="shrink-0 text-[10px] ${file.exists ? "text-emerald-400" : "text-zinc-600"}">${
+        <span class="min-w-0 flex-1 truncate font-mono text-[11px] text-stone-600">${esc(file.path)}</span>
+        <span class="shrink-0 text-[10px] ${file.exists ? "text-emerald-600" : "text-stone-400"}">${
           file.exists ? "ada" : "belum ada"
         }</span>
-        <button data-action data-reveal="${esc(file.path)}" class="shrink-0 rounded p-1 text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200" title="Buka folder">
+        <button data-action data-reveal="${esc(file.path)}" class="shrink-0 rounded p-1 text-stone-500 hover:bg-stone-100 hover:text-stone-800" title="Buka folder">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3.5 w-3.5">
             <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
         </button>
@@ -418,8 +418,8 @@ function renderContent() {
       ${warnings}
       ${defaults}
       ${table}
-      <div class="mt-5 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40">
-        <div class="border-b border-zinc-800 px-3 py-2 text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">
+      <div class="mt-5 overflow-hidden rounded-2xl border border-stone-200 bg-white">
+        <div class="border-b border-stone-200 px-3 py-2 text-[11px] font-semibold tracking-wide text-stone-500 uppercase">
           File konfigurasi
         </div>
         ${fileList}
@@ -515,19 +515,19 @@ function modelRowHtml(index, model) {
   return `
     <div class="grid grid-cols-[1fr_1fr_5rem_5rem_2.5rem_1.75rem] items-center gap-1.5" data-model-row="${index}">
       <input data-field="id" value="${esc(model.id)}" placeholder="model-id"
-        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-[11px] outline-none focus:border-emerald-500" />
+        class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-[11px] outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100" />
       <input data-field="name" value="${esc(model.name ?? "")}" placeholder="Nama tampilan"
-        class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 text-[11px] outline-none focus:border-emerald-500" />
+        class="rounded border border-stone-300 bg-white px-2 py-1 text-[11px] outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100" />
       <input data-field="contextWindow" value="${esc(model.contextWindow ?? "")}" placeholder="ctx"
-        inputmode="numeric" class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-[11px] outline-none focus:border-emerald-500" />
+        inputmode="numeric" class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-[11px] outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100" />
       <input data-field="maxTokens" value="${esc(model.maxTokens ?? "")}" placeholder="out"
-        inputmode="numeric" class="rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-[11px] outline-none focus:border-emerald-500" />
-      <label class="flex items-center justify-center gap-1 text-[10px] text-zinc-400">
+        inputmode="numeric" class="rounded border border-stone-300 bg-white px-2 py-1 font-mono text-[11px] outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100" />
+      <label class="flex items-center justify-center gap-1 text-[10px] text-stone-600">
         <input data-field="reasoning" type="checkbox" ${model.reasoning ? "checked" : ""}
-          class="h-3 w-3 rounded border-zinc-600 bg-zinc-950 accent-emerald-500" />R
+          class="h-3 w-3 rounded border-stone-300 bg-white accent-violet-600" />R
       </label>
       <button data-action data-model-remove="${index}" title="Hapus baris"
-        class="rounded p-1 text-zinc-500 hover:bg-red-950/60 hover:text-red-300">✕</button>
+        class="rounded p-1 text-stone-400 hover:bg-rose-50 hover:text-rose-600">✕</button>
     </div>`;
 }
 
@@ -561,41 +561,41 @@ function openProviderForm(mode, provider) {
         isEdit
           ? ""
           : `<div>
-              <label class="mb-1 block text-[11px] font-medium text-zinc-400">Preset provider</label>
-              <select data-preset class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500">
+              <label class="mb-1 block text-[11px] font-medium text-stone-600">Preset provider</label>
+              <select data-preset class="w-full rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100">
                 <option value="">Custom / lainnya</option>
                 ${presetOptions}
               </select>
-              <p data-preset-note class="mt-1 text-[11px] leading-relaxed text-zinc-500"></p>
+              <p data-preset-note class="mt-1 text-[11px] leading-relaxed text-stone-500"></p>
             </div>`
       }
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="mb-1 block text-[11px] font-medium text-zinc-400">ID provider</label>
+          <label class="mb-1 block text-[11px] font-medium text-stone-600">ID provider</label>
           <input data-input="id" value="${esc(draft.id)}" placeholder="groq" ${isEdit ? "readonly" : ""}
-            class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 font-mono text-xs outline-none focus:border-emerald-500 ${
+            class="w-full rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 font-mono text-xs outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100 ${
               isEdit ? "opacity-60" : ""
             }" />
         </div>
         <div>
-          <label class="mb-1 block text-[11px] font-medium text-zinc-400">Nama tampilan</label>
+          <label class="mb-1 block text-[11px] font-medium text-stone-600">Nama tampilan</label>
           <input data-input="name" value="${esc(draft.name)}" placeholder="Groq"
-            class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500" />
+            class="w-full rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100" />
         </div>
       </div>
 
       <div>
-        <label class="mb-1 block text-[11px] font-medium text-zinc-400">Base URL</label>
+        <label class="mb-1 block text-[11px] font-medium text-stone-600">Base URL</label>
         <input data-input="baseUrl" value="${esc(draft.baseUrl)}" placeholder="https://api.groq.com/openai/v1"
-          class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 font-mono text-xs outline-none focus:border-emerald-500" />
-        <p class="mt-1 text-[11px] text-zinc-500">Endpoint OpenAI-compatible biasanya berakhiran <span class="font-mono">/v1</span>.</p>
+          class="w-full rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 font-mono text-xs outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100" />
+        <p class="mt-1 text-[11px] text-stone-500">Endpoint OpenAI-compatible biasanya berakhiran <span class="font-mono">/v1</span>.</p>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
         <div>
-          <label class="mb-1 block text-[11px] font-medium text-zinc-400">Jenis API</label>
-          <select data-input="api" class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500">
+          <label class="mb-1 block text-[11px] font-medium text-stone-600">Jenis API</label>
+          <select data-input="api" class="w-full rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100">
             ${API_OPTIONS.map(
               ([value, label]) =>
                 `<option value="${value}" ${draft.api === value ? "selected" : ""}>${label}</option>`,
@@ -603,8 +603,8 @@ function openProviderForm(mode, provider) {
           </select>
         </div>
         <div>
-          <label class="mb-1 block text-[11px] font-medium text-zinc-400">Mode penyimpanan key</label>
-          <select data-input="keyMode" class="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500">
+          <label class="mb-1 block text-[11px] font-medium text-stone-600">Mode penyimpanan key</label>
+          <select data-input="keyMode" class="w-full rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100">
             <option value="inline">Simpan key (paling mudah)</option>
             <option value="env">Rujuk variabel environment</option>
           </select>
@@ -612,28 +612,28 @@ function openProviderForm(mode, provider) {
       </div>
 
       <div>
-        <label class="mb-1 block text-[11px] font-medium text-zinc-400">API key</label>
+        <label class="mb-1 block text-[11px] font-medium text-stone-600">API key</label>
         <div class="flex gap-2">
           <input data-input="key" type="password" value="" autocomplete="off" spellcheck="false"
             placeholder="${esc(
               isEdit ? "biarkan kosong untuk mempertahankan key saat ini" : "tempel API key di sini",
             )}"
-            class="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-1.5 font-mono text-xs outline-none focus:border-emerald-500" />
-          <button data-action data-toggle-key class="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:bg-zinc-800">Lihat</button>
-          <button data-action data-test class="rounded-lg border border-zinc-700 px-2.5 py-1.5 text-[11px] text-zinc-300 hover:bg-zinc-800">Test koneksi</button>
+            class="min-w-0 flex-1 rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 font-mono text-xs outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-100" />
+          <button data-action data-toggle-key class="rounded-xl border border-stone-300 px-2.5 py-1.5 text-[11px] text-stone-700 hover:bg-stone-100">Lihat</button>
+          <button data-action data-test class="rounded-xl border border-stone-300 px-2.5 py-1.5 text-[11px] text-stone-700 hover:bg-stone-100">Test koneksi</button>
         </div>
-        <div data-test-result class="mt-1.5 hidden rounded-lg border px-2.5 py-2 text-[11px] leading-relaxed"></div>
+        <div data-test-result class="mt-1.5 hidden rounded-xl border px-2.5 py-2 text-[11px] leading-relaxed"></div>
       </div>
 
       <div>
         <div class="mb-1.5 flex items-center justify-between">
-          <label class="text-[11px] font-medium text-zinc-400">Model</label>
+          <label class="text-[11px] font-medium text-stone-600">Model</label>
           <div class="flex items-center gap-2">
-            <span class="text-[10px] text-zinc-600">R = reasoning</span>
-            <button data-action data-add-model class="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:bg-zinc-800">+ Baris</button>
+            <span class="text-[10px] text-stone-400">R = reasoning</span>
+            <button data-action data-add-model class="rounded border border-stone-300 px-2 py-0.5 text-[11px] text-stone-700 hover:bg-stone-100">+ Baris</button>
           </div>
         </div>
-        <div class="grid grid-cols-[1fr_1fr_5rem_5rem_2.5rem_1.75rem] gap-1.5 px-0.5 pb-1 text-[10px] text-zinc-600">
+        <div class="grid grid-cols-[1fr_1fr_5rem_5rem_2.5rem_1.75rem] gap-1.5 px-0.5 pb-1 text-[10px] text-stone-400">
           <span>ID model</span><span>Nama</span><span>Context</span><span>Max out</span><span class="text-center">R</span><span></span>
         </div>
         <div data-models class="space-y-1.5">${draft.models
@@ -643,8 +643,8 @@ function openProviderForm(mode, provider) {
     </div>`;
 
   const footer = `
-    <button data-action data-cancel class="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800">Batal</button>
-    <button data-action data-save class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500">
+    <button data-action data-cancel class="rounded-xl border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">Batal</button>
+    <button data-action data-save class="rounded-xl bg-violet-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-violet-500">
       ${isEdit ? "Simpan perubahan" : "Simpan provider"}
     </button>`;
 
@@ -727,7 +727,7 @@ function openProviderForm(mode, provider) {
       input("baseUrl").value = preset.baseUrl;
       input("api").value = preset.api;
       if (preset.docsUrl) {
-        note.innerHTML = `Dapatkan API key di <span class="selectable font-mono text-emerald-300">${esc(
+        note.innerHTML = `Dapatkan API key di <span class="selectable font-mono text-violet-600">${esc(
           preset.docsUrl,
         )}</span>${preset.notes ? ` — ${esc(preset.notes)}` : ""}`;
       } else {
@@ -759,14 +759,14 @@ function openProviderForm(mode, provider) {
     const key = input("key").value.trim();
     const baseUrl = input("baseUrl").value.trim();
     result.className =
-      "mt-1.5 rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 py-2 text-[11px] leading-relaxed text-zinc-400";
+      "mt-1.5 rounded-xl border border-stone-300 bg-white px-2.5 py-2 text-[11px] leading-relaxed text-stone-600";
     result.textContent = "Menguji koneksi…";
     try {
       const output = await api.test(baseUrl, input("api").value, key);
       const tone = output.ok
-        ? "border-emerald-600/50 bg-emerald-500/10 text-emerald-200"
-        : "border-red-700/60 bg-red-950/40 text-red-200";
-      result.className = `mt-1.5 rounded-lg border px-2.5 py-2 text-[11px] leading-relaxed ${tone}`;
+        ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+        : "border-rose-300 bg-rose-50 text-rose-700";
+      result.className = `mt-1.5 rounded-xl border px-2.5 py-2 text-[11px] leading-relaxed ${tone}`;
       const latency = output.latencyMs != null ? ` · ${output.latencyMs} ms` : "";
       const sample = output.modelsSample?.length
         ? `<div class="mt-1 selectable font-mono text-[10px] opacity-80">${output.modelsSample
@@ -776,7 +776,7 @@ function openProviderForm(mode, provider) {
       result.innerHTML = `${esc(output.message)}${latency}${sample}`;
     } catch (error) {
       result.className =
-        "mt-1.5 rounded-lg border border-red-700/60 bg-red-950/40 px-2.5 py-2 text-[11px] text-red-200";
+        "mt-1.5 rounded-xl border border-rose-300 bg-rose-50 px-2.5 py-2 text-[11px] text-rose-700";
       result.textContent = String(error);
     }
   });
@@ -838,15 +838,15 @@ async function showPreview(op) {
           (file) => `
           <div class="mb-4">
             <div class="mb-1.5 flex items-center gap-2">
-              <span class="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-400">${esc(
+              <span class="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] text-stone-600">${esc(
                 ROLE_LABEL[file.role] ?? file.role,
               )}</span>
-              <span class="selectable min-w-0 flex-1 truncate font-mono text-[11px] text-zinc-300">${esc(
+              <span class="selectable min-w-0 flex-1 truncate font-mono text-[11px] text-stone-700">${esc(
                 file.path,
               )}</span>
               ${
                 file.sensitive
-                  ? `<span class="shrink-0 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">rahasia disamarkan</span>`
+                  ? `<span class="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] text-amber-700">rahasia disamarkan</span>`
                   : ""
               }
             </div>
@@ -854,23 +854,23 @@ async function showPreview(op) {
           </div>`,
         )
         .join("")
-    : `<p class="rounded-lg border border-zinc-800 bg-zinc-900/60 px-3 py-6 text-center text-xs text-zinc-500">
+    : `<p class="rounded-xl border border-stone-200 bg-white px-3 py-6 text-center text-xs text-stone-500">
          Tidak ada file yang akan berubah.
        </p>`;
 
   const warnings = preview.warnings.length
-    ? `<div class="mb-4 space-y-1 rounded-lg border border-amber-600/40 bg-amber-500/10 p-3">
+    ? `<div class="mb-4 space-y-1 rounded-xl border border-amber-300 bg-amber-50 p-3">
          ${preview.warnings
-           .map((warning) => `<p class="text-xs leading-relaxed text-amber-200">• ${esc(warning)}</p>`)
+           .map((warning) => `<p class="text-xs leading-relaxed text-amber-800">• ${esc(warning)}</p>`)
            .join("")}
        </div>`
     : "";
 
   const summary = `
-    <div class="mb-4 flex flex-wrap gap-x-6 gap-y-1 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2 text-[11px]">
-      ${preview.willCreate.length ? `<span class="text-emerald-300">dibuat: ${preview.willCreate.length}</span>` : ""}
-      ${preview.willModify.length ? `<span class="text-amber-300">diubah: ${preview.willModify.length}</span>` : ""}
-      <span class="text-zinc-500">backup otomatis dibuat sebelum menulis</span>
+    <div class="mb-4 flex flex-wrap gap-x-6 gap-y-1 rounded-xl border border-stone-200 bg-white px-3 py-2 text-[11px]">
+      ${preview.willCreate.length ? `<span class="text-emerald-600">dibuat: ${preview.willCreate.length}</span>` : ""}
+      ${preview.willModify.length ? `<span class="text-amber-600">diubah: ${preview.willModify.length}</span>` : ""}
+      <span class="text-stone-500">backup otomatis dibuat sebelum menulis</span>
     </div>`;
 
   const { overlay, close } = openModal({
@@ -878,11 +878,11 @@ async function showPreview(op) {
     subtitle: "Periksa diff di bawah. Belum ada yang ditulis ke disk.",
     body: summary + warnings + fileBlocks,
     footer: `
-      <button data-action data-cancel class="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800">Batal</button>
+      <button data-action data-cancel class="rounded-xl border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">Batal</button>
       <button data-action data-write ${
         changed.length ? "" : "disabled"
-      } class="rounded-lg px-3 py-1.5 text-xs font-medium text-white ${
-        isRemove ? "bg-red-600 hover:bg-red-500" : "bg-emerald-600 hover:bg-emerald-500"
+      } class="rounded-xl px-3 py-1.5 text-xs font-medium text-white ${
+        isRemove ? "bg-rose-600 hover:bg-rose-500" : "bg-violet-600 hover:bg-violet-500"
       } disabled:opacity-40">Tulis ke disk</button>`,
     wide: true,
   });
@@ -937,33 +937,33 @@ async function openBackups() {
     ? backups
         .map(
           (backup) => `
-          <div class="mb-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-3 py-2">
+          <div class="mb-2 rounded-xl border border-stone-200 bg-white px-3 py-2">
             <div class="flex items-center justify-between gap-3">
               <div class="min-w-0">
-                <p class="selectable text-xs text-zinc-200">${esc(fmtDate(backup.createdAt))}</p>
-                <p class="selectable truncate font-mono text-[10px] text-zinc-500">${esc(backup.dir)}</p>
+                <p class="selectable text-xs text-stone-800">${esc(fmtDate(backup.createdAt))}</p>
+                <p class="selectable truncate font-mono text-[10px] text-stone-500">${esc(backup.dir)}</p>
               </div>
               <button data-action data-restore="${esc(backup.id)}"
-                class="shrink-0 rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-300 hover:bg-zinc-800">Pulihkan</button>
+                class="shrink-0 rounded border border-stone-300 px-2 py-1 text-[11px] text-stone-700 hover:bg-stone-100">Pulihkan</button>
             </div>
             <div class="mt-1.5 space-y-0.5">
               ${backup.files
                 .map(
                   (file) =>
-                    `<p class="selectable truncate font-mono text-[10px] text-zinc-600">${esc(file.path)}</p>`,
+                    `<p class="selectable truncate font-mono text-[10px] text-stone-400">${esc(file.path)}</p>`,
                 )
                 .join("")}
             </div>
           </div>`,
         )
         .join("")
-    : `<p class="rounded-lg border border-dashed border-zinc-700 px-3 py-8 text-center text-xs text-zinc-500">Belum ada backup untuk harness ini.</p>`;
+    : `<p class="rounded-xl border border-dashed border-stone-300 px-3 py-8 text-center text-xs text-stone-500">Belum ada backup untuk harness ini.</p>`;
 
   const { overlay, close } = openModal({
     title: "Backup",
     subtitle: "Rekonfig menyimpan salinan setiap file sebelum menulis.",
     body: list,
-    footer: `<button data-action data-cancel class="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800">Tutup</button>`,
+    footer: `<button data-action data-cancel class="rounded-xl border border-stone-300 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-100">Tutup</button>`,
   });
 
   $("[data-cancel]", overlay).addEventListener("click", close);
@@ -998,9 +998,9 @@ async function openBackups() {
 
 function renderFatal(message) {
   $("#content").innerHTML = `
-    <div class="mx-auto max-w-lg rounded-xl border border-red-900/50 bg-red-950/30 p-5">
-      <p class="text-sm font-medium text-red-100">${esc(message)}</p>
-      <p class="mt-2 text-xs leading-relaxed text-red-200/80">
+    <div class="mx-auto max-w-lg rounded-2xl border border-rose-200 bg-rose-50 p-5">
+      <p class="text-sm font-medium text-rose-800">${esc(message)}</p>
+      <p class="mt-2 text-xs leading-relaxed text-rose-700/80">
         Rekonfig perlu dijalankan sebagai aplikasi desktop (Tauri), bukan dibuka langsung di browser.
       </p>
     </div>`;
@@ -1025,9 +1025,9 @@ async function init() {
   if (state.harnesses.length === 0) {
     renderTopbar();
     $("#content").innerHTML = `
-      <div class="mx-auto max-w-lg rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
-        <p class="text-sm font-medium text-zinc-200">Tidak ada harness yang dikenali</p>
-        <p class="mt-1 text-xs leading-relaxed text-zinc-500">
+      <div class="mx-auto max-w-lg rounded-2xl border border-stone-200 bg-white p-5">
+        <p class="text-sm font-medium text-stone-800">Tidak ada harness yang dikenali</p>
+        <p class="mt-1 text-xs leading-relaxed text-stone-500">
           Rekonfig belum menemukan konfigurasi Pi, oh-my-pi, OpenCode, atau Hermes di mesin ini.
           Pastikan salah satu harness sudah pernah dijalankan minimal sekali.
         </p>

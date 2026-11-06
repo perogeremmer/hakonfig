@@ -134,13 +134,13 @@ export function renderDiff(beforeText, afterText, maxLines = MAX_DIFF_LINES) {
 
   const truncated =
     ops.length > maxLines
-      ? `<p class="mt-2 text-[11px] text-amber-400/90">… diff dipotong pada ${maxLines} baris dari total ${ops.length} baris.</p>`
+      ? `<p class="mt-2 text-[11px] text-amber-600">… diff dipotong pada ${maxLines} baris dari total ${ops.length} baris.</p>`
       : "";
 
   const kosong =
     diffStats(ops).changed === 0
-      ? `<p class="mt-2 text-[11px] text-amber-400/90">Tidak ada baris yang berubah pada pratinjau — kemungkinan hanya nilai rahasia (disamarkan).</p>`
+      ? `<p class="mt-2 text-[11px] text-amber-600">Tidak ada baris yang berubah pada pratinjau — kemungkinan hanya nilai rahasia (disamarkan).</p>`
       : "";
 
-  return `<pre class="selectable overflow-x-auto rounded-lg border border-zinc-800 bg-zinc-950 py-2 font-mono text-[11px] leading-relaxed">${body}</pre>${truncated}${kosong}`;
+  return `<pre class="selectable overflow-x-auto rounded-xl border border-stone-200 bg-stone-50 py-2 font-mono text-[11px] leading-relaxed">${body}</pre>${truncated}${kosong}`;
 }
