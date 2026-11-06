@@ -32,10 +32,14 @@ pub trait Adapter {
     /// Mutasi dokumen di memori. Tidak menyentuh disk sama sekali.
     fn build(&self, docs: &mut Docs, op: &EditOp) -> Result<Vec<String>>;
 
+    /// Ringkasan harness: file yang relevan + jumlah provider.
+    ///
+    /// Jumlah provider dihitung dari snapshot sungguhan supaya halaman awal
+    /// bisa menampilkan "N provider terhubung" tanpa panggilan tambahan.
     fn info(&self) -> HarnessInfo {
-        let files: Vec<ConfigFileInfo> = self
-            .specs()
-            .into_iter()
+        let specs = self.specs();
+        let files: Vec<ConfigFileInfo> = specs
+            .iter()
             .map(|spec| ConfigFileInfo {
                 path: spec.path.display().to_string(),
                 role: spec.role.to_string(),
@@ -44,6 +48,21 @@ pub trait Adapter {
             })
             .collect();
         let installed = files.iter().any(|f| f.exists);
+
+        let mut provider_count = 0;
+        let mut connected_count = 0;
+        let mut read_error = None;
+
+        if installed {
+            match Docs::load(&specs).and_then(|docs| self.snapshot(&docs)) {
+                Ok(snapshot) => {
+                    provider_count = snapshot.providers.len();
+                    connected_count = snapshot.providers.iter().filter(|p| p.has_key).count();
+                }
+                Err(error) => read_error = Some(format!("{:#}", error)),
+            }
+        }
+
         HarnessInfo {
             id: self.id().to_string(),
             name: self.name().to_string(),
@@ -51,6 +70,9 @@ pub trait Adapter {
             experimental: self.experimental(),
             files,
             notes: self.notes().to_string(),
+            provider_count,
+            connected_count,
+            read_error,
         }
     }
 }

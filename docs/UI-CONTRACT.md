@@ -27,6 +27,9 @@ type HarnessInfo = {
   experimental: boolean;
   files: ConfigFileInfo[];
   notes: string;         // catatan singkat untuk ditampilkan
+  providerCount: number;   // jumlah provider di config harness ini
+  connectedCount: number;  // jumlah provider yang sudah punya API key
+  readError: string | null; // terisi bila config ada tapi gagal dibaca
 };
 
 type ModelSummary = {

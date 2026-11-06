@@ -21,6 +21,12 @@ pub struct HarnessInfo {
     pub experimental: bool,
     pub files: Vec<ConfigFileInfo>,
     pub notes: String,
+    /// Jumlah provider yang ada di config harness ini.
+    pub provider_count: usize,
+    /// Jumlah provider yang sudah punya API key terpasang.
+    pub connected_count: usize,
+    /// Terisi bila config ada tetapi gagal dibaca (mis. JSON rusak).
+    pub read_error: Option<String>,
 }
 
 // ---------------------------------------------------------------- snapshot

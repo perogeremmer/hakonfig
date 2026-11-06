@@ -235,44 +235,50 @@ function renderHarnessHeader() {
 
 function harnessCard(harness) {
   const [tint, tintText] = avatarTint(harness.id);
-  const badge = harness.installed
-    ? `<span class="rounded-full bg-tint-ok px-2 py-0.5 text-[10px] font-medium text-emerald-700">terpasang</span>`
-    : `<span class="rounded-full bg-sand px-2 py-0.5 text-[10px] font-medium text-sub">belum ada</span>`;
+  const configured = harness.connectedCount > 0;
+
+  // Badge: hijau bila sudah dikonfigurasi, abu bila belum.
+  const badge = configured
+    ? `<span class="inline-flex items-center gap-1 rounded-full bg-tint-ok px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+         <span class="h-1.5 w-1.5 rounded-full bg-brand"></span>terkonfigurasi
+       </span>`
+    : `<span class="inline-flex items-center gap-1 rounded-full bg-sand px-2 py-0.5 text-[10px] font-medium text-sub">
+         <span class="h-1.5 w-1.5 rounded-full bg-mute"></span>belum disetel
+       </span>`;
+
   const experimental = harness.experimental
     ? `<span class="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">eksperimental</span>`
     : "";
 
-  const files = harness.files
-    .map(
-      (file) => `
-      <div class="flex items-center gap-1.5">
-        <span class="h-1.5 w-1.5 shrink-0 rounded-full ${file.exists ? "bg-brand" : "bg-mute"}"></span>
-        <span class="min-w-0 flex-1 truncate font-mono text-[10px] ${file.exists ? "text-sub" : "text-mute"}" title="${esc(file.path)}">${esc(file.path)}</span>
-        <button data-action data-reveal="${esc(file.path)}" title="Buka folder"
-          class="shrink-0 rounded p-0.5 text-mute hover:bg-sand hover:text-ink">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3 w-3"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        </button>
-      </div>`,
-    )
-    .join("");
+  // Keterangan singkat di bawah nama.
+  let caption;
+  if (harness.readError) {
+    caption = `<span class="text-rose-600">config tidak terbaca</span>`;
+  } else if (!harness.installed) {
+    caption = `Belum ada file config`;
+  } else if (harness.connectedCount > 0) {
+    caption = `${harness.connectedCount} provider terhubung`;
+  } else if (harness.providerCount > 0) {
+    caption = `${harness.providerCount} provider, belum ada API key`;
+  } else {
+    caption = `Belum ada provider`;
+  }
 
   return `
     <div data-harness="${esc(harness.id)}" role="button" tabindex="0"
-      class="group cursor-pointer rounded-2xl border border-line bg-white p-4 shadow-sm transition hover:border-brand/40 hover:shadow-md">
-      <div class="flex items-start justify-between gap-2">
-        <div class="flex items-center gap-2.5">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tint} text-xs font-semibold ${tintText}">${esc(
-            avatarInitials(harness.id),
-          )}</div>
-          <div class="min-w-0">
-            <p class="truncate text-sm font-medium text-ink">${esc(harness.name)}</p>
-            <p class="truncate text-[11px] text-sub">${esc(harness.notes || "Baca & tulis konfigurasi")}</p>
-          </div>
-        </div>
-        <span class="mt-1 text-mute transition group-hover:translate-x-0.5 group-hover:text-brand">→</span>
+      class="group flex cursor-pointer items-center gap-3 rounded-2xl border border-line bg-white p-4 shadow-sm transition hover:border-brand/40 hover:shadow-md">
+      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${tint} text-sm font-semibold ${tintText}">
+        ${esc(avatarInitials(harness.id))}
       </div>
-      <div class="mt-3 flex flex-wrap items-center gap-1.5">${badge}${experimental}</div>
-      <div class="mt-3 space-y-1 rounded-xl bg-sand p-2">${files}</div>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium text-ink">${esc(harness.name)}</p>
+        <p class="truncate text-[11px] text-sub">${caption}</p>
+      </div>
+      <div class="flex shrink-0 flex-col items-end gap-1">
+        ${badge}
+        ${experimental}
+      </div>
+      <span class="shrink-0 text-mute transition group-hover:translate-x-0.5 group-hover:text-brand">→</span>
     </div>`;
 }
 
@@ -303,10 +309,17 @@ function renderHome() {
     <div class="mx-auto max-w-5xl">
       <div class="mb-4">
         <h2 class="text-lg font-semibold tracking-tight text-ink">Pilih harness</h2>
-        <p class="text-xs text-sub">Klik kotak di bawah untuk melihat dan mengelola provider-nya.</p>
+        <p class="text-xs text-sub">Klik salah satu untuk melihat provider yang terpasang.</p>
       </div>
       <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
         ${state.harnesses.map(harnessCard).join("")}
+      </div>
+
+      <div class="mt-5 rounded-2xl border border-line bg-white p-4 shadow-sm">
+        <p class="text-xs leading-relaxed text-sub">
+          Harness yang belum terpasang tetap bisa dipilih untuk menyiapkan config baru.
+          Setiap penulisan selalu membuat backup otomatis.
+        </p>
       </div>
     </div>`;
 
