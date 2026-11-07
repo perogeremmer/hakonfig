@@ -22,7 +22,7 @@ type ConfigFileInfo = {
 
 type HarnessInfo = {
   id: "pi" | "omp" | "opencode" | "hermes";
-  name: string;          // "Pi", "oh-my-pi", "OpenCode", "Hermes"
+  name: string;          // "Pi", "Oh My Pi", "OpenCode", "Hermes"
   installed: boolean;    // minimal satu file config sudah ada
   experimental: boolean;
   files: ConfigFileInfo[];
@@ -94,7 +94,8 @@ type ProviderDraft = {
 type EditOp =
   | ({ kind: "upsert" } & ProviderDraft)
   | { kind: "remove"; providerId: string }
-  | { kind: "set_enabled"; providerId: string; enabled: boolean };
+  | { kind: "set_enabled"; providerId: string; enabled: boolean }
+  | { kind: "set_default"; providerId: string; modelId: string };
 
 type FileDiff = {
   path: string;
@@ -147,8 +148,36 @@ type TestResult = {
 | `apply_edit` | `{ harnessId: string, op: EditOp }` | `ApplyResult` |
 | `list_backups` | `{ harnessId: string }` | `BackupInfo[]` |
 | `restore_backup` | `{ harnessId: string, backupId: string }` | `ApplyResult` |
-| `test_connection` | `{ baseUrl: string, api: string, key: string }` | `TestResult` |
+| `test_connection` | `{ baseUrl: string, api: string, key: string, harnessId?: string, providerId?: string }` | `TestResult` |
 | `open_in_file_manager` | `{ path: string }` | `null` |
+| `list_harness_catalog` | – | `HarnessCatalogEntry[]` |
+| `harness_version` | `{ harnessId: string }` | `string \| null` |
+| `install_harness` | `{ harnessId: string }` | `InstallResult` |
+| `uninstall_harness` | `{ harnessId: string }` | `InstallResult` |
+| `fetch_models` | `{ baseUrl: string, api: string, key: string, harnessId?: string, providerId?: string }` | `ModelOption[]` |
+| `open_external` | `{ url: string }` | `null` |
+
+```ts
+type HarnessCatalogEntry = {
+  id: string;
+  name: string;
+  kind: "adapter" | "planned"; // planned = belum ada adapter, baru bisa dipasang
+  description: string;
+  docsUrl: string | null;
+  installUnix: string | null;
+  installWindows: string | null;
+  installCommand: string | null; // sudah dipilih sesuai OS; null = install manual
+  verified: boolean;             // false = perintah belum diverifikasi
+};
+
+type ModelOption = { id: string; contextWindow?: number };
+
+type InstallResult = {
+  ok: boolean;
+  command: string;
+  output: string; // stdout+stderr, maks ~4000 karakter terakhir
+};
+```
 
 ### Catatan pemakaian
 
@@ -158,7 +187,81 @@ type TestResult = {
 - `open_in_file_manager` membuka folder induk dari `path`.
 - **`PreviewResult.files` hanya mengisi `before`/`after` untuk file yang berubah**; file lain tetap dikirim dengan `changed: false` dan isi `null` (agar payload tidak membengkak oleh katalog model yang besar).
 - Untuk file dengan `sensitive: true`, isi `before`/`after` **sudah disamarkan backend**: nilai field `key`, `apiKey`, `token`, `access`, `refresh`, `secret`, `password`, `authorization` diganti `••••••••`. UI hanya menampilkan, tidak perlu menyamarkan sendiri.
-- `set_enabled` hanya berlaku untuk harness dengan daftar disable (oh-my-pi:
-  `disabledProviders`, OpenCode: `disabled_providers`); harness lain menolak
-  lewat error, jadi UI harus memakai alur `remove` (dengan konfirmasi).
+- `set_enabled` **berbeda** dari `remove`:
+  - Oh My Pi & OpenCode menulis ke daftar disable milik harness
+    (`disabledProviders` / `disabled_providers`).
+  - Pi & Hermes **mengomentari** entri provider di file yang sama (penanda
+    `hakonfig:disabled <id>` … `hakonfig:end`). Data tidak hilang dan bisa
+    diaktifkan kembali.
+  - `remove` tetap berarti menghapus sungguhan, termasuk membuang blok komentar.
+- `set_default` menulis default provider/model ke tempat masing-masing harness:
+
+  | Harness | Ditulis ke |
+  |---|---|
+  | Pi | `settings.json` → `defaultProvider` + `defaultModel` (`providerId/modelId`) |
+  | Oh My Pi | `config.yml` → `modelRoles.default` (`providerId/modelId`) |
+  | OpenCode | `opencode.json` → `model` (`providerId/modelId`) |
+  | Hermes | `config.yaml` → `model.provider` (`custom:<id>`) + `model.default` + `model.base_url` |
+- `install_harness` / `uninstall_harness` memancarkan event `package-progress`
+  `{ harnessId, line }` per baris output; UI menampilkan progress bar + log.
+- `fetch_models` mengambil `GET {baseUrl}/models` dan mengembalikan **semua** id
+  (bukan sampel), plus context window bila endpoint menyediakannya.
+- `open_external` hanya menerima URL `http(s)` dan membukanya di browser default
+  (`xdg-open` / `open` / `start`). URL lain ditolak.
+- `ProviderPreset` kini punya `badge` (`"free"` / `"local"`) untuk chip di pemilih
+  provider, dan `HarnessCatalogEntry` punya `descriptionId` (deskripsi Bahasa
+  Indonesia; `description` = English).
+- `harness_version` menjalankan `<bin> --version` lewat shell login (timeout 4 s)
+  dan mengembalikan `null` bila tidak terdeteksi - UI harus tetap jalan tanpa versi.
+- `install_harness` menjalankan perintah dari katalog (bukan input pengguna) dengan
+  timeout 420 s. UI **wajib** menampilkan perintahnya lebih dulu untuk dikonfirmasi.
+- `test_connection` / `fetch_models` memakai `key` yang dikirim UI; bila `key`
+  kosong dan `harnessId` + `providerId` diisi, backend membaca key yang
+  **tersimpan** di config harness lewat `Adapter::stored_key` (per adapter:
+  Pi `auth.json` → `models.json.apiKey`, Oh My Pi `models.yml.apiKey`,
+  OpenCode `auth.json` → `options.apiKey` → `env[0]`, Hermes `key_env` → `.env`).
+  Referensi environment (`$VAR` / `${VAR}`) di-resolve backend. Key mentah tidak
+  pernah dikirim ke UI, jadi UI cukup mengosongkan `key` bila
+  `ProviderSummary.hasKey` bernilai true.
 - `apply_edit` boleh dipanggil walau tidak ada perubahan; ia mengembalikan `filesWritten: []` tanpa membuat backup.
+- Form provider: untuk provider yang id-nya ada di `ProviderPreset` (katalog Hakonfig) **dan**
+  nilai `baseUrl`/`api`/`name` masih sama dengan katalog, form hanya menampilkan API key +
+  model. Endpoint ditampilkan sebagai kartu info (read-only) dan payload `upsert` tetap
+  mengirim nilai katalog. Provider custom (id tidak dikenal) tetap memakai form lengkap.
+- Logo: id yang tidak terdaftar di `LOGO_IDS` memakai mark `custom.svg` (OpenAI-compatible),
+  bukan monogram. Menambah logo = taruh file + daftarkan id-nya.
+- `upsert` **tanpa** `key` berarti "jangan sentuh kredensial": `apiKey`/`options.apiKey`/`env[]`/`.env`
+  yang sudah ada dibiarkan apa adanya. Hanya `upsert` **dengan** `key` yang menulis ulang
+  kredensial (dan membersihkan salinan lama di tempat lain). Jadi mengganti nama atau
+  daftar model tidak pernah menghapus API key pengguna.
+
+---
+
+## Preferensi frontend (localStorage)
+
+Disimpan di key `hakonfig.prefs` - **bukan** di backend.
+
+| Field | Nilai | Default | Efek |
+|---|---|---|---|
+| `lang` | `"en"` \| `"id"` | `"en"` | Bahasa UI; `id.js` fallback ke `en.js` |
+| `theme` | `"light"` \| `"dark"` | `"light"` | Kelas `dark` di `<html>` |
+| `confirmDelete` | `boolean` | `true` | Dialog konfirmasi sebelum hapus provider |
+
+Tidak ada auto-detect bahasa dari locale OS: default selalu English agar
+dokumentasi dan screenshot konsisten.
+
+## i18n
+
+- `web/i18n/en.js` = sumber kebenaran; `web/i18n/id.js` wajib punya key yang sama.
+- `t(key, vars)` mengganti `{var}`; key yang hilang jatuh ke English.
+- `setLang(lang)` juga memperbarui `<html lang>`; UI di-render ulang tanpa restart.
+- Paritas key dijaga test `web/i18n.test.js` (jalan tanpa DOM/jaringan):
+  key hilang, nilai kosong, placeholder berbeda, dan terjemahan yang lupa
+  diterjemahkan (kecuali kata serapan yang didaftarkan eksplisit).
+
+## Tema
+
+- Token didefinisikan sebagai CSS variable di `@theme` (Tailwind v4); `.dark`
+  hanya menimpa nilainya, sehingga markup memakai kelas yang sama di kedua tema.
+- Kontras terukur: `ink`/surface 16.4:1 · putih di `brand` 7.9:1 (terang) dan
+  5.8:1 (gelap) · teks link `brand-text` 9.5:1 / 8.0:1.

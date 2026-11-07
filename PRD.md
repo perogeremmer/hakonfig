@@ -1,6 +1,6 @@
-# PRD — Hakonfig
+# PRD - Hakonfig
 
-> **Hakonfig** — Aplikasi desktop untuk membaca, mengubah, dan menulis konfigurasi provider/model pada AI coding harness (OpenCode, Pi, Hermes, oh-my-pi, dll) tanpa harus "akrobat" edit file di file explorer.
+> **Hakonfig** - Aplikasi desktop untuk membaca, mengubah, dan menulis konfigurasi provider/model pada AI coding harness (OpenCode, Pi, Hermes, oh-my-pi, dll) tanpa harus "akrobat" edit file di file explorer.
 
 - **Status:** Draft v1
 - **Stack final:** Tauri v2 (Rust) + HTML + Tailwind CSS (tanpa frontend framework) + vanilla JS
@@ -14,7 +14,7 @@ Mahasiswa/pengguna sering mendapat API key gratis (Groq, Gemini, DeepSeek, dll),
 
 1. Setiap harness menyimpan konfigurasi di lokasi dan format yang berbeda.
 2. Konfigurasi tersebar di **beberapa file** (bukan satu file): misal Pi memisahkan `models.json` (pakai referensi `$ENV_VAR`) dari `auth.json` (key asli).
-3. Pengguna akhirnya mengedit file JSON/YAML secara manual, yang rawan merusak konfigurasi — dibuktikan dengan banyaknya file backup manual (`.bak`, `.bak2`, `.bak.peer-*`).
+3. Pengguna akhirnya mengedit file JSON/YAML secara manual, yang rawan merusak konfigurasi - dibuktikan dengan banyaknya file backup manual (`.bak`, `.bak2`, `.bak.peer-*`).
 
 **Hakonfig** adalah GUI yang membaca konfigurasi saat ini, menampilkannya dalam bentuk yang mudah dipahami, dan menulis perubahan dengan aman (merge + backup otomatis).
 
@@ -131,11 +131,11 @@ trait Adapter {
 
 ### 6.2 Catatan penting per harness
 
-- **Pi** — dua file wajib konsisten:
+- **Pi** - dua file wajib konsisten:
   - `models.json`: provider + model + referensi `$ENV_VAR`.
   - `auth.json`: `{ "<provider_id>": { "type": ..., "key": "<asli>" } }`.
   - Menambah provider di Pi berarti menulis ke **keduanya**.
-- **OpenCode** — provider didefinisikan di `opencode.json`; autentikasi mengikuti mekanisme OpenCode sendiri (auth store / env). Adapter harus menghormati ini dan tidak menulis key ke tempat yang salah.
+- **OpenCode** - provider didefinisikan di `opencode.json`; autentikasi mengikuti mekanisme OpenCode sendiri (auth store / env). Adapter harus menghormati ini dan tidak menulis key ke tempat yang salah.
 
 ---
 
@@ -168,7 +168,7 @@ Setiap preset menyimpan **daftar model** dengan: `id`, `name`, `context_window`,
 | Lapisan | Teknologi | Alasan |
 |---|---|---|
 | Shell / runtime | **Tauri v2** | binary kecil, cross-platform, file-system access native |
-| Backend engine | **Rust** (di `src-tauri`) | adapter file, parsing, merge — UI-agnostic |
+| Backend engine | **Rust** (di `src-tauri`) | adapter file, parsing, merge - UI-agnostic |
 | Frontend | **HTML + Tailwind CSS + vanilla JS** | tanpa framework; ringan, mudah di-maintain |
 | Bridge UI↔Rust | `@tauri-apps/api` (`invoke`) | memanggil Tauri commands |
 | Editor JSON/YAML | **CodeMirror 6** (opsional, vanilla) | ringan, support JSON+YAML |
@@ -312,8 +312,8 @@ struct Defaults {
 
 ### 10.2 Prinsip
 
-- **Path selalu ditampilkan eksplisit** — menyelesaikan "ga tahu file di mana".
-- **Baca dulu, ubah, preview, baru tulis** — tidak ada tulis tersembunyi.
+- **Path selalu ditampilkan eksplisit** - menyelesaikan "ga tahu file di mana".
+- **Baca dulu, ubah, preview, baru tulis** - tidak ada tulis tersembunyi.
 - **Warn** sebelum operasi destruktif (hapus provider, restore).
 - Bahasa UI: Indonesia (default), extensible.
 
@@ -321,7 +321,7 @@ struct Defaults {
 
 ## 11. Keamanan
 
-- Token tetap disimpan **di file harness** (plaintext — memang begitu cara kerja harness), aplikasi tidak menyalin ke lokasi sendiri.
+- Token tetap disimpan **di file harness** (plaintext - memang begitu cara kerja harness), aplikasi tidak menyalin ke lokasi sendiri.
 - Tidak menulis token ke **log** atau telemetri.
 - File yang ditulis diberi permission ketat (`0600`) untuk `auth.json` bila memungkinkan.
 - Token hanya dikirim saat `test_connection` ke endpoint provider terkait, tidak ke server Hakonfig.
@@ -344,11 +344,11 @@ struct Defaults {
 
 | Fase | Deliverable | Fitur |
 |---|---|---|
-| **M0 — Spike** | Core engine + CLI | `discover`, `read`, `write` (merge+backup) untuk Pi & OpenCode |
-| **M1 — Shell** | Tauri + HTML + Tailwind | jendela, deteksi harness, **read-only viewer** |
-| **M2 — Edit** | MVP | tambah/ubah/hapus provider, preset, backup/restore, preview |
-| **M3 — Kualitas** | Validasi + test | test connection, validasi `$schema`, diff |
-| **M4 — Ekspansi** | Adapter + distribusi | Hermes, oh-my-pi, bundler + installer 3 OS |
+| **M0 - Spike** | Core engine + CLI | `discover`, `read`, `write` (merge+backup) untuk Pi & OpenCode |
+| **M1 - Shell** | Tauri + HTML + Tailwind | jendela, deteksi harness, **read-only viewer** |
+| **M2 - Edit** | MVP | tambah/ubah/hapus provider, preset, backup/restore, preview |
+| **M3 - Kualitas** | Validasi + test | test connection, validasi `$schema`, diff |
+| **M4 - Ekspansi** | Adapter + distribusi | Hermes, oh-my-pi, bundler + installer 3 OS |
 
 ---
 
@@ -376,7 +376,7 @@ struct Defaults {
 
 ## 16. Open Questions
 
-1. **oh-my-pi** dan **Hermes** — apa persisnya path & format konfigurasi? (perlu riset sebelum adapter dibuat)
+1. **oh-my-pi** dan **Hermes** - apa persisnya path & format konfigurasi? (perlu riset sebelum adapter dibuat)
 2. OpenCode: di mana tepatnya key disimpan pada versi terbaru (auth store vs env)? (perlu verifikasi)
 3. Apakah perlu dukungan **Windows credential manager** untuk key, atau cukup file plaintext seperti harness?
 4. Preset model: siapa yang maintain daftar model per provider? (opsi: file JSON statis + update manual)
@@ -385,7 +385,7 @@ struct Defaults {
 
 ---
 
-## 17. Appendiks — Contoh Format Konfigurasi (diamati, key di-redaksi)
+## 17. Appendiks - Contoh Format Konfigurasi (diamati, key di-redaksi)
 
 ### 17.1 Pi `~/.pi/agent/models.json` (ringkas)
 
