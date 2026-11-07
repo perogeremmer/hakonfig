@@ -1,6 +1,6 @@
 //! Resolusi path konfigurasi lintas OS.
 //!
-//! Semua path OS-specific terkurung di modul ini — adapter tidak pernah
+//! Semua path OS-specific terkurung di modul ini - adapter tidak pernah
 //! menyusun path sendiri.
 use std::env;
 use std::path::PathBuf;

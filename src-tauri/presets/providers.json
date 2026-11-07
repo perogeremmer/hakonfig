@@ -1,7 +1,7 @@
 [
   {
     "id": "groq",
-    "name": "Groq (free tier)",
+    "name": "Groq",
     "baseUrl": "https://api.groq.com/openai/v1",
     "api": "openai-completions",
     "envVar": "GROQ_API_KEY",
@@ -51,11 +51,12 @@
         "maxTokens": 40960,
         "reasoning": true
       }
-    ]
+    ],
+    "badge": "free"
   },
   {
     "id": "gemini",
-    "name": "Google Gemini (free tier)",
+    "name": "Google Gemini",
     "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai",
     "api": "openai-completions",
     "envVar": "GEMINI_API_KEY",
@@ -84,11 +85,12 @@
         "maxTokens": 8192,
         "reasoning": false
       }
-    ]
+    ],
+    "badge": "free"
   },
   {
     "id": "cerebras",
-    "name": "Cerebras (free tier)",
+    "name": "Cerebras",
     "baseUrl": "https://api.cerebras.ai/v1",
     "api": "openai-completions",
     "envVar": "CEREBRAS_API_KEY",
@@ -117,7 +119,8 @@
         "maxTokens": 32768,
         "reasoning": true
       }
-    ]
+    ],
+    "badge": "free"
   },
   {
     "id": "deepseek",
@@ -147,7 +150,7 @@
   },
   {
     "id": "openrouter",
-    "name": "OpenRouter (ada model :free)",
+    "name": "OpenRouter",
     "baseUrl": "https://openrouter.ai/api/v1",
     "api": "openai-completions",
     "envVar": "OPENROUTER_API_KEY",
@@ -190,11 +193,12 @@
         "maxTokens": 8192,
         "reasoning": false
       }
-    ]
+    ],
+    "badge": "free"
   },
   {
     "id": "mistral",
-    "name": "Mistral AI (free tier)",
+    "name": "Mistral AI",
     "baseUrl": "https://api.mistral.ai/v1",
     "api": "openai-completions",
     "envVar": "MISTRAL_API_KEY",
@@ -230,7 +234,8 @@
         "maxTokens": 32768,
         "reasoning": false
       }
-    ]
+    ],
+    "badge": "free"
   },
   {
     "id": "together",
@@ -289,7 +294,8 @@
         "maxTokens": 16384,
         "reasoning": true
       }
-    ]
+    ],
+    "badge": "free"
   },
   {
     "id": "opencode-go",
@@ -333,7 +339,7 @@
   },
   {
     "id": "ollama",
-    "name": "Ollama (lokal, tanpa key)",
+    "name": "Ollama",
     "baseUrl": "http://localhost:11434/v1",
     "api": "openai-completions",
     "envVar": null,
@@ -354,6 +360,309 @@
         "contextWindow": 131072,
         "maxTokens": 8192,
         "reasoning": false
+      }
+    ],
+    "badge": "local"
+  },
+  {
+    "id": "openai",
+    "name": "OpenAI",
+    "baseUrl": "https://api.openai.com/v1",
+    "api": "openai-completions",
+    "envVar": "OPENAI_API_KEY",
+    "docsUrl": "https://platform.openai.com/api-keys",
+    "keyRequired": true,
+    "notes": "Endpoint resmi OpenAI. Model terbaru ada di akun kamu; pakai Sync model setelah key terpasang.",
+    "models": [
+      {
+        "id": "gpt-6.1-terra",
+        "name": "GPT-6.1 Terra"
+      },
+      {
+        "id": "gpt-6.1-terra-pro",
+        "name": "GPT-6.1 Terra Pro"
+      }
+    ]
+  },
+  {
+    "id": "xai",
+    "name": "xAI Grok",
+    "baseUrl": "https://api.x.ai/v1",
+    "api": "openai-completions",
+    "envVar": "XAI_API_KEY",
+    "docsUrl": "https://console.x.ai",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible milik xAI. Model Grok terkenal cepat untuk kerja coding.",
+    "models": [
+      {
+        "id": "grok-4.7",
+        "name": "Grok 4.7"
+      },
+      {
+        "id": "grok-4.6",
+        "name": "Grok 4.6"
+      }
+    ]
+  },
+  {
+    "id": "moonshot",
+    "name": "Moonshot Kimi",
+    "baseUrl": "https://api.moonshot.ai/v1",
+    "api": "openai-completions",
+    "envVar": "MOONSHOT_API_KEY",
+    "docsUrl": "https://platform.moonshot.ai/console/api-keys",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible dari Moonshot. Keluarga Kimi kuat untuk konteks panjang.",
+    "models": [
+      {
+        "id": "kimi-k3.1-pro",
+        "name": "Kimi K3.1 Pro"
+      },
+      {
+        "id": "kimi-k3",
+        "name": "Kimi K3"
+      },
+      {
+        "id": "kimi-k2.7-code",
+        "name": "Kimi K2.7 Code"
+      }
+    ]
+  },
+  {
+    "id": "zhipu",
+    "name": "Z.ai GLM",
+    "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+    "api": "openai-completions",
+    "envVar": "ZHIPU_API_KEY",
+    "docsUrl": "https://z.ai/manage-apikey/apikey-list",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "GLM lewat endpoint OpenAI-compatible Z.ai. Ada paket gratis terbatas.",
+    "models": [
+      {
+        "id": "glm-5.3",
+        "name": "GLM 5.3"
+      },
+      {
+        "id": "glm-5.3-flash",
+        "name": "GLM 5.3 Flash"
+      }
+    ]
+  },
+  {
+    "id": "minimax",
+    "name": "MiniMax",
+    "baseUrl": "https://api.minimax.io/v1",
+    "api": "openai-completions",
+    "envVar": "MINIMAX_API_KEY",
+    "docsUrl": "https://platform.minimax.io/user-center/basic-information/interface-key",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible MiniMax. Model M-series punya konteks besar.",
+    "models": [
+      {
+        "id": "minimax-m3.1-flash",
+        "name": "MiniMax M3.1 Flash"
+      },
+      {
+        "id": "minimax-m3",
+        "name": "MiniMax M3"
+      }
+    ]
+  },
+  {
+    "id": "dashscope",
+    "name": "Alibaba Qwen (DashScope)",
+    "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+    "api": "openai-completions",
+    "envVar": "DASHSCOPE_API_KEY",
+    "docsUrl": "https://bailian.console.alibabacloud.com",
+    "keyRequired": true,
+    "notes": "Jalur OpenAI-compatible DashScope internasional. Qwen Coder jadi andalan untuk kode.",
+    "models": [
+      {
+        "id": "qwen3.8-max",
+        "name": "Qwen3.8 Max"
+      },
+      {
+        "id": "qwen3.8-flash",
+        "name": "Qwen3.8 Flash"
+      },
+      {
+        "id": "qwen3-coder-plus",
+        "name": "Qwen3 Coder Plus"
+      }
+    ]
+  },
+  {
+    "id": "cline",
+    "name": "Cline",
+    "baseUrl": "https://api.cline.bot/api/v1",
+    "api": "openai-completions",
+    "envVar": "CLINE_API_KEY",
+    "docsUrl": "https://app.cline.bot/settings/api-keys",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "API resmi Cline. Banyak model berlabel :free yang jalan tanpa memotong kredit.",
+    "models": [
+      {
+        "id": "liquid/lfm-3-1.7b:free",
+        "name": "LFM 3 1.7B (free)"
+      },
+      {
+        "id": "nvidia/nemotron-3.5-super-vl:free",
+        "name": "Nemotron 3.5 Super VL (free)"
+      },
+      {
+        "id": "google/gemini-omni-1.2-flash",
+        "name": "Gemini Omni 1.2 Flash"
+      }
+    ]
+  },
+  {
+    "id": "commandcode",
+    "name": "Command Code",
+    "baseUrl": "https://api.commandcode.ai/provider/v1",
+    "api": "openai-completions",
+    "envVar": "COMMANDCODE_API_KEY",
+    "docsUrl": "https://commandcode.ai/studio",
+    "keyRequired": true,
+    "notes": "Provider API dari Command Code. Model GPT dan Claude lewat satu endpoint OpenAI-compatible.",
+    "models": [
+      {
+        "id": "gpt-6-astra",
+        "name": "GPT-6 Astra",
+        "contextWindow": 1050000
+      },
+      {
+        "id": "gpt-6.1-sol",
+        "name": "GPT-6.1 Sol",
+        "contextWindow": 1050000
+      },
+      {
+        "id": "gpt-5.6-sol",
+        "name": "GPT-5.6 Sol",
+        "contextWindow": 1050000
+      }
+    ]
+  },
+  {
+    "id": "deepinfra",
+    "name": "DeepInfra",
+    "baseUrl": "https://api.deepinfra.com/v1/openai",
+    "api": "openai-completions",
+    "envVar": "DEEPINFRA_API_KEY",
+    "docsUrl": "https://deepinfra.com/dash/api_keys",
+    "keyRequired": true,
+    "notes": "Bayar per token dengan harga rendah. Katalog model open-weight lengkap.",
+    "models": [
+      {
+        "id": "deepseek-ai/DeepSeek-V4-Pro",
+        "name": "DeepSeek V4 Pro"
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V3",
+        "name": "DeepSeek V3"
+      }
+    ]
+  },
+  {
+    "id": "sambanova",
+    "name": "SambaNova",
+    "baseUrl": "https://api.sambanova.ai/v1",
+    "api": "openai-completions",
+    "envVar": "SAMBANOVA_API_KEY",
+    "docsUrl": "https://cloud.sambanova.ai/apis",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Inference cepat di chip SambaNova. Ada tingkatan gratis untuk eksperimen.",
+    "models": [
+      {
+        "id": "GLM-5.3",
+        "name": "GLM 5.3",
+        "contextWindow": 131072
+      },
+      {
+        "id": "Meta-Llama-3.3-70B-Instruct",
+        "name": "Llama 3.3 70B",
+        "contextWindow": 131072
+      },
+      {
+        "id": "gpt-oss-120b",
+        "name": "gpt-oss 120B",
+        "contextWindow": 131072
+      }
+    ]
+  },
+  {
+    "id": "fireworks",
+    "name": "Fireworks AI",
+    "baseUrl": "https://api.fireworks.ai/inference/v1",
+    "api": "openai-completions",
+    "envVar": "FIREWORKS_API_KEY",
+    "docsUrl": "https://fireworks.ai/account/api-keys",
+    "keyRequired": true,
+    "notes": "Katalog model open-weight dengan latensi rendah. Isi daftar model lewat Sync setelah key masuk.",
+    "models": []
+  },
+  {
+    "id": "nebius",
+    "name": "Nebius AI Studio",
+    "baseUrl": "https://api.studio.nebius.ai/v1",
+    "api": "openai-completions",
+    "envVar": "NEBIUS_API_KEY",
+    "docsUrl": "https://studio.nebius.com/settings/api-keys",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint OpenAI-compatible Nebius. Mulai dengan kredit gratis untuk eksperimen.",
+    "models": []
+  },
+  {
+    "id": "vercel-gateway",
+    "name": "Vercel AI Gateway",
+    "baseUrl": "https://ai-gateway.vercel.sh/v1",
+    "api": "openai-completions",
+    "envVar": "AI_GATEWAY_API_KEY",
+    "docsUrl": "https://vercel.com/dashboard/ai-gateway",
+    "keyRequired": true,
+    "notes": "Satu key untuk banyak vendor. Cocok kalau kamu sudah memakai Vercel.",
+    "models": [
+      {
+        "id": "alibaba/qwen3-coder",
+        "name": "Qwen3 Coder",
+        "contextWindow": 262144
+      },
+      {
+        "id": "alibaba/qwen-3-32b",
+        "name": "Qwen 3 32B",
+        "contextWindow": 128000
+      }
+    ]
+  },
+  {
+    "id": "huggingface",
+    "name": "Hugging Face Router",
+    "baseUrl": "https://router.huggingface.co/v1",
+    "api": "openai-completions",
+    "envVar": "HF_TOKEN",
+    "docsUrl": "https://huggingface.co/settings/tokens",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Router Hugging Face: satu endpoint untuk banyak penyedia model open-weight.",
+    "models": [
+      {
+        "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "name": "DeepSeek V4.1 Flash",
+        "contextWindow": 1048576
+      },
+      {
+        "id": "zai-org/GLM-5.3-Flash",
+        "name": "GLM 5.3 Flash",
+        "contextWindow": 1048576
+      },
+      {
+        "id": "Qwen/Qwen3.8-27B",
+        "name": "Qwen3.8 27B",
+        "contextWindow": 1000000
       }
     ]
   }

@@ -30,7 +30,7 @@ impl Adapter for OmpAdapter {
     }
 
     fn name(&self) -> &'static str {
-        "oh-my-pi"
+        "Oh My Pi"
     }
 
     fn notes(&self) -> &'static str {
@@ -159,7 +159,7 @@ impl Adapter for OmpAdapter {
                 let api_key_field = match (draft.key_value(), mode) {
                     (Some(key), KeyMode::Inline) => {
                         warnings.push(
-                            "oh-my-pi: API key ditulis plaintext di models.yml (file diberi permission 0600)."
+                            "Oh My Pi: API key ditulis plaintext di models.yml (file diberi permission 0600)."
                                 .to_string(),
                         );
                         Some(key.to_string())
@@ -217,6 +217,25 @@ impl Adapter for OmpAdapter {
                     )
                 }])
             }
+            EditOp::SetDefault {
+                provider_id,
+                model_id,
+            } => {
+                let provider = provider_id.trim().to_string();
+                let model = model_id.trim().to_string();
+                if provider.is_empty() || model.is_empty() {
+                    anyhow::bail!("Provider dan model wajib diisi.");
+                }
+                let settings = docs.require_mut("settings")?;
+                settings.object_at("modelRoles").insert(
+                    "default".to_string(),
+                    Value::String(format!("{}/{}", provider, model)),
+                );
+                Ok(vec![format!(
+                    "Default Oh My Pi: {}/{} (ditulis ke config.yml).",
+                    provider, model
+                )])
+            }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();
                 let mut removed = false;
@@ -240,5 +259,19 @@ impl Adapter for OmpAdapter {
                 Ok(warnings)
             }
         }
+    }
+
+    /// oh-my-pi menyimpan key langsung di `models.yml` (`apiKey`), dan entry
+    /// provider yang dinonaktifkan tetap ada di file - jadi cukup satu lookup.
+    fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
+        let target = provider_id.trim();
+        if target.is_empty() {
+            return None;
+        }
+        docs.get("models")?
+            .data()
+            .get("providers")
+            .and_then(|map| map.get(target))
+            .and_then(|entry| get_str(entry, "apiKey"))
     }
 }

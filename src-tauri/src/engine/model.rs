@@ -138,6 +138,11 @@ pub enum EditOp {
         provider_id: String,
         enabled: bool,
     },
+    /// Ganti default provider/model yang dipakai harness.
+    SetDefault {
+        provider_id: String,
+        model_id: String,
+    },
 }
 
 // ---------------------------------------------------------------- results
@@ -212,6 +217,9 @@ pub struct ProviderPreset {
     pub docs_url: Option<String>,
     #[serde(default)]
     pub key_required: bool,
+    /// "free" | "local" - ditampilkan sebagai chip di pemilih provider.
+    #[serde(default)]
+    pub badge: Option<String>,
     #[serde(default)]
     pub notes: String,
     #[serde(default)]

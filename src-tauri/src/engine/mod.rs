@@ -2,6 +2,8 @@
 //! Modul ini tidak tahu apa-apa soal UI.
 pub mod adapters;
 pub mod backup;
+pub mod catalog;
+pub mod version;
 pub mod doc;
 pub mod model;
 pub mod paths;

@@ -303,24 +303,31 @@ impl Adapter for OpenCodeAdapter {
                             "baseURL".to_string(),
                             Value::String(draft.base_url.trim().to_string()),
                         );
-                        // Key tidak pernah diduplikasi di dua tempat.
-                        options_obj.remove("apiKey");
+                        // Key baru diberikan: simpan di satu tempat saja
+                        // (auth.json untuk inline, `env` untuk environment).
+                        // Tanpa key baru, `apiKey`/`env` lama dibiarkan apa adanya
+                        // supaya edit nama/model tidak membuang kredensial.
+                        if draft.key_value().is_some() {
+                            options_obj.remove("apiKey");
+                        }
                     }
                     obj.insert("options".to_string(), options);
 
-                    match mode {
-                        KeyMode::Env => {
-                            obj.insert(
-                                "env".to_string(),
-                                Value::Array(vec![Value::String(env_var.clone())]),
-                            );
-                            warnings.push(format!(
-                                "Mode environment: set variabel {} di shell kamu.",
-                                env_var
-                            ));
-                        }
-                        KeyMode::Inline => {
-                            obj.remove("env");
+                    if draft.key_value().is_some() {
+                        match mode {
+                            KeyMode::Env => {
+                                obj.insert(
+                                    "env".to_string(),
+                                    Value::Array(vec![Value::String(env_var.clone())]),
+                                );
+                                warnings.push(format!(
+                                    "Mode environment: set variabel {} di shell kamu.",
+                                    env_var
+                                ));
+                            }
+                            KeyMode::Inline => {
+                                obj.remove("env");
+                            }
                         }
                     }
 
@@ -400,6 +407,25 @@ impl Adapter for OpenCodeAdapter {
                     )
                 }])
             }
+            EditOp::SetDefault {
+                provider_id,
+                model_id,
+            } => {
+                let provider = provider_id.trim().to_string();
+                let model = model_id.trim().to_string();
+                if provider.is_empty() || model.is_empty() {
+                    anyhow::bail!("Provider dan model wajib diisi.");
+                }
+                let config = docs.require_mut("config")?;
+                config.root_object().insert(
+                    "model".to_string(),
+                    Value::String(format!("{}/{}", provider, model)),
+                );
+                Ok(vec![format!(
+                    "Default OpenCode: {}/{} (ditulis ke opencode.json).",
+                    provider, model
+                )])
+            }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();
                 let container = providers_key(docs.require("config")?.data());
@@ -429,5 +455,40 @@ impl Adapter for OpenCodeAdapter {
                 Ok(warnings)
             }
         }
+    }
+
+    /// Urutan sama dengan `snapshot`: `auth.json` → `options.apiKey` → `env[0]`
+    /// (dikembalikan sebagai `$VAR` agar pemanggil bisa me-resolve environment).
+    fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
+        let target = provider_id.trim();
+        if target.is_empty() {
+            return None;
+        }
+        if let Some(key) = docs
+            .get("auth")
+            .and_then(|doc| doc.data().get(target))
+            .and_then(|credential| get_str(credential, "key"))
+        {
+            return Some(key);
+        }
+
+        let config = docs.get("config")?;
+        let data = config.data();
+        // Map baru (`providers`) menang atas map lama (`provider`).
+        let mut found = None;
+        for container in ["provider", "providers"] {
+            if let Some(entry) = data.get(container).and_then(|map| map.get(target)) {
+                found = Some(entry);
+            }
+        }
+        let entry = found?;
+        if let Some(key) = entry.get("options").and_then(|options| get_str(options, "apiKey")) {
+            return Some(key);
+        }
+        entry
+            .get("env")
+            .and_then(Value::as_array)
+            .and_then(|vars| vars.iter().find_map(Value::as_str))
+            .map(|var| format!("${}", var.trim()))
     }
 }

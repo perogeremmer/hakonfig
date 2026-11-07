@@ -1,4 +1,4 @@
-//! Adapter Hermes (`~/.hermes`) — **eksperimental**.
+//! Adapter Hermes (`~/.hermes`) - **eksperimental**.
 //!
 //! * `config.yaml` : `providers.<id>` = { name, base_url, key_env, api_mode }
 //! * `.env`        : nilai API key yang dirujuk `key_env`
@@ -33,6 +33,10 @@ impl Adapter for HermesAdapter {
     }
 
     fn experimental(&self) -> bool {
+        true
+    }
+
+    fn supports_toggle(&self) -> bool {
         true
     }
 
@@ -79,8 +83,10 @@ impl Adapter for HermesAdapter {
         }
 
         let mut providers = Vec::new();
+        let mut active_ids: Vec<String> = Vec::new();
         if let Some(map) = data.get("providers").and_then(Value::as_object) {
             for (id, entry) in map {
+                active_ids.push(id.clone());
                 let key_env = get_str(entry, "key_env");
                 let stored = key_env
                     .as_deref()
@@ -103,6 +109,34 @@ impl Adapter for HermesAdapter {
                 });
             }
         }
+        // Provider nonaktif tetap tampil dari blok komentar.
+        for id in config.parked_ids() {
+            if active_ids.contains(&id) {
+                continue;
+            }
+            let entry = config.parked_value(&id).unwrap_or(Value::Null);
+            let key_env = get_str(&entry, "key_env");
+            let stored = key_env
+                .as_deref()
+                .and_then(|var| env.and_then(|doc| doc.env_get(var)));
+            let key_display = match (&stored, &key_env) {
+                (Some(value), _) => Some(mask_key(value)),
+                (None, Some(var)) => Some(format!("${} (belum diisi)", var)),
+                (None, None) => None,
+            };
+            providers.push(ProviderSummary {
+                id: id.clone(),
+                name: get_str(&entry, "name").unwrap_or_else(|| id.clone()),
+                base_url: get_str(&entry, "base_url"),
+                api: get_str(&entry, "api_mode"),
+                has_key: stored.is_some(),
+                key_display,
+                models: Vec::new(),
+                enabled: false,
+                can_toggle: true,
+            });
+        }
+
         providers.sort_by(|a, b| a.id.cmp(&b.id));
 
         let model_section = data.get("model");
@@ -209,10 +243,83 @@ impl Adapter for HermesAdapter {
 
                 Ok(warnings)
             }
-            EditOp::SetEnabled { .. } => {
-                anyhow::bail!(
-                    "Hermes tidak punya daftar provider nonaktif. Nonaktifkan provider dengan menghapusnya."
-                )
+            EditOp::SetEnabled {
+                provider_id,
+                enabled,
+            } => {
+                let target = provider_id.trim().to_string();
+                let config = docs.require_mut("config")?;
+                let existing = config
+                    .data()
+                    .get("providers")
+                    .and_then(|p| p.get(&target))
+                    .cloned();
+
+                if *enabled {
+                    let Some(value) = config.parked_value(&target) else {
+                        if existing.is_some() {
+                            return Ok(vec![]);
+                        }
+                        anyhow::bail!("Provider '{}' tidak ditemukan.", target);
+                    };
+                    config.object_at("providers").insert(target.clone(), value);
+                    config.drop_parked(&target);
+                    Ok(vec![format!("Provider '{}' diaktifkan kembali.", target)])
+                } else {
+                    let Some(entry) = existing else {
+                        if config.parked_value(&target).is_some() {
+                            return Ok(vec![]);
+                        }
+                        anyhow::bail!("Provider '{}' tidak ditemukan.", target);
+                    };
+                    let removed = config
+                        .tree_mut()
+                        .get_mut("providers")
+                        .and_then(Value::as_object_mut)
+                        .and_then(|map| map.remove(&target))
+                        .is_some();
+                    if removed {
+                        config.park(&target, &entry);
+                    }
+                    Ok(vec![format!(
+                        "Provider '{}' dinonaktifkan (dikomentari di config.yaml).",
+                        target
+                    )])
+                }
+            }
+            EditOp::SetDefault {
+                provider_id,
+                model_id,
+            } => {
+                let provider = provider_id.trim().to_string();
+                let model = model_id.trim().to_string();
+                if provider.is_empty() || model.is_empty() {
+                    anyhow::bail!("Provider dan model wajib diisi.");
+                }
+
+                // Hermes memakai provider kustom dengan awalan "custom:".
+                let base_url = docs
+                    .require("config")?
+                    .data()
+                    .get("providers")
+                    .and_then(|p| p.get(&provider))
+                    .and_then(|entry| get_str(entry, "base_url"));
+
+                let config = docs.require_mut("config")?;
+                let model_section = config.object_at("model");
+                model_section.insert(
+                    "provider".to_string(),
+                    Value::String(format!("custom:{}", provider)),
+                );
+                model_section.insert("default".to_string(), Value::String(model.clone()));
+                if let Some(url) = base_url {
+                    model_section.insert("base_url".to_string(), Value::String(url));
+                }
+
+                Ok(vec![format!(
+                    "Default Hermes: custom:{} / {} (ditulis ke config.yaml).",
+                    provider, model
+                )])
             }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();
@@ -235,6 +342,12 @@ impl Adapter for HermesAdapter {
                     }
                 }
 
+                if let Some(config) = docs.get_mut("config") {
+                    if config.parked_value(&target).is_some() {
+                        config.drop_parked(&target);
+                    }
+                }
+
                 if let (Some(var), Some(env)) = (key_env, docs.get_mut("env")) {
                     if env.env_get(&var).is_some() {
                         env.env_remove(&var);
@@ -250,6 +363,37 @@ impl Adapter for HermesAdapter {
                 }
                 Ok(warnings)
             }
+        }
+    }
+
+    /// Hermes hanya menyimpan **nama** variabel (`key_env`); nilainya ada di
+    /// `.env`. Bila `.env` belum diisi, kembalikan `$VAR` supaya pemanggil
+    /// masih bisa mendapatkannya dari environment proses.
+    fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
+        let target = provider_id.trim();
+        if target.is_empty() {
+            return None;
+        }
+        let config = docs.get("config")?;
+        let entry = config
+            .data()
+            .get("providers")
+            .and_then(|map| map.get(target))
+            .cloned()
+            // provider nonaktif tetap punya `key_env` di blok komentar
+            .or_else(|| config.parked_value(target))?;
+        let var = get_str(&entry, "key_env")?;
+        let var = var.trim();
+        if var.is_empty() {
+            return None;
+        }
+        match docs
+            .get("env")
+            .and_then(|doc| doc.env_get(var))
+            .filter(|value| !value.trim().is_empty())
+        {
+            Some(value) => Some(value),
+            None => Some(format!("${}", var)),
         }
     }
 }

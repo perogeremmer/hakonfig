@@ -16,7 +16,7 @@ pub enum Format {
     /// JSON dengan komentar & trailing comma (mis. `models.json` Pi).
     Jsonc,
     Yaml,
-    /// File `.env` — diedit langsung secara baris demi baris agar komentar awet.
+    /// File `.env` - diedit langsung secara baris demi baris agar komentar awet.
     DotEnv,
 }
 
@@ -40,10 +40,12 @@ pub struct Doc {
     pub format: Format,
     pub sensitive: bool,
     pub exists: bool,
-    /// Isi file saat pertama dibaca — dasar perbandingan `changed`.
+    /// Isi file saat pertama dibaca - dasar perbandingan `changed`.
     pub before: String,
     /// true bila file memuat komentar yang akan hilang saat ditulis ulang.
     pub has_comments: bool,
+    /// Blok provider yang diparkir sebagai komentar (lihat `park`).
+    pub trailing: String,
     pub dirty: bool,
     payload: Payload,
 }
@@ -58,16 +60,20 @@ impl Doc {
             String::new()
         };
 
+        let (body, trailing) = split_parked(&before, spec.format);
+
         let payload = match spec.format {
-            Format::Json | Format::Jsonc => Payload::Tree(parse_json_like(&before)?),
-            Format::Yaml => Payload::Tree(parse_yaml(&before)?),
+            Format::Json | Format::Jsonc => Payload::Tree(parse_json_like(&body)?),
+            Format::Yaml => Payload::Tree(parse_yaml(&body)?),
             Format::DotEnv => Payload::Text(before.clone()),
         };
 
+        // Deteksi komentar pengguna pada isi file *tanpa* blok parkir Hakonfig,
+        // supaya penanda `hakonfig:disabled` tidak memicu peringatan.
         let has_comments = match spec.format {
             Format::Json => false,
-            Format::Jsonc => has_json_comments(&before),
-            Format::Yaml => has_yaml_comments(&before),
+            Format::Jsonc => has_json_comments(&body),
+            Format::Yaml => has_yaml_comments(&body),
             Format::DotEnv => false,
         };
 
@@ -79,6 +85,7 @@ impl Doc {
             exists,
             before,
             has_comments,
+            trailing,
             dirty: false,
             payload,
         })
@@ -92,7 +99,16 @@ impl Doc {
     pub fn render(&self) -> String {
         match &self.payload {
             Payload::Text(text) => text.clone(),
-            Payload::Tree(value) => render_value(value, self.format),
+            Payload::Tree(value) => {
+                let mut out = render_value(value, self.format);
+                if !self.trailing.trim().is_empty() {
+                    if !out.ends_with('\n') {
+                        out.push('\n');
+                    }
+                    out.push_str(&self.trailing);
+                }
+                out
+            }
         }
     }
 
@@ -177,6 +193,108 @@ impl Doc {
             Payload::Tree(v) => v,
             Payload::Text(_) => panic!("payload_value tidak tersedia untuk format teks"),
         }
+    }
+
+    // ------------------------------------------------------- parkir provider
+    //
+    // Harness tanpa daftar "disabled" (Pi, Hermes) bisa menonaktifkan provider
+    // dengan menaruhnya sebagai komentar di file yang sama. Kedua format
+    // mendukung komentar (Pi: JSONC, Hermes: YAML), jadi data tidak hilang dan
+    // bisa diaktifkan lagi tanpa menyentuh backup.
+
+    fn parked_blocks(&self) -> Vec<(String, usize, usize)> {
+        let prefix = comment_prefix(self.format);
+        let lines: Vec<&str> = self.trailing.lines().collect();
+        let mut out = Vec::new();
+        let mut start: Option<(String, usize)> = None;
+
+        for (index, line) in lines.iter().enumerate() {
+            let content = marker_content(line, prefix).unwrap_or_default();
+            if let Some(id) = content.strip_prefix(PARK_BEGIN) {
+                start = Some((id.trim().to_string(), index));
+                continue;
+            }
+            if content == PARK_END {
+                if let Some((id, begin)) = start.take() {
+                    out.push((id, begin, index));
+                }
+            }
+        }
+        out
+    }
+
+    pub fn parked_ids(&self) -> Vec<String> {
+        self.parked_blocks().into_iter().map(|(id, _, _)| id).collect()
+    }
+
+    pub fn parked_value(&self, id: &str) -> Option<Value> {
+        let (_, begin, end) = self
+            .parked_blocks()
+            .into_iter()
+            .find(|(candidate, _, _)| candidate == id)?;
+        let prefix = comment_prefix(self.format);
+        let payload: Vec<String> = self
+            .trailing
+            .lines()
+            .skip(begin + 1)
+            .take(end.saturating_sub(begin + 1))
+            .map(|line| strip_comment(line, prefix))
+            .collect();
+        let text = payload.join("\n");
+        match self.format {
+            Format::Yaml => parse_yaml(&text).ok(),
+            _ => parse_json_like(&text).ok(),
+        }
+    }
+
+    /// Buang blok parkir untuk id tertentu (dipakai saat provider dihapus).
+    pub fn drop_parked(&mut self, id: &str) {
+        let Some((_, begin, end)) = self
+            .parked_blocks()
+            .into_iter()
+            .find(|(candidate, _, _)| candidate == id)
+        else {
+            return;
+        };
+        let mut lines: Vec<String> = self.trailing.lines().map(str::to_string).collect();
+        lines.drain(begin..=end);
+        self.trailing = normalize_trailing(&lines.join("\n"));
+        self.dirty = true;
+    }
+
+    /// Parkir satu entri provider sebagai komentar di akhir file.
+    pub fn park(&mut self, id: &str, value: &Value) {
+        let prefix = comment_prefix(self.format);
+        let payload = match self.format {
+            Format::Yaml => serde_yaml::to_string(value).unwrap_or_default(),
+            _ => {
+                let mut text = serde_json::to_string_pretty(value).unwrap_or_default();
+                text.push('\n');
+                text
+            }
+        };
+
+        let mut block = String::new();
+        block.push_str(&format!("{} {} {}\n", prefix, PARK_BEGIN, id));
+        for line in payload.trim_end().lines() {
+            if line.trim().is_empty() {
+                block.push_str(&format!("{}\n", prefix));
+            } else {
+                block.push_str(&format!("{} {}\n", prefix, line));
+            }
+        }
+        block.push_str(&format!("{} {}\n", prefix, PARK_END));
+
+        let mut lines: Vec<String> = self.trailing.lines().map(str::to_string).collect();
+        while lines.first().map(|l| l.trim().is_empty()).unwrap_or(false) {
+            lines.remove(0);
+        }
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
+        lines.extend(block.trim_end().lines().map(str::to_string));
+        self.trailing = normalize_trailing(&lines.join("\n"));
+        self.dirty = true;
     }
 
     // -------------------------------------------------------------- DotEnv
@@ -320,6 +438,79 @@ fn render_value(value: &Value, format: Format) -> String {
             out
         }
     }
+}
+
+const PARK_BEGIN: &str = "hakonfig:disabled";
+const PARK_END: &str = "hakonfig:end";
+
+fn comment_prefix(format: Format) -> &'static str {
+    match format {
+        Format::Yaml => "#",
+        _ => "//",
+    }
+}
+
+/// Isi baris komentar tanpa prefix (mis. `// hakonfig:end` -> `hakonfig:end`).
+fn marker_content(line: &str, prefix: &str) -> Option<String> {
+    let trimmed = line.trim_start();
+    let rest = trimmed.strip_prefix(prefix)?;
+    let rest = rest.trim_start_matches(['/', '#']).trim();
+    Some(rest.to_string())
+}
+
+/// Buang prefix komentar + satu spasi, sisakan isi aslinya (indentasi utuh).
+fn strip_comment(line: &str, prefix: &str) -> String {
+    let trimmed = line.trim_start();
+    match trimmed.strip_prefix(prefix) {
+        Some(rest) => rest.strip_prefix(' ').unwrap_or(rest).to_string(),
+        None => trimmed.to_string(),
+    }
+}
+
+fn normalize_trailing(text: &str) -> String {
+    let body = text.trim_matches('\n');
+    if body.trim().is_empty() {
+        String::new()
+    } else {
+        format!("\n{}\n", body)
+    }
+}
+
+/// Pisahkan blok parkir dari isi file sebelum di-parse.
+fn split_parked(text: &str, format: Format) -> (String, String) {
+    if !matches!(format, Format::Json | Format::Jsonc | Format::Yaml) {
+        return (text.to_string(), String::new());
+    }
+    let prefix = comment_prefix(format);
+    let mut body: Vec<String> = Vec::new();
+    let mut parked: Vec<String> = Vec::new();
+    let mut inside = false;
+
+    for line in text.lines() {
+        let content = marker_content(line, prefix).unwrap_or_default();
+        let is_begin = content.starts_with(PARK_BEGIN);
+        let is_end = content == PARK_END;
+
+        if is_begin {
+            inside = true;
+            parked.push(line.trim_end().to_string());
+            continue;
+        }
+        if inside {
+            parked.push(line.trim_end().to_string());
+            if is_end {
+                inside = false;
+            }
+            continue;
+        }
+        body.push(line.to_string());
+    }
+
+    let mut body_text = body.join("\n");
+    if !body_text.is_empty() {
+        body_text.push('\n');
+    }
+    (body_text, normalize_trailing(&parked.join("\n")))
 }
 
 fn join_lines(mut lines: Vec<String>) -> String {
@@ -810,7 +1001,7 @@ mod unit_tests {
     #[test]
     fn file_rusak_gagal_dimuat_bukan_ditimpa() {
         // Keputusan desain: file yang tidak bisa diparse tidak boleh ditulis
-        // ulang secara diam-diam — lebih baik gagal keras dan biarkan pengguna
+        // ulang secara diam-diam - lebih baik gagal keras dan biarkan pengguna
         // memperbaikinya.
         let dir = temp_dir("json-rusak");
         let path = dir.join("rusak.json");

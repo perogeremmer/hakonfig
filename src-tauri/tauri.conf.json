@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "identifier": "dev.perogeremmer.hakonfig",
   "build": {
-    "frontendDist": "../web"
+    "frontendDist": "../web",
+    "beforeBuildCommand": "bun run css"
   },
   "app": {
     "withGlobalTauri": true,
@@ -29,14 +30,25 @@
     "targets": "all",
     "category": "DeveloperTool",
     "shortDescription": "Kelola konfigurasi provider AI coding harness",
-    "longDescription": "Hakonfig membaca, mengubah, dan menulis konfigurasi provider/model pada harness AI coding (Pi, oh-my-pi, OpenCode, Hermes) tanpa mengedit file secara manual.",
+    "longDescription": "Hakonfig membaca, mengubah, dan menulis konfigurasi provider/model pada harness AI coding (Pi, Oh My Pi, OpenCode, Hermes) tanpa mengedit file secara manual.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "license": "MIT",
+    "licenseFile": "../LICENSE",
+    "publisher": "perogeremmer",
+    "homepage": "https://github.com/perogeremmer/hakonfig",
+    "linux": {
+      "deb": {
+        "files": {
+          "/usr/share/doc/hakonfig/copyright": "../LICENSE"
+        }
+      }
+    }
   },
   "mainBinaryName": "hakonfig"
 }

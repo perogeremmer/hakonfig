@@ -37,6 +37,20 @@ pub trait Adapter {
     /// Mutasi dokumen di memori. Tidak menyentuh disk sama sekali.
     fn build(&self, docs: &mut Docs, op: &EditOp) -> Result<Vec<String>>;
 
+    /// API key mentah yang tersimpan untuk `provider_id` di config harness ini.
+    ///
+    /// Dipakai **hanya di backend** oleh `test_connection` / `fetch_models`:
+    /// key tersimpan tidak pernah dikirim ke UI. Nilai yang dikembalikan boleh
+    /// berupa referensi environment (`$VAR` / `${VAR}`) - pemanggil yang
+    /// me-resolve-nya. Default `None` = harness tidak menyimpan key.
+    ///
+    /// Harus sepakat dengan `snapshot`: provider yang dilaporkan `has_key`
+    /// seharusnya mengembalikan `Some` di sini.
+    fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
+        let _ = (docs, provider_id);
+        None
+    }
+
     /// Ringkasan harness: file yang relevan + jumlah provider.
     ///
     /// Jumlah provider dihitung dari snapshot sungguhan supaya halaman awal

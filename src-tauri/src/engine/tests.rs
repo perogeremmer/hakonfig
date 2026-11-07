@@ -54,6 +54,94 @@ fn snapshot(harness: &str) -> crate::engine::model::HarnessSnapshot {
     adapter.snapshot(&docs).unwrap()
 }
 
+/// Key mentah yang dibaca backend untuk `test_connection` / `fetch_models`.
+fn stored_key(harness: &str, provider_id: &str) -> Option<String> {
+    let adapter = adapters::get(harness).unwrap();
+    let docs = Docs::load(&adapter.specs()).unwrap();
+    adapter.stored_key(&docs, provider_id)
+}
+
+#[test]
+fn ganti_default_model_per_harness() {
+    let (_lock, root) = sandbox("defaults");
+    let pi_dir = root.join("pi/agent");
+    let omp_dir = root.join("omp/agent");
+    let oc_dir = root.join("opencode/config");
+    let oc_data = root.join("opencode/data");
+    let hm_dir = root.join("hermes");
+
+    // --- Pi: settings.json
+    write(
+        &pi_dir.join("settings.json"),
+        r#"{"theme":"dark","defaultProvider":"lama","defaultModel":"lama/m0"}"#,
+    );
+    commands::apply_edit(
+        "pi".into(),
+        EditOp::SetDefault {
+            provider_id: "groq".to_string(),
+            model_id: "llama-3.3-70b-versatile".to_string(),
+        },
+    )
+    .unwrap();
+    let settings = json(&pi_dir.join("settings.json"));
+    assert_eq!(settings["defaultProvider"], "groq");
+    assert_eq!(settings["defaultModel"], "groq/llama-3.3-70b-versatile");
+    assert_eq!(settings["theme"], "dark", "setelan lain tidak boleh hilang");
+    assert_eq!(snapshot("pi").default_provider.as_deref(), Some("groq"));
+
+    // --- oh-my-pi: config.yml modelRoles.default
+    write(&omp_dir.join("config.yml"), "setupVersion: 2\nmodelRoles:\n  advisor: a/b\n  default: lama/m0\n");
+    commands::apply_edit(
+        "omp".into(),
+        EditOp::SetDefault {
+            provider_id: "opencode-go".to_string(),
+            model_id: "kimi-k3".to_string(),
+        },
+    )
+    .unwrap();
+    let cfg = yaml(&omp_dir.join("config.yml"));
+    assert_eq!(cfg["modelRoles"]["default"], "opencode-go/kimi-k3");
+    assert_eq!(cfg["modelRoles"]["advisor"], "a/b", "role lain tetap");
+
+    // --- OpenCode: root "model"
+    write(&oc_dir.join("opencode.json"), r#"{"model":"lama/m0","theme":"x"}"#);
+    write(&oc_data.join("auth.json"), "{}");
+    commands::apply_edit(
+        "opencode".into(),
+        EditOp::SetDefault {
+            provider_id: "deepseek".to_string(),
+            model_id: "deepseek-chat".to_string(),
+        },
+    )
+    .unwrap();
+    let cfg = json(&oc_dir.join("opencode.json"));
+    assert_eq!(cfg["model"], "deepseek/deepseek-chat");
+    assert_eq!(cfg["theme"], "x");
+
+    // --- Hermes: model.provider "custom:<id>" + default + base_url
+    write(
+        &hm_dir.join("config.yaml"),
+        "model:\n  default: lama/m0\n  provider: custom:lama\nproviders:\n  groq:\n    name: Groq\n    base_url: https://api.groq.com/openai/v1\n    key_env: GROQ_API_KEY\n    api_mode: chat_completions\n",
+    );
+    write(&hm_dir.join(".env"), "");
+    commands::apply_edit(
+        "hermes".into(),
+        EditOp::SetDefault {
+            provider_id: "groq".to_string(),
+            model_id: "llama-3.3-70b-versatile".to_string(),
+        },
+    )
+    .unwrap();
+    let cfg = yaml(&hm_dir.join("config.yaml"));
+    assert_eq!(cfg["model"]["provider"], "custom:groq");
+    assert_eq!(cfg["model"]["default"], "llama-3.3-70b-versatile");
+    assert_eq!(cfg["model"]["base_url"], "https://api.groq.com/openai/v1");
+    assert_eq!(
+        cfg["providers"]["groq"]["key_env"], "GROQ_API_KEY",
+        "provider tidak boleh ikut berubah"
+    );
+}
+
 #[test]
 fn pi_merge_backup_dan_redaksi() {
     let (_lock, root) = sandbox("pi_merge_backup_dan_redaksi");
@@ -353,27 +441,158 @@ fn omp_toggle_nonaktif_reversible() {
 }
 
 #[test]
-fn harness_tanpa_daftar_disable_menolak_toggle() {
-    let (_lock, root) = sandbox("no-toggle");
+fn pi_nonaktifkan_mengomentari_bukan_menghapus() {
+    let (_lock, root) = sandbox("pi-park");
     let dir = root.join("pi/agent");
     write(
         &dir.join("models.json"),
-        r#"{"providers":{"a":{"name":"A","baseUrl":"https://x/v1","api":"openai-completions"}}}"#,
+        r#"{
+  "providers": {
+    "groq": {
+      "name": "Groq",
+      "baseUrl": "https://api.groq.com/openai/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "m1", "name": "M1" }]
+    }
+  }
+}"#,
     );
+    write(&dir.join("auth.json"), r#"{"groq":{"type":"api_key","key":"gsk-abc"}}"#);
 
     let snap = snapshot("pi");
     assert!(snap.providers[0].enabled);
-    assert!(!snap.providers[0].can_toggle, "Pi tidak mendukung toggle");
+    assert!(snap.providers[0].can_toggle, "Pi sekarang mendukung toggle");
 
-    let result = commands::preview_edit(
+    // nonaktifkan
+    commands::apply_edit(
         "pi".into(),
         EditOp::SetEnabled {
-            provider_id: "a".to_string(),
+            provider_id: "groq".to_string(),
             enabled: false,
         },
+    )
+    .unwrap();
+
+    let raw = std::fs::read_to_string(dir.join("models.json")).unwrap();
+    assert!(
+        raw.contains("hakonfig:disabled groq"),
+        "harus ada penanda parkir: {raw}"
     );
-    assert!(result.is_err(), "Pi harus menolak, bukan menghapus diam-diam");
+    assert!(
+        raw.contains("Groq") && raw.contains("//"),
+        "entri harus dikomentari, bukan hilang: {raw}"
+    );
+    // file tetap JSONC valid (bisa diparse) dan provider tidak lagi aktif
+    let parsed = crate::engine::doc::parse_json_like(&raw).unwrap();
+    assert!(parsed["providers"].get("groq").is_none());
+    // key di auth.json tidak dihapus
+    let auth = json(&dir.join("auth.json"));
+    assert_eq!(auth["groq"]["key"], "gsk-abc");
+
+    // tetap tampil di daftar sebagai nonaktif
+    let snap = snapshot("pi");
+    let groq = snap.providers.iter().find(|p| p.id == "groq").unwrap();
+    assert!(!groq.enabled);
+    assert!(groq.can_toggle);
+    assert_eq!(groq.name, "Groq");
+    assert_eq!(groq.models.len(), 1, "model ikut terbaca dari blok komentar");
+    assert!(groq.has_key);
+
+    // aktifkan lagi -> kembali ke tree, komentar hilang
+    commands::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: true,
+        },
+    )
+    .unwrap();
+    let raw = std::fs::read_to_string(dir.join("models.json")).unwrap();
+    assert!(!raw.contains("hakonfig:disabled"), "penanda hilang: {raw}");
+    let parsed = crate::engine::doc::parse_json_like(&raw).unwrap();
+    assert_eq!(parsed["providers"]["groq"]["name"], "Groq");
+    assert!(snapshot("pi").providers[0].enabled);
 }
+
+#[test]
+fn hapus_provider_nonaktif_membuang_blok_komentar() {
+    let (_lock, root) = sandbox("pi-park-delete");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"groq":{"name":"Groq","baseUrl":"https://x/v1","api":"openai-completions"}}}"#,
+    );
+
+    commands::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    assert!(std::fs::read_to_string(dir.join("models.json"))
+        .unwrap()
+        .contains("hakonfig:disabled"));
+
+    // hapus = benar-benar buang, termasuk blok komentarnya
+    commands::apply_edit(
+        "pi".into(),
+        EditOp::Remove {
+            provider_id: "groq".to_string(),
+        },
+    )
+    .unwrap();
+    let raw = std::fs::read_to_string(dir.join("models.json")).unwrap();
+    assert!(!raw.contains("hakonfig:disabled"), "blok parkir harus hilang: {raw}");
+    assert!(!raw.contains("Groq"), "nama provider harus hilang: {raw}");
+    assert!(snapshot("pi").providers.is_empty());
+}
+
+#[test]
+fn hermes_nonaktifkan_mengomentari_di_yaml() {
+    let (_lock, root) = sandbox("hermes-park");
+    let dir = root.join("hermes");
+    write(
+        &dir.join("config.yaml"),
+        "providers:\n  groq:\n    name: Groq\n    base_url: https://api.groq.com/openai/v1\n    key_env: GROQ_API_KEY\n    api_mode: chat_completions\n",
+    );
+    write(&dir.join(".env"), "GROQ_API_KEY=gsk-abc\n");
+
+    commands::apply_edit(
+        "hermes".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    let raw = std::fs::read_to_string(dir.join("config.yaml")).unwrap();
+    assert!(raw.contains("# hakonfig:disabled groq"), "yaml parkir: {raw}");
+    let parsed: serde_json::Value = serde_yaml::from_str(&raw).unwrap();
+    assert!(parsed["providers"].get("groq").is_none());
+    // key di .env tetap
+    assert!(std::fs::read_to_string(dir.join(".env"))
+        .unwrap()
+        .contains("GROQ_API_KEY=gsk-abc"));
+
+    let snap = snapshot("hermes");
+    assert!(!snap.providers[0].enabled);
+
+    commands::apply_edit(
+        "hermes".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: true,
+        },
+    )
+    .unwrap();
+    let raw = std::fs::read_to_string(dir.join("config.yaml")).unwrap();
+    assert!(!raw.contains("hakonfig:disabled"), "penanda hilang: {raw}");
+    let parsed: serde_json::Value = serde_yaml::from_str(&raw).unwrap();
+    assert_eq!(parsed["providers"]["groq"]["name"], "Groq");
+}
+
 
 #[test]
 fn opencode_provider_dan_auth() {
@@ -589,4 +808,279 @@ fn validasi_input_ditolak() {
     bad = draft("groq", Some("k"), KeyMode::Inline);
     bad.models.clear();
     assert!(commands::preview_edit("pi".into(), EditOp::Upsert(bad)).is_err());
+}
+
+// ------------------------------------------------------------ stored key
+
+#[test]
+fn stored_key_dibaca_per_adapter() {
+    let (_lock, root) = sandbox("stored_key");
+
+    // --- Pi: auth.json menang atas apiKey; apiKey boleh berupa $VAR.
+    let pi = root.join("pi/agent");
+    write(
+        &pi.join("models.json"),
+        r#"{
+  "providers": {
+    "groq": { "name": "Groq", "baseUrl": "https://api.groq.com/openai/v1", "api": "openai-completions", "apiKey": "pi-apiKey", "models": [{ "id": "m1" }] },
+    "openai": { "name": "OpenAI", "baseUrl": "https://api.openai.com/v1", "api": "openai-completions", "apiKey": "$OPENAI_API_KEY", "models": [{ "id": "gpt" }] },
+    "tanpa-key": { "name": "Tanpa", "baseUrl": "https://x.test/v1", "api": "openai-completions", "models": [{ "id": "m" }] }
+  }
+}"#,
+    );
+    write(
+        &pi.join("auth.json"),
+        r#"{ "groq": { "type": "api_key", "key": "pi-auth" } }"#,
+    );
+    assert_eq!(stored_key("pi", "groq").as_deref(), Some("pi-auth"));
+    assert_eq!(
+        stored_key("pi", "openai").as_deref(),
+        Some("$OPENAI_API_KEY"),
+        "referensi environment diteruskan apa adanya"
+    );
+    assert_eq!(stored_key("pi", "tanpa-key"), None);
+    assert_eq!(stored_key("pi", "tidak-ada"), None);
+
+    // Provider yang dinonaktifkan (dikomentari) tetap punya key tersimpan.
+    commands::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        stored_key("pi", "groq").as_deref(),
+        Some("pi-auth"),
+        "provider nonaktif tetap bisa dites"
+    );
+
+    // --- oh-my-pi: key ada di apiKey models.yml.
+    let omp = root.join("omp/agent");
+    write(
+        &omp.join("models.yml"),
+        "providers:\n  groq:\n    baseUrl: https://api.groq.com/openai/v1\n    api: openai-completions\n    apiKey: omp-key\n    models:\n      - id: m1\n",
+    );
+    assert_eq!(stored_key("omp", "groq").as_deref(), Some("omp-key"));
+
+    // --- OpenCode: auth.json → options.apiKey → env[0].
+    let oc = root.join("opencode/config");
+    write(
+        &oc.join("opencode.json"),
+        r#"{
+  "provider": {
+    "langsung": { "npm": "@ai-sdk/openai-compatible", "options": { "baseURL": "https://a.test/v1", "apiKey": "oc-key" } },
+    "envvar": { "npm": "@ai-sdk/openai-compatible", "options": { "baseURL": "https://b.test/v1" }, "env": ["MY_KEY"] }
+  }
+}"#,
+    );
+    write(
+        &root.join("opencode/data/auth.json"),
+        r#"{ "login": { "type": "api", "key": "oc-auth" } }"#,
+    );
+    assert_eq!(stored_key("opencode", "langsung").as_deref(), Some("oc-key"));
+    assert_eq!(
+        stored_key("opencode", "envvar").as_deref(),
+        Some("$MY_KEY"),
+        "nama variabel diteruskan untuk di-resolve backend"
+    );
+    assert_eq!(stored_key("opencode", "login").as_deref(), Some("oc-auth"));
+
+    // --- Hermes: key_env → nilai di .env, atau $VAR bila .env kosong.
+    let hermes = root.join("hermes");
+    write(
+        &hermes.join("config.yaml"),
+        r#"providers:
+  groq:
+    name: Groq
+    base_url: https://api.groq.com/openai/v1
+    key_env: GROQ_API_KEY
+    api_mode: chat_completions
+  kosong:
+    name: Kosong
+    base_url: https://b.test/v1
+    key_env: KOSONG_API_KEY
+    api_mode: chat_completions
+"#,
+    );
+    write(&hermes.join(".env"), "GROQ_API_KEY=hermes-key\n");
+    assert_eq!(stored_key("hermes", "groq").as_deref(), Some("hermes-key"));
+    assert_eq!(
+        stored_key("hermes", "kosong").as_deref(),
+        Some("$KOSONG_API_KEY")
+    );
+}
+
+#[test]
+fn stored_key_konsisten_dengan_has_key_snapshot() {
+    let (_lock, root) = sandbox("stored_key_has_key");
+    let pi = root.join("pi/agent");
+    write(
+        &pi.join("models.json"),
+        r#"{ "providers": {
+  "ada": { "name": "Ada", "baseUrl": "https://a.test/v1", "api": "openai-completions", "apiKey": "kunci", "models": [{ "id": "m" }] },
+  "tidak": { "name": "Tidak", "baseUrl": "https://b.test/v1", "api": "openai-completions", "models": [{ "id": "m" }] }
+} }"#,
+    );
+    write(&pi.join("auth.json"), "{}");
+
+    for provider in snapshot("pi").providers {
+        assert_eq!(
+            provider.has_key,
+            stored_key("pi", &provider.id).is_some(),
+            "provider {}: hasKey dan stored_key harus sepakat",
+            provider.id
+        );
+    }
+}
+
+#[test]
+fn request_key_memakai_key_tersimpan_bila_kolom_kosong() {
+    let (_lock, root) = sandbox("request_key");
+    let pi = root.join("pi/agent");
+    write(
+        &pi.join("models.json"),
+        r#"{ "providers": {
+  "dari-file": { "name": "File", "baseUrl": "https://a.test/v1", "api": "openai-completions", "apiKey": "file-key", "models": [{ "id": "m" }] },
+  "dari-env": { "name": "Env", "baseUrl": "https://b.test/v1", "api": "openai-completions", "apiKey": "$HAKONFIG_TEST_KEY", "models": [{ "id": "m" }] }
+} }"#,
+    );
+    write(&pi.join("auth.json"), "{}");
+
+    // key yang diketik pengguna selalu menang
+    assert_eq!(
+        commands::request_key("diketik", Some("pi"), Some("dari-file")).unwrap(),
+        "diketik"
+    );
+    // kolom kosong → baca dari config
+    assert_eq!(
+        commands::request_key("   ", Some("pi"), Some("dari-file")).unwrap(),
+        "file-key"
+    );
+    // $VAR di-resolve dari environment
+    std::env::set_var("HAKONFIG_TEST_KEY", "env-key");
+    assert_eq!(
+        commands::request_key("", Some("pi"), Some("dari-env")).unwrap(),
+        "env-key"
+    );
+    std::env::remove_var("HAKONFIG_TEST_KEY");
+    // tanpa identitas provider / provider tak dikenal → kosong, bukan error
+    assert_eq!(commands::request_key("", None, None).unwrap(), "");
+    assert_eq!(
+        commands::request_key("", Some("pi"), Some("tidak-ada")).unwrap(),
+        ""
+    );
+}
+
+// ------------------------------------------------- edit tanpa key baru
+
+#[test]
+fn edit_tanpa_key_baru_tidak_membuang_kredensial() {
+    let (_lock, root) = sandbox("edit_tanpa_key");
+
+    // --- Pi: apiKey inline di models.json harus selamat saat nama diganti.
+    let pi = root.join("pi/agent");
+    write(
+        &pi.join("models.json"),
+        r#"{ "providers": {
+  "inline": { "name": "Lama", "baseUrl": "https://a.test/v1", "api": "openai-completions", "apiKey": "sk-inline-asli", "models": [{ "id": "m1" }] },
+  "envref": { "name": "Env", "baseUrl": "https://b.test/v1", "api": "openai-completions", "apiKey": "$ENVREF_API_KEY", "models": [{ "id": "m1" }] }
+} }"#,
+    );
+    write(&pi.join("auth.json"), "{}");
+
+    let mut renamed = draft("inline", None, KeyMode::Inline);
+    renamed.name = "Nama Baru".to_string();
+    commands::apply_edit("pi".into(), EditOp::Upsert(renamed)).unwrap();
+
+    let models = json(&pi.join("models.json"));
+    assert_eq!(
+        models["providers"]["inline"]["apiKey"], "sk-inline-asli",
+        "apiKey inline tidak boleh hilang saat edit tanpa key baru"
+    );
+    assert_eq!(models["providers"]["inline"]["name"], "Nama Baru");
+    assert_eq!(
+        stored_key("pi", "inline").as_deref(),
+        Some("sk-inline-asli"),
+        "key masih bisa dipakai Test/Sync setelah edit"
+    );
+
+    // Referensi environment juga tidak boleh dihapus.
+    let mut env_edit = draft("envref", None, KeyMode::Inline);
+    env_edit.name = "Env Baru".to_string();
+    commands::apply_edit("pi".into(), EditOp::Upsert(env_edit)).unwrap();
+    let models = json(&pi.join("models.json"));
+    assert_eq!(models["providers"]["envref"]["apiKey"], "$ENVREF_API_KEY");
+
+    // --- OpenCode: options.apiKey dan env[] harus selamat.
+    let oc = root.join("opencode/config");
+    write(
+        &oc.join("opencode.json"),
+        r#"{ "provider": {
+  "langsung": { "npm": "@ai-sdk/openai-compatible", "options": { "baseURL": "https://a.test/v1", "apiKey": "oc-asli" }, "models": { "m1": {} } },
+  "envvar": { "npm": "@ai-sdk/openai-compatible", "options": { "baseURL": "https://b.test/v1" }, "env": ["OC_KEY"], "models": { "m1": {} } }
+} }"#,
+    );
+    write(&root.join("opencode/data/auth.json"), "{}");
+
+    let mut oc_edit = draft("langsung", None, KeyMode::Inline);
+    oc_edit.name = "Langsung Baru".to_string();
+    commands::apply_edit("opencode".into(), EditOp::Upsert(oc_edit)).unwrap();
+
+    let config = json(&oc.join("opencode.json"));
+    assert_eq!(
+        config["provider"]["langsung"]["options"]["apiKey"], "oc-asli",
+        "options.apiKey tidak boleh hilang saat edit tanpa key baru"
+    );
+    assert_eq!(config["provider"]["langsung"]["name"], "Langsung Baru");
+
+    let mut oc_env = draft("envvar", None, KeyMode::Inline);
+    oc_env.name = "Envvar Baru".to_string();
+    commands::apply_edit("opencode".into(), EditOp::Upsert(oc_env)).unwrap();
+    let config = json(&oc.join("opencode.json"));
+    assert_eq!(
+        config["provider"]["envvar"]["env"][0], "OC_KEY",
+        "daftar env tidak boleh dihapus saat edit tanpa key baru"
+    );
+
+    // --- Hermes: nilai di .env harus selamat.
+    let hermes = root.join("hermes");
+    write(
+        &hermes.join("config.yaml"),
+        "providers:\n  tog:\n    name: Tog\n    base_url: https://t.test/v1\n    key_env: TOG_API_KEY\n    api_mode: chat_completions\n",
+    );
+    write(&hermes.join(".env"), "TOG_API_KEY=tok-asli\n");
+    let mut h_edit = draft("tog", None, KeyMode::Inline);
+    h_edit.name = "Tog Baru".to_string();
+    commands::apply_edit("hermes".into(), EditOp::Upsert(h_edit)).unwrap();
+    let env = fs::read_to_string(hermes.join(".env")).unwrap();
+    assert!(env.contains("TOG_API_KEY=tok-asli"), "env: {env}");
+}
+
+#[test]
+fn key_baru_tetap_menimpa_key_lama() {
+    let (_lock, root) = sandbox("edit_key_baru");
+    let pi = root.join("pi/agent");
+    write(
+        &pi.join("models.json"),
+        r#"{ "providers": { "groq": { "name": "Groq", "baseUrl": "https://a.test/v1", "api": "openai-completions", "apiKey": "sk-lama", "models": [{ "id": "m1" }] } } }"#,
+    );
+    write(&pi.join("auth.json"), "{}");
+
+    commands::apply_edit("pi".into(), upsert("groq", Some("sk-baru"), KeyMode::Inline)).unwrap();
+
+    // Inline → key pindah ke auth.json, apiKey lama dibersihkan.
+    let auth = json(&pi.join("auth.json"));
+    assert_eq!(auth["groq"]["key"], "sk-baru");
+    let models = json(&pi.join("models.json"));
+    assert!(models["providers"]["groq"].get("apiKey").is_none());
+    assert_eq!(stored_key("pi", "groq").as_deref(), Some("sk-baru"));
+
+    // Mode env → apiKey jadi referensi $VAR.
+    commands::apply_edit("pi".into(), upsert("groq", Some("apa saja"), KeyMode::Env)).unwrap();
+    let models = json(&pi.join("models.json"));
+    assert_eq!(models["providers"]["groq"]["apiKey"], "$GROQ_API_KEY");
+    let auth = json(&pi.join("auth.json"));
+    assert!(auth.get("groq").is_none(), "mode env tidak menyimpan key");
 }

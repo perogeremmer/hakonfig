@@ -12,6 +12,10 @@ use super::write;
 
 const MANIFEST: &str = "manifest.json";
 
+/// Jumlah backup yang disimpan per harness. Sisanya dihapus otomatis supaya
+/// folder `.hakonfig/backups` tidak menumpuk tanpa batas.
+pub const MAX_BACKUPS: usize = 5;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct ManifestEntry {
@@ -71,7 +75,46 @@ pub fn create(harness: &str, base: &Path, docs: &[&Doc]) -> Result<Option<PathBu
     };
     let text = serde_json::to_string_pretty(&manifest)?;
     write::atomic_write(&dir.join(MANIFEST), &text, false)?;
+    prune(base, MAX_BACKUPS);
     Ok(Some(dir))
+}
+
+/// Sisakan `keep` backup terbaru, hapus sisanya. Mengembalikan jumlah direktori
+/// yang dihapus.
+///
+/// Direktori tanpa manifest yang bisa dibaca dianggap paling lama (kunci
+/// urutnya kosong), jadi ia ikut dibersihkan lebih dulu.
+pub fn prune(base: &Path, keep: usize) -> usize {
+    let root = backups_root(base);
+    let Ok(read_dir) = std::fs::read_dir(&root) else {
+        return 0;
+    };
+
+    let mut items: Vec<(String, PathBuf)> = Vec::new();
+    for entry in read_dir.flatten() {
+        let dir = entry.path();
+        if !dir.is_dir() {
+            continue;
+        }
+        let created = read_manifest(&dir)
+            .map(|manifest| manifest.created_at)
+            .unwrap_or_default();
+        items.push((created, dir));
+    }
+
+    if items.len() <= keep {
+        return 0;
+    }
+
+    // terbaru dulu, lalu buang ekornya
+    items.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut removed = 0;
+    for (_, dir) in items.into_iter().skip(keep) {
+        if std::fs::remove_dir_all(&dir).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
 }
 
 fn read_manifest(dir: &Path) -> Option<Manifest> {
@@ -222,6 +265,55 @@ mod unit_tests {
         assert_eq!(list(&base).len(), 1);
 
         assert!(restore(&base, "tidak-ada").is_err());
+    }
+
+    #[test]
+    fn backup_dibatasi_dan_yang_paling_lama_dihapus() {
+        let base = temp_dir("backup-retensi");
+        let doc = doc_for(&base, "models", "models.json", "{}");
+
+        let mut created = Vec::new();
+        for _ in 0..(MAX_BACKUPS + 3) {
+            std::thread::sleep(std::time::Duration::from_millis(6));
+            let dir = create("pi", &base, &[&doc]).unwrap().expect("backup");
+            created.push(dir.file_name().unwrap().to_string_lossy().to_string());
+        }
+
+        let entries = list(&base);
+        assert_eq!(
+            entries.len(),
+            MAX_BACKUPS,
+            "hanya {} backup terbaru yang boleh tersisa",
+            MAX_BACKUPS
+        );
+
+        // yang tersisa adalah ekor dari urutan pembuatan (terbaru di depan)
+        let ids: Vec<String> = entries.iter().map(|e| e.id.clone()).collect();
+        let expected: Vec<String> = created.iter().rev().take(MAX_BACKUPS).cloned().collect();
+        assert_eq!(ids, expected);
+
+        // backup yang sudah dibuang tidak bisa dipulihkan lagi
+        let tertua = &created[0];
+        assert!(restore(&base, tertua).is_err());
+    }
+
+    #[test]
+    fn direktori_tanpa_manifest_ikut_dibersihkan() {
+        let base = temp_dir("backup-orphan");
+        let doc = doc_for(&base, "models", "models.json", "{}");
+        create("pi", &base, &[&doc]).unwrap();
+
+        let orphan = backups_root(&base).join("tanpa-manifest");
+        std::fs::create_dir_all(&orphan).unwrap();
+
+        // masih di bawah batas: tidak ada yang dihapus
+        assert_eq!(prune(&base, MAX_BACKUPS), 0);
+        assert!(orphan.is_dir());
+
+        // tepat di batas: orphan (dianggap paling lama) yang dibuang lebih dulu
+        assert_eq!(prune(&base, 1), 1);
+        assert!(!orphan.is_dir());
+        assert_eq!(list(&base).len(), 1);
     }
 
     #[test]

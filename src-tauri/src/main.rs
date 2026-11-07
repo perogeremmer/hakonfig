@@ -1,4 +1,4 @@
-// Hakonfig — kelola konfigurasi provider AI coding harness.
+// Hakonfig - kelola konfigurasi provider AI coding harness.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
@@ -16,6 +16,12 @@ fn main() {
             commands::restore_backup,
             commands::test_connection,
             commands::open_in_file_manager,
+            commands::list_harness_catalog,
+            commands::harness_version,
+            commands::install_harness,
+            commands::uninstall_harness,
+            commands::fetch_models,
+            commands::open_external,
         ])
         .run(tauri::generate_context!())
         .expect("gagal menjalankan Hakonfig");

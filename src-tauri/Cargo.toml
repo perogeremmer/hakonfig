@@ -3,6 +3,8 @@ name = "hakonfig"
 version = "0.1.0"
 description = "Kelola konfigurasi provider AI coding harness"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/perogeremmer/hakonfig"
 rust-version = "1.82"
 
 [build-dependencies]

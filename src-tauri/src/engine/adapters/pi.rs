@@ -1,7 +1,7 @@
 //! Adapter Pi (`~/.pi/agent`).
 //!
 //! Pi menyimpan katalog di `models.json` (JSONC, mendukung komentar) dan
-//! kredensial di `auth.json` — dua file terpisah yang harus konsisten:
+//! kredensial di `auth.json` - dua file terpisah yang harus konsisten:
 //!   * katalog : `providers.<id>` = { name, baseUrl, api, apiKey?, models[] }
 //!   * kredensial: `auth.json.<id>` = { type: "api_key", key }
 //!
@@ -35,7 +35,11 @@ impl Adapter for PiAdapter {
     }
 
     fn notes(&self) -> &'static str {
-        "Katalog di models.json, API key di auth.json. Hakonfig menulis keduanya sekaligus."
+        "Katalog di models.json, API key di auth.json. Menonaktifkan provider = mengomentarinya di models.json."
+    }
+
+    fn supports_toggle(&self) -> bool {
+        true
     }
 
     fn specs(&self) -> Vec<FileSpec> {
@@ -80,8 +84,10 @@ impl Adapter for PiAdapter {
         }
 
         let mut providers = Vec::new();
+        let mut active_ids: Vec<String> = Vec::new();
         if let Some(map) = models.data().get("providers").and_then(Value::as_object) {
             for (id, entry) in map {
+                active_ids.push(id.clone());
                 let config_key = get_str(entry, "apiKey");
                 let stored_key = auth
                     .and_then(|doc| doc.data().get(id))
@@ -106,6 +112,35 @@ impl Adapter for PiAdapter {
                 });
             }
         }
+        // Provider yang dinonaktifkan tetap tampil (dari blok komentar).
+        for id in models.parked_ids() {
+            if active_ids.contains(&id) {
+                continue;
+            }
+            let entry = models.parked_value(&id).unwrap_or(Value::Null);
+            let stored_key = auth
+                .and_then(|doc| doc.data().get(&id))
+                .and_then(|credential| get_str(credential, "key"));
+            let config_key = get_str(&entry, "apiKey");
+            let (has_key, key_display) = match (stored_key, config_key) {
+                (Some(key), _) => (true, Some(mask_key(&key))),
+                (None, Some(key)) => (true, Some(mask_key(&key))),
+                (None, None) => (false, None),
+            };
+
+            providers.push(ProviderSummary {
+                id: id.clone(),
+                name: get_str(&entry, "name").unwrap_or_else(|| id.clone()),
+                base_url: get_str(&entry, "baseUrl"),
+                api: get_str(&entry, "api"),
+                has_key,
+                key_display,
+                models: shared::models_from_pi_style(&entry),
+                enabled: false,
+                can_toggle: true,
+            });
+        }
+
         providers.sort_by(|a, b| a.id.cmp(&b.id));
 
         let default_provider = settings.and_then(|doc| get_str(doc.data(), "defaultProvider"));
@@ -156,8 +191,12 @@ impl Adapter for PiAdapter {
                     // Key inline disimpan di auth.json; jangan sisakan apiKey
                     // lama yang bisa menimpa atau membingungkan.
                     (Some(_), KeyMode::Inline) => None,
-                    // Saat edit tanpa mengganti key, jangan sentuh field ini.
-                    (None, _) => None,
+                    // Edit tanpa key baru: **pertahankan** apiKey yang sudah ada.
+                    // Menghapusnya di sini akan membuang kunci milik pengguna
+                    // hanya karena ia mengganti nama atau model.
+                    (None, _) => {
+                        existing_entry.as_ref().and_then(|entry| get_str(entry, "apiKey"))
+                    }
                 };
 
                 let models = docs.require_mut("models")?;
@@ -197,10 +236,73 @@ impl Adapter for PiAdapter {
 
                 Ok(warnings)
             }
-            EditOp::SetEnabled { .. } => {
-                anyhow::bail!(
-                    "Pi tidak punya daftar provider nonaktif. Nonaktifkan provider dengan menghapusnya."
-                )
+            EditOp::SetEnabled {
+                provider_id,
+                enabled,
+            } => {
+                let target = provider_id.trim().to_string();
+                let models = docs.require_mut("models")?;
+                let existing = models
+                    .data()
+                    .get("providers")
+                    .and_then(|p| p.get(&target))
+                    .cloned();
+
+                if *enabled {
+                    let Some(value) = models.parked_value(&target) else {
+                        if existing.is_some() {
+                            return Ok(vec![]); // sudah aktif
+                        }
+                        anyhow::bail!("Provider '{}' tidak ditemukan.", target);
+                    };
+                    models.object_at("providers").insert(target.clone(), value);
+                    models.drop_parked(&target);
+                    Ok(vec![format!("Provider '{}' diaktifkan kembali.", target)])
+                } else {
+                    let Some(entry) = existing else {
+                        if models.parked_value(&target).is_some() {
+                            return Ok(vec![]); // sudah nonaktif
+                        }
+                        anyhow::bail!("Provider '{}' tidak ditemukan.", target);
+                    };
+                    let removed = models
+                        .tree_mut()
+                        .get_mut("providers")
+                        .and_then(Value::as_object_mut)
+                        .and_then(|map| map.remove(&target))
+                        .is_some();
+                    if removed {
+                        models.park(&target, &entry);
+                    }
+                    Ok(vec![format!(
+                        "Provider '{}' dinonaktifkan (dikomentari di models.json).",
+                        target
+                    )])
+                }
+            }
+            EditOp::SetDefault {
+                provider_id,
+                model_id,
+            } => {
+                let provider = provider_id.trim().to_string();
+                let model = model_id.trim().to_string();
+                if provider.is_empty() || model.is_empty() {
+                    anyhow::bail!("Provider dan model wajib diisi.");
+                }
+                let settings = docs.require_mut("settings")?;
+                let root = settings.root_object();
+                root.insert(
+                    "defaultProvider".to_string(),
+                    Value::String(provider.clone()),
+                );
+                root.insert(
+                    "defaultModel".to_string(),
+                    Value::String(format!("{}/{}", provider, model)),
+                );
+                Ok(vec![format!(
+                    "Default Pi: {}/{} (ditulis ke settings.json).",
+                    provider, model
+                )])
             }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();
@@ -222,6 +324,11 @@ impl Adapter for PiAdapter {
                         auth.root_object().remove(&target);
                     }
                 }
+                if let Some(models) = docs.get_mut("models") {
+                    if models.parked_value(&target).is_some() {
+                        models.drop_parked(&target);
+                    }
+                }
 
                 let mut warnings = Vec::new();
                 if !removed {
@@ -233,5 +340,30 @@ impl Adapter for PiAdapter {
                 Ok(warnings)
             }
         }
+    }
+
+    /// Pi mendahulukan kredensial di `auth.json` di atas `apiKey` di
+    /// `models.json` - urutan yang sama dengan `snapshot`.
+    fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
+        let target = provider_id.trim();
+        if target.is_empty() {
+            return None;
+        }
+        if let Some(key) = docs
+            .get("auth")
+            .and_then(|doc| doc.data().get(target))
+            .and_then(|credential| get_str(credential, "key"))
+        {
+            return Some(key);
+        }
+        let models = docs.get("models")?;
+        let entry = models
+            .data()
+            .get("providers")
+            .and_then(|map| map.get(target))
+            .cloned()
+            // provider yang dinonaktifkan tetap punya key tersimpan (blok komentar)
+            .or_else(|| models.parked_value(target))?;
+        get_str(&entry, "apiKey")
     }
 }
