@@ -3,38 +3,203 @@
 @source "./index.html";
 @source "./main.js";
 @source "./diff.js";
+@source "./icons.js";
+
+/* =============================================================================
+   FONT - Plus Jakarta Sans (UI) + JetBrains Mono (ID/path/command)
+   Dibundel lokal: aplikasi desktop harus tampil benar tanpa jaringan.
+   Sumber: @fontsource (OFL 1.1) - lihat web/fonts/LICENSES.md
+   ========================================================================== */
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("./fonts/PlusJakartaSans-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("./fonts/PlusJakartaSans-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("./fonts/PlusJakartaSans-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("./fonts/PlusJakartaSans-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("./fonts/PlusJakartaSans-800.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./fonts/JetBrainsMono-400.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./fonts/JetBrainsMono-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("./fonts/JetBrainsMono-600.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* =============================================================================
+   TOKEN - tema terang (default)
+   Semantik, bukan nama warna: main.js memakai token yang SAMA di kedua tema,
+   dan .dark hanya menimpa nilai variabelnya.
+   ========================================================================== */
 
 @theme {
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
-  /* Design token hasil ekstraksi dari referensi visual (tema terang & hangat) */
-  --color-cream: #fdfaf6;      /* latar halaman */
-  --color-sand: #faf7f3;       /* permukaan hangat: sidebar, header, hover */
-  --color-line: #f1f1f3;       /* garis kartu */
-  --color-brand: #1eaf5d;      /* aksi utama, status sukses */
-  --color-peach: #fbefe9;      /* item terpilih / hover hangat */
-  --color-tint-ok: #e6f9ef;    /* pil sukses */
-  --color-tint-info: #f0f3ff;  /* pil info */
-  --color-ink: #0a0a0a;        /* teks utama */
-  --color-sub: #6c7481;        /* teks sekunder */
-  --color-mute: #b4b8be;       /* teks redup */
+  /* permukaan */
+  --color-canvas: #faf7f2;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f1ea;
+  --color-surface-sunken: #efe9df;
+
+  /* garis */
+  --color-line: #e8e1d6;
+  --color-line-strong: #d9d0c2;
+
+  /* teks */
+  --color-ink: #221f1b;
+  --color-ink-secondary: #6b6459;
+  --color-ink-muted: #9c9488;
+  --color-on-brand: #ffffff;
+
+  /* brand - maroon */
+  --color-brand: #8c3345;
+  --color-brand-hover: #7a2a3b;
+  --color-brand-text: #7a2a3b;
+  --color-brand-soft: #f7e5e8;
+  --color-brand-strong: #4a1824;
+
+  /* status */
+  --color-ok-bg: #e7f6ee;
+  --color-ok-text: #0b5c3b;
+  --color-info-bg: #e9f0ff;
+  --color-info-text: #1d4ed8;
+  --color-warn-bg: #fff1e0;
+  --color-warn-text: #8a4a08;
+  --color-neutral-bg: #f1ede5;
+  --color-neutral-text: #6b6459;
+  --color-danger-bg: #fdecea;
+  --color-danger-text: #b42318;
+  --color-danger: #b42318;
+  --color-danger-hover: #971b12;
+
+  /* overlay & bayangan */
+  --color-overlay: rgba(34, 31, 27, 0.35);
+  --shadow-xs: 0 1px 2px rgba(34, 31, 27, 0.05);
+  --shadow-sm: 0 1px 2px rgba(34, 31, 27, 0.04), 0 4px 12px -6px rgba(34, 31, 27, 0.1);
+  --shadow-md: 0 2px 4px rgba(34, 31, 27, 0.04), 0 12px 28px -12px rgba(34, 31, 27, 0.18);
+  --shadow-lg: 0 4px 8px rgba(34, 31, 27, 0.05), 0 24px 48px -20px rgba(34, 31, 27, 0.24);
+
+  /* radius */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 20px;
 }
+
+/* =============================================================================
+   TEMA GELAP - hangat, bukan abu-biru
+   Kontras terukur (surface #211b18):
+     ink 15.2:1 · ink-secondary 7.8:1 · ok #8AE8B8 9.1:1
+     brand #A34758 + teks putih 5.8:1 · brand-text #DCA3AC 8.0:1
+   ========================================================================== */
+
+.dark {
+  --color-canvas: #16110f;
+  --color-surface: #211b18;
+  --color-surface-muted: #2a2320;
+  --color-surface-sunken: #120e0c;
+
+  --color-line: #352d28;
+  --color-line-strong: #483d36;
+
+  --color-ink: #f6f1eb;
+  --color-ink-secondary: #b8aea4;
+  --color-ink-muted: #8a8076;
+
+  --color-brand: #a34758;
+  --color-brand-hover: #b85c6c;
+  --color-brand-text: #dca3ac;
+  --color-brand-soft: #2e1b20;
+  --color-brand-strong: #f0c8ce;
+
+  --color-ok-bg: #16352a;
+  --color-ok-text: #8ae8b8;
+  --color-info-bg: #1b2740;
+  --color-info-text: #a8c4ff;
+  --color-warn-bg: #3a2a14;
+  --color-warn-text: #f0b563;
+  --color-neutral-bg: #2c2622;
+  --color-neutral-text: #b8aea4;
+  --color-danger-bg: #3a1d1a;
+  --color-danger-text: #f09186;
+  --color-danger: #b42318;
+  --color-danger-hover: #d13a2c;
+
+  --color-overlay: rgba(8, 5, 4, 0.6);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px -6px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.3), 0 12px 28px -12px rgba(0, 0, 0, 0.65);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.35), 0 24px 48px -20px rgba(0, 0, 0, 0.75);
+}
+
+/* =============================================================================
+   DASAR
+   ========================================================================== */
 
 html,
 body {
   height: 100%;
 }
 
-/* Kontrol native mengikuti tema terang. */
 html {
   color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
 }
 
 body {
   overscroll-behavior: none;
   -webkit-user-select: none;
   user-select: none;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
 }
 
 .selectable {
@@ -42,76 +207,510 @@ body {
   user-select: text;
 }
 
-/* WebKitGTK merender <select> dengan gaya gelap bawaan; reset agar token
-   Tailwind (bg-white / text-stone-800) benar-benar berlaku. */
+/* WebKitGTK merender <select> dengan gaya bawaan; reset agar token berlaku. */
 select {
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236c7481' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%236c7481' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6.5l4 4 4-4'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 0.5rem center;
+  background-position: right 0.7rem center;
   background-size: 1rem 1rem;
-  padding-right: 1.9rem;
+  padding-right: 2.1rem;
 }
-
+.dark select {
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b8aea4' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
 select option {
-  background-color: #ffffff;
-  color: #0a0a0a;
+  background-color: var(--color-surface);
+  color: var(--color-ink);
 }
 
-/* ---- scrollbars ---- */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 25%, transparent);
+  border-color: var(--color-brand);
+}
+
+/* ---- scrollbar ---- */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #e7e2dc transparent;
+  scrollbar-color: var(--color-line-strong) transparent;
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #e7e2dc;
+  background: var(--color-line-strong);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: #c9c3bb;
+  background: var(--color-ink-muted);
   background-clip: content-box;
 }
 
-/* ---- diff view (tema terang) ---- */
+/* =============================================================================
+   KOMPONEN - dipakai lewat kelas di main.js agar markup tetap ringkas
+   ========================================================================== */
+
+/* ---- tombol ---- */
+.hk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease,
+    box-shadow 120ms ease;
+  cursor: pointer;
+}
+.hk-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.hk-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hk-btn-primary {
+  height: 44px;
+  padding: 0 20px;
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  box-shadow: var(--shadow-sm);
+}
+.hk-btn-primary:hover:not(:disabled) {
+  background: var(--color-brand-hover);
+}
+
+.hk-btn-secondary {
+  height: 40px;
+  padding: 0 16px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line-strong);
+}
+.hk-btn-secondary:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+}
+
+.hk-btn-ghost {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+  color: var(--color-ink-secondary);
+  background: transparent;
+}
+.hk-btn-ghost:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+.hk-btn-danger {
+  height: 44px;
+  padding: 0 20px;
+  background: var(--color-danger);
+  color: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+.hk-btn-danger:hover:not(:disabled) {
+  background: var(--color-danger-hover);
+}
+
+.hk-btn-icon {
+  height: 36px;
+  width: 36px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line-strong);
+  color: var(--color-ink-secondary);
+}
+.hk-btn-icon:hover:not(:disabled) {
+  background: var(--color-surface-muted);
+  color: var(--color-ink);
+}
+
+/* Status terpilih untuk segmented control (Settings). Ditulis setelah varian
+   dasar agar menang urutan cascade. */
+.hk-btn.hk-btn-active {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+  color: var(--color-brand-strong);
+}
+
+.hk-btn-sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- input ---- */
+.hk-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-line-strong);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 15px;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.hk-input::placeholder {
+  color: var(--color-ink-muted);
+}
+.hk-input:focus {
+  outline: none;
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 20%, transparent);
+}
+.hk-input:disabled {
+  background: var(--color-surface-muted);
+  color: var(--color-ink-muted);
+  cursor: not-allowed;
+}
+
+/* input kunci API: lebih tinggi + mono, tombol Show/Hide menempel di dalam */
+.hk-key-wrap {
+  position: relative;
+}
+.hk-key-wrap .hk-input {
+  height: 48px;
+  padding-right: 5.5rem;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.hk-key-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-ink-secondary);
+  background: var(--color-surface-muted);
+}
+.hk-key-toggle:hover {
+  color: var(--color-ink);
+}
+
+.hk-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.hk-help {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-ink-secondary);
+}
+
+/* ---- kartu ---- */
+.hk-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---- chip ---- */
+.hk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hk-chip-ok {
+  background: var(--color-ok-bg);
+  color: var(--color-ok-text);
+}
+.hk-chip-info {
+  background: var(--color-info-bg);
+  color: var(--color-info-text);
+}
+.hk-chip-warn {
+  background: var(--color-warn-bg);
+  color: var(--color-warn-text);
+}
+.hk-chip-neutral {
+  background: var(--color-neutral-bg);
+  color: var(--color-neutral-text);
+}
+.hk-chip-brand {
+  background: var(--color-brand-soft);
+  color: var(--color-brand-strong);
+}
+
+/* ---- switch ---- */
+.hk-switch {
+  position: relative;
+  flex: none;
+  height: 26px;
+  width: 44px;
+  border-radius: 9999px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-line-strong);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+.hk-switch[aria-checked="true"] {
+  background: var(--color-brand);
+  border-color: var(--color-brand);
+}
+.hk-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  height: 20px;
+  width: 20px;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 160ms cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+.hk-switch[aria-checked="true"]::after {
+  transform: translateX(18px);
+}
+
+/* ---- checkbox ---- */
+.hk-check {
+  height: 20px;
+  width: 20px;
+  flex: none;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--color-line-strong);
+  accent-color: var(--color-brand);
+  cursor: pointer;
+}
+
+/* ---- modal ---- */
+.hk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 24px;
+  background: var(--color-overlay);
+  backdrop-filter: blur(2px);
+}
+.hk-modal {
+  width: 100%;
+  max-width: 640px;
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  margin-block: 24px;
+}
+.hk-modal-sm {
+  max-width: 480px;
+}
+.hk-modal-md {
+  max-width: 560px;
+}
+.hk-modal-lg {
+  max-width: 880px;
+}
+.hk-modal-xl {
+  max-width: 960px;
+}
+
+/* ---- menu ⋯ ---- */
+.hk-menu {
+  position: absolute;
+  z-index: 60;
+  min-width: 176px;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+.hk-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+  text-align: left;
+}
+.hk-menu-item:hover {
+  background: var(--color-surface-muted);
+}
+.hk-menu-item-danger {
+  color: var(--color-danger-text);
+}
+.hk-menu-item-danger:hover {
+  background: var(--color-danger-bg);
+}
+.hk-menu-sep {
+  margin: 6px 4px;
+  height: 1px;
+  background: var(--color-line);
+}
+
+/* ---- progress bar ---- */
+@keyframes hk-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+.hk-bar {
+  position: relative;
+  overflow: hidden;
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--color-surface-sunken);
+}
+.hk-bar::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 32%;
+  border-radius: 9999px;
+  background: var(--color-brand);
+  animation: hk-indeterminate 1.15s ease-in-out infinite;
+}
+
+/* ---- spinner ---- */
+@keyframes hk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.hk-spin {
+  animation: hk-spin 0.9s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/* ---- diff ---- */
+.hk-diff {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-sunken);
+  padding-block: 8px;
+}
 .diff-line {
   display: block;
   white-space: pre-wrap;
   word-break: break-word;
-  padding-left: 1.25rem;
+  padding-left: 20px;
   position: relative;
 }
 .diff-add {
-  background: #e6f9ef;
-  color: #10693a;
+  background: var(--color-ok-bg);
+  color: var(--color-ok-text);
 }
 .diff-add::before {
   content: "+";
   position: absolute;
-  left: 0.25rem;
-  color: #16a34a;
+  left: 4px;
+  font-weight: 600;
 }
 .diff-del {
-  background: #fdeaea;
-  color: #9b1c1c;
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
 }
 .diff-del::before {
   content: "-";
   position: absolute;
-  left: 0.25rem;
-  color: #dc2626;
+  left: 4px;
+  font-weight: 600;
 }
 .diff-ctx {
-  color: #6c7481;
+  color: var(--color-ink-secondary);
 }
-.diff-ctx::before {
-  content: " ";
+
+/* ---- logo provider ---- */
+.hk-logo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+/* Logo asli menutupi monogram; kalau file belum ada, onerror menghapus <img>
+   sehingga monogram di bawahnya yang terlihat. */
+.hk-logo img {
   position: absolute;
-  left: 0.25rem;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  padding: 18%;
+  object-fit: contain;
+  background: inherit;
+}
+/* Mark dengan glyph gelap punya varian terang untuk tema gelap. */
+.hk-logo img.hk-logo-img-dark {
+  display: none;
+}
+.dark .hk-logo-dual img.hk-logo-img:not(.hk-logo-img-dark) {
+  display: none;
+}
+.dark .hk-logo-dual img.hk-logo-img-dark {
+  display: block;
+}
+
+/* =============================================================================
+   AKSESIBILITAS - hormati preferensi sistem
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .hk-bar::after {
+    animation: none;
+    width: 100%;
+    left: 0;
+  }
 }

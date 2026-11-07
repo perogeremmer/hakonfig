@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="OpenAI-compatible">
+  <rect width="96" height="96" rx="22" fill="#8C3345"/>
+  <!-- Steker: "colok ke endpoint compatible mana pun" -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M36 26v11M60 26v11"/>
+    <path d="M27 37h42v11a21 21 0 0 1-42 0z"/>
+    <path d="M48 69v11"/>
+  </g>
+</svg>

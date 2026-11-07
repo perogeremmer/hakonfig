@@ -1,5 +1,5 @@
 // =============================================================================
-// Unit test untuk web/diff.js — jalankan dengan `bun run test:js`
+// Unit test untuk web/diff.js - jalankan dengan `bun run test:js`
 // =============================================================================
 import test from "node:test";
 import assert from "node:assert/strict";

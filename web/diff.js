@@ -139,7 +139,7 @@ export function renderDiff(beforeText, afterText, maxLines = MAX_DIFF_LINES) {
 
   const kosong =
     diffStats(ops).changed === 0
-      ? `<p class="mt-2 text-[11px] text-amber-700">Tidak ada baris yang berubah pada pratinjau — kemungkinan hanya nilai rahasia (disamarkan).</p>`
+      ? `<p class="mt-2 text-[11px] text-amber-700">Tidak ada baris yang berubah pada pratinjau - kemungkinan hanya nilai rahasia (disamarkan).</p>`
       : "";
 
   return `<pre class="selectable overflow-x-auto rounded-2xl border border-line bg-sand py-2 font-mono text-[11px] leading-relaxed">${body}</pre>${truncated}${kosong}`;
