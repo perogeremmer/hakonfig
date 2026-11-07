@@ -1,73 +1,133 @@
 # Hakonfig
 
-> **Hakonfig** = **Ha**rness **Konfig**uration — aplikasi desktop untuk mengelola konfigurasi provider AI di harness coding agent, tanpa mengedit file JSON/YAML manual.
+**Hakonfig = Harness Konfiguration.** A free, open-source desktop app that sets up
+AI providers for your coding tools, without hand-editing JSON or YAML.
 
-Aplikasi desktop untuk **membaca, mengubah, dan menulis konfigurasi provider AI** pada harness AI coding — **Pi**, **oh-my-pi**, **OpenCode**, dan **Hermes** — tanpa mengedit file JSON/YAML secara manual.
+> The UI ships in **English** by default; Bahasa Indonesia is available in Settings.
+> This document is in English.
 
-Masalah yang dipecahkan: mahasiswa/pengguna punya API key gratis (Groq, Gemini, Cerebras, …) tapi tidak tahu **di mana** harus menaruhnya, **dalam format apa**, dan bahwa API key kadang disimpan di **file berbeda** dari katalog model. Hakonfig menyelesaikannya: pilih harness → pilih preset → tempel key → lihat diff → tulis.
+You have a free API key (Groq, Gemini, Cerebras, ...) and no idea where it goes: which
+file, which key, and why the key sometimes lives in a different file than the model
+catalog. Hakonfig does it for you: pick your tool, pick a provider, paste the key,
+review the diff, write it.
 
-Hakonfig **bukan** proxy/gateway dan **tidak** menyimpan key di tempat sendiri. Ia hanya menulis ke file yang memang dibaca harness kamu.
+Hakonfig is **not** a proxy or a gateway, and it never stores your keys in its own
+place. It only writes to the files your tools already read.
 
-- **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS — tanpa framework frontend
-- **Ukuran:** biner 5,3 MB · paket `.deb` 2,4 MB
-- **Test:** 56 test (36 Rust + 20 JS), tanpa jaringan
+- **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS, no frontend framework
+- **UI:** Plus Jakarta Sans bundled locally (offline), light and dark themes, English + Bahasa Indonesia
+- **Tests:** 80 tests (51 Rust + 29 JS), all offline, no network required
+- **License:** [MIT](LICENSE), free to use, modify, and redistribute
+
+### What it does, in one paragraph
+
+Pick your tool, pick a provider, paste one API key. Hakonfig tests the key, pulls the
+model list straight from the provider, lets you tick the models you want, shows a
+human-readable summary of what will change, and only then writes the config files -
+with an automatic backup you can restore from History.
 
 ---
 
-## Daftar isi
+## Contents
 
-- [Fitur](#fitur)
-- [Harness yang didukung](#harness-yang-didukung)
-- [Prasyarat](#prasyarat)
-- [Menjalankan (mode dev)](#menjalankan-mode-dev)
-- [Build untuk distribusi](#build-untuk-distribusi)
-- [Test](#test)
-- [Cara pakai](#cara-pakai)
-- [Struktur repo](#struktur-repo)
-- [Konfigurasi lewat `HAKONFIG_ROOT`](#konfigurasi-lewat-hakonfig_root)
-- [Menambah harness baru](#menambah-harness-baru)
-- [Model keamanan](#model-keamanan)
-- [Batasan yang diketahui](#batasan-yang-diketahui)
+- [Open source](#open-source)
+- [Features](#features)
+- [Supported tools](#supported-tools)
+- [Requirements](#requirements)
+- [Running (dev mode)](#running-dev-mode)
+- [Building for distribution](#building-for-distribution)
+- [Automated releases](#automated-releases)
+- [Tests](#tests)
+- [How to use it](#how-to-use-it)
+- [Repository layout](#repository-layout)
+- [Sandboxing with `HAKONFIG_ROOT`](#sandboxing-with-hakonfig_root)
+- [Adding a new tool](#adding-a-new-tool)
+- [Security model](#security-model)
+- [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
-- [Lisensi](#lisensi)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
-## Fitur
+## Open source
 
-- **Deteksi harness + path eksplisit** — menjawab "filenya di mana?" dan ada tombol buka folder.
-- **Baca konfigurasi saat ini** sebagai tabel: provider, base URL, API, status key (disamarkan), jumlah model.
-- **Tambah / ubah / hapus provider** dengan **preset siap pakai**: Groq, Gemini, Cerebras, DeepSeek, OpenRouter, Mistral, Together, NVIDIA NIM, OpenCode Go, Ollama — plus opsi **Custom** untuk endpoint apa pun.
-- **Pratinjau diff sebelum menulis** — tidak ada penulisan tersembunyi.
-- **Backup otomatis** setiap penulisan + panel **pulihkan**.
-- **Test koneksi** ke endpoint provider (validasi key, latency, contoh model).
-- **Tulis aman**: merge (field tak dikenal dipertahankan), penulisan atomik (`tmp` + `rename`), permission `0600` untuk file berisi kredensial.
-- **Nilai rahasia disamarkan** di seluruh pratinjau (API key, token, password).
-- **Bahasa UI:** Indonesia.
+Hakonfig is open source under the [MIT License](LICENSE). That means you can use it
+commercially, fork it, embed it, change it, and ship it, as long as the copyright
+notice and permission notice are kept. There is no paid tier, no telemetry, and no
+account: the app runs entirely on your machine and only talks to the provider endpoint
+you configure.
 
-## Harness yang didukung
+Issues and pull requests are welcome. See [Contributing](#contributing).
 
-| Harness | Status | File yang dikelola |
+---
+
+## Features
+
+- **Three-step provider setup:** pick a provider card with its real logo, paste the API
+  key, hit **Test & find models**, tick the models you want. Base URL, API type, and the
+  model list are filled in for you; unticked models are never written.
+- **24 built-in provider presets** (Groq, Gemini, Cerebras, DeepSeek, OpenRouter,
+  Mistral, Together, NVIDIA NIM, OpenCode Go, Ollama, OpenAI, xAI, Moonshot, Z.ai,
+  MiniMax, DashScope, Cline, Command Code, DeepInfra, SambaNova, Fireworks, Nebius,
+  Vercel AI Gateway, Hugging Face Router) plus **Custom** for any OpenAI-compatible
+  endpoint.
+- **Custom providers get a neutral mark.** Anything not in the catalog uses the
+  OpenAI-compatible logo instead of a two-letter monogram.
+- **Registered providers only ask for the key.** For providers that come from the
+  catalog, the edit form hides Base URL, API type, id, and display name, because the
+  endpoint is already known. Custom providers keep the full form.
+- **Light and dark theme** (light by default), with locally bundled fonts so it looks
+  identical offline.
+- **Bilingual UI:** English by default, Bahasa Indonesia in Settings, and it switches
+  instantly, without a restart.
+- **Tool versions on the tile** (e.g. `v1.5.0`), detected from `<bin> --version`.
+- **Install/uninstall tools** with a progress bar and streamed log, after confirming the
+  exact command.
+- **Tool catalog** for tools that are not installed yet (Claude Code, Codex CLI,
+  Gemini CLI, Aider, Crush, Qwen Code) with an **Install** button that runs the official
+  command (shown to you first for confirmation).
+- **Detects config paths** and shows them, with a button to open the folder.
+- **Reads the current config** as a list: provider, base URL, API type, key status
+  (masked), model count.
+- **Diff preview before writing.** Nothing is written silently.
+- **Disable is not delete.** On Oh My Pi/OpenCode the provider is added to the tool's own
+  disable list; on Pi/Hermes the entry is *commented out* in the file
+  (`// hakonfig:disabled groq`). Data disappears only when you press **Delete**.
+- **Automatic backup** on every write, kept at 5 per tool, plus a **restore** panel.
+- **Connection test** against the provider endpoint (key validity, latency, sample models).
+- **Change the default model** per tool, written to `settings.json` / `config.yml` /
+  `opencode.json` / `config.yaml` depending on the tool.
+- **Safe writes:** merge (unknown fields preserved), atomic write (`tmp` + `rename`),
+  `0600` permissions for files that hold credentials.
+- **Secrets masked** everywhere in the preview (API keys, tokens, passwords).
+
+---
+
+## Supported tools
+
+| Tool | Status | Files managed |
 |---|---|---|
-| **Pi** | stabil | `~/.pi/agent/models.json` (JSONC) + `auth.json` + `settings.json`¹ |
-| **oh-my-pi** | stabil | `~/.omp/agent/models.yml` + `config.yml`¹ |
-| **OpenCode** | stabil | `~/.config/opencode/opencode.json` (atau `.jsonc`) + `~/.local/share/opencode/auth.json` |
-| **Hermes** | eksperimental | `~/.hermes/config.yaml` + `~/.hermes/.env` |
+| **Pi** | stable | `~/.pi/agent/models.json` (JSONC) + `auth.json` + `settings.json`¹ |
+| **Oh My Pi** | stable | `~/.omp/agent/models.yml` + `config.yml`¹ |
+| **OpenCode** | stable | `~/.config/opencode/opencode.json` (or `.jsonc`) + `~/.local/share/opencode/auth.json` |
+| **Hermes** | experimental | `~/.hermes/config.yaml` + `~/.hermes/.env` |
 
-¹ hanya dibaca untuk menampilkan default provider/model; tidak pernah ditulis.
+¹ read-only, used to show the current default provider/model; never written.
 
 ---
 
-## Prasyarat
+## Requirements
 
-### Semua platform
+### All platforms
 
-| Kebutuhan | Versi | Cek |
+| Need | Version | Check |
 |---|---|---|
 | Rust (rustup) | ≥ 1.82 | `cargo --version` |
-| Bun | ≥ 1.1 (Node ≥ 20 juga bisa) | `bun --version` |
+| Bun | ≥ 1.1 (Node ≥ 20 also works) | `bun --version` |
 
-CLI Tauri **tidak perlu** dipasang global — sudah menjadi devDependency (`@tauri-apps/cli`).
+You do **not** need a global Tauri CLI: it is already a devDependency
+(`@tauri-apps/cli`).
 
 ### Linux
 
@@ -85,10 +145,10 @@ sudo dnf install -y webkit2gtk4.1-devel openssl-devel curl wget file \
 sudo pacman -S --needed base-devel curl wget file openssl webkit2gtk-4.1 librsvg libxdo
 ```
 
-Verifikasi:
+Verify:
 
 ```bash
-pkg-config --modversion webkit2gtk-4.1   # harus keluar nomor versi
+pkg-config --modversion webkit2gtk-4.1   # must print a version number
 ```
 
 ### macOS
@@ -99,9 +159,10 @@ xcode-select --install
 
 ### Windows
 
-1. **Visual Studio Build Tools** dengan workload *Desktop development with C++* (MSVC + Windows SDK).
-2. **WebView2 Runtime** — sudah ada di Windows 11; Windows 10 bisa unduh dari situs Microsoft.
-3. Rust toolchain MSVC:
+1. **Visual Studio Build Tools** with the *Desktop development with C++* workload
+   (MSVC + Windows SDK).
+2. **WebView2 Runtime** (preinstalled on Windows 11, downloadable for Windows 10).
+3. MSVC Rust toolchain:
 
 ```powershell
 rustup default stable-msvc
@@ -109,53 +170,55 @@ rustup default stable-msvc
 
 ---
 
-## Menjalankan (mode dev)
+## Running (dev mode)
 
 ```bash
-bun install     # sekali saja
-bun run dev     # build CSS lalu jalankan aplikasi
+bun install     # once
+bun run dev     # build CSS, then start the app
 ```
 
-`bun run dev` menjalankan `bun run css` lebih dulu (Tailwind → `web/styles.css`), lalu `tauri dev`.
+`bun run dev` runs `bun run css` first (Tailwind → `web/styles.css`), then `tauri dev`.
 
-### Siklus edit yang perlu diketahui
+### Edit loop you should know about
 
-Tauri **menyematkan aset `web/` saat compile**, jadi tidak ada hot reload:
+Tauri **embeds the `web/` assets at compile time**, so there is no hot reload:
 
-| Yang kamu ubah | Yang perlu dilakukan |
+| What you changed | What to do |
 |---|---|
-| File Rust (`src-tauri/src/**`) | otomatis rebuild & restart oleh `tauri dev` |
-| `web/*.html`, `web/*.js` | hentikan dev lalu `bun run dev` lagi (rebuild ±3 detik) |
-| `web/styles.src.css` | `bun run css` (atau `bun run css:watch` di terminal lain), lalu restart dev |
+| Rust files (`src-tauri/src/**`) | `tauri dev` rebuilds and restarts automatically |
+| `web/*.html`, `web/*.js` | stop dev and run `bun run dev` again (about 3 s rebuild) |
+| `web/styles.src.css` | run `bun run css` (or `bun run css:watch` in another terminal), then restart dev |
 
-Watcher `tauri dev` hanya memantau `src-tauri`, jadi perubahan di `web/` tidak memicu restart otomatis. Ini konsekuensi memilih tanpa bundler/dev-server.
+The `tauri dev` watcher only watches `src-tauri`, so changes under `web/` do not trigger
+a restart. That is the trade-off of shipping without a bundler/dev-server.
 
-Kalau ingin mencoba tanpa menyentuh config asli, lihat [HAKONFIG_ROOT](#konfigurasi-lewat-hakonfig_root).
+To try things without touching your real configs, see
+[Sandboxing with `HAKONFIG_ROOT`](#sandboxing-with-hakonfig_root).
 
 ---
 
-## Build untuk distribusi
+## Building for distribution
 
 ```bash
 bun run build          # = bun run css && tauri build
 ```
 
-Hasilnya:
+Output:
 
 ```
-src-tauri/target/release/hakonfig                      # biner (~5,3 MB)
-src-tauri/target/release/bundle/                       # installer
+src-tauri/target/release/hakonfig                      # binary
+src-tauri/target/release/bundle/                       # installers
 ```
 
-Bundel yang dihasilkan tergantung OS tempat kamu build:
+Bundles depend on the OS you build on:
 
-| OS build | Artefak |
+| Build OS | Artifacts |
 |---|---|
 | Linux | `.deb`, `.rpm`, `.AppImage` |
 | macOS | `.app`, `.dmg` |
 | Windows | `.msi`, `.exe` (NSIS) |
 
-Membuat satu jenis bundel saja (lebih cepat):
+Build a single bundle type (faster):
 
 ```bash
 bunx tauri build --bundles deb     # Linux
@@ -163,188 +226,269 @@ bunx tauri build --bundles dmg     # macOS
 bunx tauri build --bundles nsis    # Windows
 ```
 
-> **Catatan AppImage:** pembuatan AppImage mengunduh `linuxdeploy`/`appimagetool` dari internet saat pertama kali. Ukurannya juga jauh lebih besar (**~84 MB**) karena membawa pustaka GTK/WebKit di dalamnya, sedangkan `.deb`/`.rpm` hanya **~2,4 MB** karena memakai pustaka sistem. Kalau offline atau butuh paket kecil, pakai `--bundles deb`.
+> **AppImage note:** creating an AppImage downloads `linuxdeploy`/`appimagetool` on first
+> use. The result is much larger (**~84 MB**) because it bundles GTK/WebKit, while
+> `.deb`/`.rpm` are only **~2.4 MB** since they use system libraries. Offline or
+> size-sensitive? Use `--bundles deb`.
 
-Contoh hasil `bun run build` di Linux:
+Example output of `bun run build` on Linux:
 
 ```
-bundle/deb/Hakonfig_0.1.0_amd64.deb          2,4 MB
-bundle/rpm/Hakonfig-0.1.0-1.x86_64.rpm       2,4 MB
+bundle/deb/Hakonfig_0.1.0_amd64.deb           2.4 MB
+bundle/rpm/Hakonfig-0.1.0-1.x86_64.rpm        2.4 MB
 bundle/appimage/Hakonfig_0.1.0_amd64.AppImage 84 MB
 ```
 
-> **Catatan cross-compile:** Tauri **tidak** bisa cross-compile. Untuk rilis 3 OS, pakai matriks CI (mis. GitHub Actions dengan runner `ubuntu-latest`, `macos-latest`, `windows-latest`), atau build di tiap OS.
-
-### Menandatangani aplikasi (opsional, untuk rilis publik)
-
-- macOS: butuh sertifikat Apple Developer + notarization; tanpa itu pengguna harus `Klik kanan → Open` pertama kali.
-- Windows: tanpa sertifikat code signing, SmartScreen akan menampilkan peringatan.
-
-Untuk pemakaian kelas/kelas internal, aplikasi unsigned biasanya cukup.
+> **Cross-compilation note:** Tauri **cannot** cross-compile. The three-OS release is
+> produced by a GitHub Actions matrix (see [Automated releases](#automated-releases)):
+> `macos-latest`, `ubuntu-22.04`, and `windows-latest`.
 
 ---
 
-## Test
+## Automated releases
+
+Two workflows live in `.github/workflows/`:
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| `ci.yml` | push to `master`, every PR, manual | version check, JS tests, Tailwind build, `cargo test`, `cargo check`, and a `.deb` dry-run build (no upload) |
+| `release.yml` | tag `v*.*.*`, or manual | builds macOS (universal `.dmg`), Windows (NSIS `.exe`), Ubuntu (`.deb`) and uploads them to one **draft release** |
+
+Release flow:
 
 ```bash
-bun run test        # 36 test Rust + 20 test JS
-bun run test:rust   # cargo test
-bun run test:js     # node --test web/diff.test.js
+node scripts/version.mjs bump minor     # 0.1.0 -> 0.2.0 (all files updated)
+git commit -am "chore: release v0.2.0"
+git tag v0.2.0
+git push --follow-tags
 ```
 
-Semua test berjalan **offline** dan tidak menyentuh config asli (Rust memakai sandbox `HAKONFIG_ROOT`).
+When the workflow finishes, open the **Releases** tab, check the assets, then **Publish**.
+Releases are created as drafts on purpose so you can inspect them first.
 
-| Lapisan | Jumlah | Cakupan |
+What CI guards against:
+
+- `node scripts/version.mjs check` fails if `package.json`, `src-tauri/Cargo.toml`,
+  `src-tauri/tauri.conf.json`, and `web/version.js` drift apart.
+- The tag must match the app version (`v0.2.0` vs `0.2.0`); otherwise the job stops
+  before building anything.
+- `build.beforeBuildCommand` in `tauri.conf.json` runs `bun run css`, so `styles.css`
+  is always regenerated on the runner.
+
+CI builds are **unsigned**. If you ever need signing, add `APPLE_CERTIFICATE`,
+`APPLE_ID`, `APPLE_TEAM_ID` (macOS) and `TAURI_SIGNING_PRIVATE_KEY` /
+`WINDOWS_CERTIFICATE` (Windows) as repository secrets and pass them to `tauri-action`.
+
+### Signing (optional, for public releases)
+
+- macOS: requires an Apple Developer certificate plus notarization; without it users must
+  `Right click → Open` the first time.
+- Windows: without a code signing certificate, SmartScreen shows an extra warning.
+
+Unsigned builds are usually fine for internal or classroom use.
+
+---
+
+## Tests
+
+```bash
+bun run test        # 51 Rust tests + 29 JS tests
+bun run test:rust   # cargo test
+bun run test:js     # node --test web/diff.test.js web/i18n.test.js web/form.test.js
+```
+
+All tests run **offline** and never touch your real configs (Rust uses a `HAKONFIG_ROOT`
+sandbox).
+
+| Layer | Count | Coverage |
 |---|---|---|
-| Unit — `engine/doc.rs` | 16 | parse JSONC (komentar + trailing comma), YAML (kosong/null/rusak), deteksi komentar, `mask_key`, `is_slug`, `env_name_from`, redaksi rahasia, edit `.env`, `is_changed` |
-| Unit — `engine/backup.rs` | 4 | backup kosong, roundtrip create→list→restore, manifest rusak, urutan terbaru |
-| Unit — `engine/write.rs` | 4 | direktori induk, overwrite, tanpa sisa `.hakonfig-tmp`, permission `0644` vs `0600` |
-| Unit — `engine/paths.rs` | 2 | override `HAKONFIG_ROOT`, pemilihan `opencode.jsonc` vs `.json` |
-| Unit — `web/diff.js` | 20 | `lcsDiff`, pemotongan konteks, file kosong, blok raksasa (anti-hang), escaping XSS, pemotongan output |
-| Integrasi — `engine/tests.rs` | 5 | merge field tak dikenal, key ke file yang benar, mode `$ENV`, remove, no-op remove, backup/restore, redaksi pratinjau, validasi input |
+| Unit (`engine/doc.rs`) | 16 | JSONC parsing (comments + trailing commas), YAML (empty/null/broken), comment detection, `mask_key`, `is_slug`, `env_name_from`, secret redaction, `.env` edits, `is_changed` |
+| Unit (`engine/backup.rs`) | 6 | empty backup, create→list→restore roundtrip, corrupt manifest, newest-first order, retention cap, orphan cleanup |
+| Unit (`engine/write.rs`) | 4 | parent dirs, overwrite, no leftover `.hakonfig-tmp`, `0644` vs `0600` permissions |
+| Unit (`engine/paths.rs`) | 2 | `HAKONFIG_ROOT` override, `opencode.jsonc` vs `.json` pick |
+| Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks (anti-hang), XSS escaping, output trimming |
+| Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholder parity, untranslated strings, no em dash |
+| Unit (`web/form.test.js`) | 3 | no DOM reads after the form closes, payload built from copies |
+| Integration (`engine/tests.rs`) | 23 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behavior, remove, no-op remove, backup/restore, preview redaction, input validation, per-adapter `stored_key` |
 
 ---
 
-## Cara pakai
+## How to use it
 
-1. Buka Hakonfig — harness yang terpasang langsung terdeteksi beserta path-nya.
-2. Pilih harness di sidebar (mis. **Pi**).
-3. Klik **+ Tambah Provider** → pilih preset (mis. **Groq**) → tempel API key → klik **Test koneksi** (opsional).
-4. **Simpan** → muncul **pratinjau diff** → klik **Tulis ke disk**.
+1. Open Hakonfig. Installed tools are detected immediately, together with their paths.
+2. Pick a tool (e.g. **Pi**).
+3. Click **+ Add provider** → pick a preset (e.g. **Groq**) → paste the API key →
+   optionally run **Test connection**.
+4. Press **Save** → a **diff preview** appears → press **Write to disk**.
 
-Selesai. Kalau ada yang salah, buka **Backup** → **Pulihkan**.
+That's it. If something looks wrong, open **History** → **Restore**.
 
 ---
 
-## Struktur repo
+## Repository layout
 
 ```
 hakonfig/
-├── web/                          # frontend: HTML + Tailwind + vanilla JS (tanpa framework)
+├── web/                          # frontend: HTML + Tailwind + vanilla JS (no framework)
 │   ├── index.html
-│   ├── main.js                   # UI + alur kerja
-│   ├── diff.js                   # logika diff (dipisah agar bisa diuji)
-│   ├── diff.test.js              # unit test diff
-│   ├── styles.src.css            # sumber Tailwind
-│   └── styles.css                # hasil build (gitignored)
+│   ├── main.js                   # UI and flows
+│   ├── version.js                # APP_VERSION, generated by scripts/version.mjs
+│   ├── diff.js                   # diff logic (separated so it can be tested)
+│   ├── diff.test.js              # diff unit tests
+│   ├── i18n/                     # en.js, id.js, index.js
+│   ├── assets/providers/         # logos (local files, no CDN)
+│   ├── fonts/                    # bundled webfonts + licenses
+│   ├── styles.src.css            # Tailwind source
+│   └── styles.css                # build output (gitignored)
 ├── src-tauri/
 │   ├── src/
 │   │   ├── main.rs
-│   │   ├── commands.rs           # jembatan UI ↔ engine (9 command)
+│   │   ├── commands.rs           # UI <-> engine bridge (Tauri commands)
 │   │   └── engine/
-│   │       ├── model.rs          # tipe data bersama
-│   │       ├── paths.rs          # resolusi path per OS (satu-satunya tempat OS-specific)
-│   │       ├── doc.rs            # dokumen: parse / mutasi / render / redaksi
-│   │       ├── backup.rs         # snapshot + restore + manifest
-│   │       ├── write.rs          # penulisan atomik + permission
-│   │       ├── preset.rs         # pemuat preset
-│   │       ├── tests.rs          # test integrasi (lewat layer commands)
-│   │       ├── testutil.rs       # sandbox + mutex untuk test
-│   │       └── adapters/         # satu file per harness
+│   │       ├── model.rs          # shared types
+│   │       ├── paths.rs          # per-OS path resolution (only OS-specific place)
+│   │       ├── doc.rs            # documents: parse / mutate / render / redact
+│   │       ├── backup.rs         # snapshot + restore + manifest + retention
+│   │       ├── write.rs          # atomic writes + permissions
+│   │       ├── preset.rs         # preset loader
+│   │       ├── catalog.rs        # tool catalog for the "not installed" section
+│   │       ├── version.rs        # `<bin> --version` detection
+│   │       ├── tests.rs          # integration tests (through the commands layer)
+│   │       ├── testutil.rs       # sandbox + mutex for tests
+│   │       └── adapters/         # one file per tool
 │   │           ├── pi.rs
 │   │           ├── omp.rs
 │   │           ├── opencode.rs
 │   │           └── hermes.rs
-│   ├── presets/providers.json    # data preset (update tanpa sentuh kode)
+│   ├── presets/providers.json    # provider presets (edit data, not code)
+│   ├── presets/harnesses.json    # tool catalog + install commands
 │   ├── capabilities/
 │   ├── icons/
 │   └── tauri.conf.json
-├── docs/UI-CONTRACT.md           # kontrak command & tipe antara UI dan Rust
-├── scripts/make-demo-sandbox.sh  # sandbox demo untuk uji UI
-├── PRD.md                        # dokumen produk
+├── docs/UI-CONTRACT.md           # command and type contract between UI and Rust
+├── scripts/version.mjs           # single source of truth for the version number
+├── scripts/make-demo-sandbox.sh  # demo sandbox for UI work
+├── CHANGELOG.md
+├── PRD.md                        # product document
+├── LICENSE
 └── README.md
 ```
 
-Engine (`src-tauri/src/engine/`) **tidak mengimpor Tauri sama sekali** — ia pustaka murni. UI juga tanpa framework. Artinya keduanya bisa dipakai ulang bila suatu saat shell-nya diganti.
+The engine (`src-tauri/src/engine/`) **does not import Tauri at all**: it is a plain
+library. The UI has no framework either. Both can be reused if the shell is ever
+replaced.
 
 ---
 
-## Konfigurasi lewat `HAKONFIG_ROOT`
+## Sandboxing with `HAKONFIG_ROOT`
 
-Untuk pengembangan dan pengujian, seluruh direktori harness bisa dialihkan ke satu root:
+For development and testing, every tool directory can be redirected to one root:
 
 ```bash
-./scripts/make-demo-sandbox.sh /tmp/rk-demo
-HAKONFIG_ROOT=/tmp/rk-demo bun run dev
+./scripts/make-demo-sandbox.sh /tmp/hk-demo
+HAKONFIG_ROOT=/tmp/hk-demo bun run dev
 ```
 
-Pemetaan: `$HAKONFIG_ROOT/pi`, `/omp`, `/hermes`, `/opencode/config`, `/opencode/data`.
+Mapping: `$HAKONFIG_ROOT/pi`, `/omp`, `/hermes`, `/opencode/config`, `/opencode/data`.
 
-Ini dipakai oleh test Rust sehingga config asli di mesin tidak pernah tersentuh.
-
----
-
-## Menambah harness baru
-
-1. Buat `src-tauri/src/engine/adapters/<nama>.rs` yang mengimplementasikan trait `Adapter`:
-   `specs()`, `backup_base()`, `snapshot()`, `build()` — dan opsional `experimental()` / `notes()`.
-2. Daftarkan di `adapters::all()` (`src-tauri/src/engine/adapters/mod.rs`).
-3. Tambahkan test integrasi di `engine/tests.rs`.
-
-UI **tidak perlu diubah**: daftar harness, tabel provider, dan form semuanya dirender dari data backend.
+The Rust tests use the same mechanism, so your real configs are never touched.
 
 ---
 
-## Model keamanan
+## Adding a new tool
 
-- Key tetap tinggal di file harness (memang begitu cara harness bekerja). Hakonfig tidak menyalin key ke penyimpanannya sendiri.
-- Key tidak pernah ditulis ke log.
-- Pratinjau menyamarkan nilai rahasia — termasuk saat menampilkan diff.
-- Selalu **backup dulu** sebelum menulis: `<dir harness>/.hakonfig/backups/<timestamp>/` + `manifest.json`.
-- Penulisan atomik: file sementara di direktori yang sama, lalu `rename`.
-- File berisi kredensial ditulis dengan permission `0600`.
+1. Create `src-tauri/src/engine/adapters/<name>.rs` implementing the `Adapter` trait:
+   `specs()`, `backup_base()`, `snapshot()`, `build()`, plus optional
+   `stored_key()` (used by the backend for Test/Sync when the key field is left empty),
+   `experimental()`, and `notes()`.
+2. Register it in `adapters::all()` (`src-tauri/src/engine/adapters/mod.rs`).
+3. Add integration tests in `engine/tests.rs`.
+
+The UI **does not need changes**: the tool list, provider list, and forms are all
+rendered from backend data.
 
 ---
 
-## Batasan yang diketahui
+## Security model
 
-1. **Komentar hilang pada file JSON/JSONC/YAML.** Menulis ulang `models.json`, `models.yml`, `opencode.json`, atau `config.yaml` menghapus komentar di dalamnya. Hakonfig **memberi peringatan** dan selalu membuat backup. File `.env` **tidak** terkena (diedit baris-per-baris, komentar tetap).
-2. **Hermes masih eksperimental.** Hanya provider + API key yang ditulis; daftar model diambil Hermes sendiri dari endpoint.
-3. **oh-my-pi tidak punya file auth terpisah yang stabil**, jadi key ditulis sebagai `apiKey` plaintext di `models.yml` (permission `0600`).
-4. **Path OpenCode di macOS/Windows** memakai beberapa kandidat (XDG, `Library/Application Support`, `%APPDATA%`). Instalasi dengan lokasi tak lazim mungkin perlu penyesuaian di `engine/paths.rs`.
-5. **Preset model bersifat statis.** Provider sering mengganti/menghapus model gratis — perbarui `src-tauri/presets/providers.json`.
-6. **Tidak ada hot reload** untuk `web/` (tanpa bundler/dev-server).
-7. Skema config harness bisa berubah antar versi. Selalu periksa diff dan gunakan panel backup bila hasilnya tidak sesuai.
+- Keys stay in the tool's own files (that is how the tools work). Hakonfig never copies
+  them into storage of its own.
+- Stored keys are read back **only in the backend** (`Adapter::stored_key`) for Test/Sync;
+  the value is never sent to the UI.
+- Keys are never logged.
+- Saving without filling in the key field never touches existing credentials, so renaming
+  a provider or editing its models is safe.
+- The preview masks secret values, including inside the diff.
+- Always **backup first**: `<tool dir>/.hakonfig/backups/<timestamp>/` + `manifest.json`.
+  Only the 5 newest backups per tool are kept.
+- Atomic writes: a temp file in the same directory, then `rename`.
+- Files holding credentials are written with `0600` permissions.
+
+---
+
+## Known limitations
+
+1. **Comments are lost in JSON/JSONC/YAML files.** Rewriting `models.json`, `models.yml`,
+   `opencode.json`, or `config.yaml` drops comments inside them. Hakonfig **warns** you
+   and always makes a backup. `.env` files are unaffected (edited line by line, comments
+   preserved).
+2. **Hermes is still experimental.** Only providers and API keys are written; Hermes
+   fetches its own model list from the endpoint.
+3. **Oh My Pi has no stable separate auth file**, so the key is written as plaintext
+   `apiKey` in `models.yml` (`0600` permissions).
+4. **OpenCode paths on macOS/Windows** try several candidates (XDG,
+   `Library/Application Support`, `%APPDATA%`). Unusual installs may need a tweak in
+   `engine/paths.rs`.
+5. **Preset model lists are static.** Providers add and retire models constantly, so
+   update `src-tauri/presets/providers.json`. The ids are a starting point; the
+   **Sync models** button pulls the live list from the endpoint. Providers whose catalog
+   cannot be read without a key (Fireworks, Nebius) intentionally ship with an empty
+   list, filled in via Sync after the key is set.
+6. **No hot reload** for `web/` (no bundler/dev-server).
+7. Tool config schemas can change between versions. Always review the diff and use the
+   backup panel if the result looks off.
 
 ---
 
 ## Troubleshooting
 
-| Gejala | Penyebab & solusi |
+| Symptom | Cause and fix |
 |---|---|
-| `The system library webkit2gtk-4.1 was not found` | Dependensi Linux belum ada → lihat [Prasyarat](#prasyarat). Cek: `pkg-config --modversion webkit2gtk-4.1` |
+| `The system library webkit2gtk-4.1 was not found` | Linux dependencies missing → see [Requirements](#requirements). Check with `pkg-config --modversion webkit2gtk-4.1` |
 | `error: linker cc not found` (Linux) | `sudo apt install build-essential` |
-| `link.exe not found` / error MSVC (Windows) | Install Visual Studio Build Tools + `rustup default stable-msvc`, buka shell baru |
-| `Gtk-Message: Failed to load module "xapp-gtk3-module"` | **Aman diabaikan** — hanya modul tema Linux Mint/Cinnamon yang tidak ada |
-| Jendela putih / UI kosong | Aset `web/` belum di-build ulang → `bun run css && bun run dev` |
-| `styles.css` 404 / tampilan tanpa gaya | `bun run css` belum dijalankan |
-| AppImage gagal dibuat | Butuh unduh tool dari internet → pakai `--bundles deb` |
-| `identifier` berakhiran `.app` | Sudah diperbaiki (`dev.hudya.hakonfig`); identifier tidak boleh berakhiran `.app` karena bentrok dengan bundle macOS |
-| Provider tidak muncul di harness | Cek path yang ditampilkan di sidebar; pastikan harness sudah pernah dijalankan minimal sekali |
-| `file config tidak bisa diparse` | Hakonfig sengaja gagal keras daripada menimpa file rusak. Perbaiki JSON/YAML-nya dulu (backup tersedia) |
-| Ingin coba tanpa risiko | Pakai `HAKONFIG_ROOT=/tmp/rk-demo` |
+| `link.exe not found` / MSVC errors (Windows) | Install Visual Studio Build Tools, run `rustup default stable-msvc`, open a new shell |
+| `Gtk-Message: Failed to load module "xapp-gtk3-module"` | **Safe to ignore**: a Linux Mint/Cinnamon theme module that is simply absent |
+| White window / empty UI | `web/` assets not rebuilt → `bun run css && bun run dev` |
+| Unstyled UI / `styles.css` 404 | `bun run css` was not run |
+| AppImage build fails | It downloads tools from the internet → use `--bundles deb` |
+| Provider missing from a tool | Check the path shown in the UI; make sure the tool has been started at least once |
+| `config file could not be parsed` | Hakonfig fails loudly rather than overwriting a broken file. Fix the JSON/YAML first (a backup is available) |
+| Want to experiment safely | Use `HAKONFIG_ROOT=/tmp/hk-demo` |
 
 ---
 
-## Kontribusi
+## Contributing
 
-Pull request, issue, dan adapter harness baru sangat diterima. Untuk menambah
-harness, lihat [Menambah harness baru](#menambah-harness-baru) — cukup satu file
-adapter, UI tidak perlu diubah.
+Pull requests, issues, and new tool adapters are very welcome. To add a tool, see
+[Adding a new tool](#adding-a-new-tool); it is a single adapter file, with no UI changes.
 
-Sebelum mengirim PR:
+Before sending a PR:
 
 ```bash
-bun run test     # 36 test Rust + 20 test JS harus hijau
+bun run test            # 51 Rust + 29 JS tests must pass
+bun run version:check   # version must be consistent across files
+bun run css             # make sure Tailwind still builds
 ```
+
+Keep UI copy in both `web/i18n/en.js` and `web/i18n/id.js` (a test enforces key parity),
+and keep new logos as local files in `web/assets/providers/` (no CDN links).
 
 ---
 
-## Lisensi
+## License
 
-[MIT](LICENSE) © 2026 perogeremmer dan kontributor.
+[MIT](LICENSE) © 2026 perogeremmer and contributors.
 
-Artinya: siapa pun bebas memakai, menyalin, mengubah, menggabungkan,
-menerbitkan, mendistribusikan, mensublisensikan, dan/atau menjual salinan
-perangkat lunak ini, dengan tetap menyertakan pemberitahuan hak cipta dan izin
-di atas. Perangkat lunak diberikan **tanpa jaminan** apa pun.
+In short: anyone is free to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of this software, provided the copyright notice and permission notice
+are included. The software is provided **without warranty** of any kind.
