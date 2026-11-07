@@ -10,11 +10,20 @@
     "build": "bun run css && tauri build",
     "test": "bun run test:rust && bun run test:js",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
-    "test:js": "node --test web/diff.test.js"
+    "test:js": "node --test web/diff.test.js web/i18n.test.js web/form.test.js",
+    "version": "node scripts/version.mjs show",
+    "version:check": "node scripts/version.mjs check",
+    "version:bump": "node scripts/version.mjs bump"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4",
     "@tauri-apps/cli": "^2",
     "tailwindcss": "^4"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/perogeremmer/hakonfig",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/perogeremmer/hakonfig.git"
   }
 }

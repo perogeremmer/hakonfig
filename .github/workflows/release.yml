@@ -1,0 +1,129 @@
+name: Release
+
+# Rilis dibuat dari tag, mis. `v0.2.0`. Versi di dalam aplikasi harus sama
+# dengan nama tag, kalau tidak job guard berhenti sebelum build.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag yang mau dibangun (mis. v0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Cek versi
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Versi harus konsisten di semua file
+        run: bun run version:check
+
+      - name: Tag harus sama dengan versi aplikasi
+        id: version
+        run: |
+          VERSION=$(node scripts/version.mjs show)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          EXPECTED="${GITHUB_REF_NAME}"
+          if [ -n "${{ inputs.tag }}" ]; then EXPECTED="${{ inputs.tag }}"; fi
+          if [ "$EXPECTED" != "v${VERSION}" ]; then
+            echo "::error::ref '$EXPECTED' tidak sama dengan versi aplikasi v${VERSION}"
+            echo "Perbaiki dengan: node scripts/version.mjs bump ${EXPECTED#v}"
+            exit 1
+          fi
+          echo "merilis v${VERSION}"
+
+  build:
+    name: ${{ matrix.name }}
+    needs: guard
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (universal)
+            os: macos-latest
+            args: --target universal-apple-darwin --bundles app,dmg
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - name: Ubuntu (.deb)
+            os: ubuntu-22.04
+            args: --bundles deb
+            rust-targets: ""
+          - name: Windows (NSIS)
+            os: windows-latest
+            args: --bundles nsis
+            rust-targets: ""
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Tauri system dependencies (Linux)
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.name }}
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      # tauri-action menjalankan beforeBuildCommand (`bun run css`), membangun
+      # bundle, lalu mengunggahnya ke draft release dengan tag v<versi>.
+      - name: Build & unggah ke draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: v${{ needs.guard.outputs.version }}
+          releaseName: "Hakonfig v${{ needs.guard.outputs.version }}"
+          releaseBody: |
+            Hakonfig v${{ needs.guard.outputs.version }}
+
+            | Platform | File |
+            |---|---|
+            | macOS (universal: Apple Silicon + Intel) | `.dmg` |
+            | Windows 10/11 | `.exe` (NSIS installer) |
+            | Linux (Debian/Ubuntu) | `.deb` |
+
+            Build ini **belum ditandatangani**. Di macOS, klik kanan aplikasi lalu
+            pilih **Open** pada kali pertama. Di Windows, SmartScreen bisa
+            menampilkan peringatan tambahan.
+
+            Lisensi MIT. Cara pakai ada di README repositori.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
