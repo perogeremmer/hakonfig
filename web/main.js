@@ -7,6 +7,7 @@ import { esc, renderDiff } from "./diff.js";
 import { icon } from "./icons.js";
 import { t, setLang, getLang, fmtDate } from "./i18n/index.js";
 import { APP_VERSION } from "./version.js";
+import { isRegisteredProvider, registeredApi } from "./provider-form.js";
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
@@ -1586,11 +1587,10 @@ function renderProviderForm(mode, provider) {
   // simpan sendiri, jadi jangan tanya lagi. Kalau ternyata isinya sudah beda
   // dari katalog (mis. pernah diubah manual), tampilkan field-nya kembali.
   const preset = isEdit ? state.presets.find((item) => item.id === provider?.id) : null;
-  const managed =
-    Boolean(preset) &&
-    preset.baseUrl === provider?.baseUrl &&
-    preset.api === provider?.api &&
-    preset.name === provider?.name;
+  // Nama tampilan tidak ikut dibandingkan: mengganti nama tidak boleh
+  // memunculkan kembali field endpoint.
+  const managed = isRegisteredProvider(preset, provider);
+  const presetValue = preset?.api ?? null;
 
   const bodyHtml = `
       <div class="space-y-5">
@@ -1628,7 +1628,7 @@ function renderProviderForm(mode, provider) {
                 <label class="hk-label">${esc(t("advanced.apiType"))}</label>
                 <select data-field="api" class="hk-input">
                   ${API_OPTIONS.map(
-                    (value) => `<option value="${value}" ${(provider?.api ?? "openai-completions") === value ? "selected" : ""}>${value}</option>`,
+                    (value) => `<option value="${value}" ${(presetValue ?? provider?.api ?? "openai-completions") === value ? "selected" : ""}>${value}</option>`,
                   ).join("")}
                 </select>
               </div>
@@ -1765,7 +1765,7 @@ function renderProviderForm(mode, provider) {
   // Provider terdaftar tidak merender field endpoint, jadi nilainya diambil dari
   // provider itu sendiri (sudah sama dengan katalog karena `managed` dicek).
   const endpointUrl = () => (managed ? provider.baseUrl ?? "" : field("baseUrl").value.trim());
-  const endpointApi = () => (managed ? provider.api ?? "" : field("api").value);
+  const endpointApi = () => (managed ? registeredApi(preset, provider) : field("api").value);
   const providerName = () => (managed ? provider.name ?? "" : field("name").value);
   const providerKeyId = () => (managed ? provider.id : field("id").value);
 
