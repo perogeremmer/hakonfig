@@ -230,6 +230,9 @@ type InstallResult = {
   mengirim nilai katalog. Provider custom (id tidak dikenal) tetap memakai form lengkap.
 - Logo: id yang tidak terdaftar di `LOGO_IDS` memakai mark `custom.svg` (OpenAI-compatible),
   bukan monogram. Menambah logo = taruh file + daftarkan id-nya.
+- Mode env memakai nama variabel `<PROVIDER_ID>_API_KEY` (aturan `env_name_from` di
+  backend). UI wajib menampilkan nama itu, bukan `envVar` dari preset, supaya hint dan
+  isi config tidak pernah berbeda.
 - `upsert` **tanpa** `key` berarti "jangan sentuh kredensial": `apiKey`/`options.apiKey`/`env[]`/`.env`
   yang sudah ada dibiarkan apa adanya. Hanya `upsert` **dengan** `key` yang menulis ulang
   kredensial (dan membersihkan salinan lama di tempat lain). Jadi mengganti nama atau

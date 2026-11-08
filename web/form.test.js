@@ -67,3 +67,12 @@ test("model draft dibaca sebelum form ditutup", () => {
   assert.notEqual(builtAt, -1, "handler harus memanggil readModels()");
   assert.ok(builtAt < closeAt, "readModels() harus dipanggil sebelum close()");
 });
+
+test("input id provider tidak memakai data-field=\"id\"", () => {
+  // Baris model juga memakai data-field="id". Kalau input id provider memakai
+  // nama yang sama, `field("id")` bisa mengambil model pertama (lihat bug
+  // variabel environment CLAUDE_SONNET_5_5_API_KEY) dan id provider bisa salah
+  // terbaca saat menyimpan.
+  assert.match(source, /data-field="providerId"/, "input id provider harus pakai providerId");
+  assert.doesNotMatch(source, /field\("id"\)/, "jangan query field(\"id\") tanpa scope baris model");
+});

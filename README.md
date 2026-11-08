@@ -72,6 +72,11 @@ Issues and pull requests are welcome. See [Contributing](#contributing).
   MiniMax, DashScope, Cline, Command Code, DeepInfra, SambaNova, Fireworks, Nebius,
   Vercel AI Gateway, Hugging Face Router) plus **Custom** for any OpenAI-compatible
   endpoint.
+- **Environment mode names the variable after the provider.** Choosing "use an
+  environment variable" shows exactly the name that gets written and read, e.g.
+  `COMMANDCODE_API_KEY` for `commandcode` or `OPENCODE_GO_API_KEY` for `opencode-go`.
+  The UI and the backend share one rule (`<PROVIDER_ID>_API_KEY`), so the hint can
+  never disagree with the config.
 - **Custom providers get a neutral mark.** Anything not in the catalog uses the
   OpenAI-compatible logo instead of a two-letter monogram.
 - **Registered providers only ask for the key.** For providers that come from the

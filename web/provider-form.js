@@ -36,3 +36,28 @@ export function isRegisteredProvider(preset, provider) {
 export function registeredApi(preset, provider) {
   return provider?.api || preset?.api || "openai-completions";
 }
+
+/**
+ * Nama variabel environment untuk mode env, mis. `opencode-go` -> `OPENCODE_GO_API_KEY`.
+ * Salinan aturan Rust `env_name_from` (`src-tauri/src/engine/doc.rs`).
+ */
+export function envVarName(id) {
+  const upper = String(id ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `${upper}_API_KEY`;
+}
+
+/**
+ * Variabel yang ditampilkan pada mode env.
+ *
+ * Selalu diturunkan dari id provider, karena backend memakai aturan yang sama
+ * (`env_name_from`) saat menulis `$VAR` ke config. Memakai nama lain di UI
+ * hanya akan menyesatkan: variabel yang benar-benar dibaca bukan itu.
+ */
+export function envVarFor({ provider, typedId, managed }) {
+  const id = managed ? provider?.id : typedId ?? provider?.id;
+  const trimmed = String(id ?? "").trim();
+  return trimmed ? envVarName(trimmed) : "\u2039provider-id\u203a_API_KEY";
+}

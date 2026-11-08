@@ -7,7 +7,7 @@ import { esc, renderDiff } from "./diff.js";
 import { icon } from "./icons.js";
 import { t, setLang, getLang, fmtDate } from "./i18n/index.js";
 import { APP_VERSION } from "./version.js";
-import { isRegisteredProvider, registeredApi } from "./provider-form.js";
+import { envVarFor, isRegisteredProvider, registeredApi } from "./provider-form.js";
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
@@ -70,19 +70,6 @@ function tint(id) {
   let hash = 0;
   for (const char of String(id)) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return TINTS[hash % TINTS.length];
-}
-
-/**
- * Nama variabel environment yang dipakai mode "env", mis. `groq` → `GROQ_API_KEY`.
- * Salinan aturan Rust `env_name_from` (`src-tauri/src/engine/doc.rs`) - kalau
- * salah satu diubah, ubah keduanya.
- */
-function envVarName(id) {
-  const upper = String(id ?? "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return `${upper}_API_KEY`;
 }
 
 function initials(id) {
@@ -1634,7 +1621,7 @@ function renderProviderForm(mode, provider) {
               </div>
               <div>
                 <label class="hk-label">${esc(t("advanced.idLabel"))} *</label>
-                <input data-field="id" value="${esc(provider?.id ?? "")}" placeholder="my-provider" ${isEdit ? "readonly" : ""}
+                <input data-field="providerId" value="${esc(provider?.id ?? "")}" placeholder="my-provider" ${isEdit ? "readonly" : ""}
                   class="hk-input" style="font-family:var(--font-mono);font-size:13px;${isEdit ? "opacity:.6" : ""}" />
               </div>
             </div>
@@ -1689,7 +1676,7 @@ function renderProviderForm(mode, provider) {
                 ${esc(t("advanced.keyEnv"))}
                 <span data-key-mode-hint="env" class="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">
                   ${esc(t("advanced.keyEnvWhere"))} <span data-env-var class="selectable font-mono font-semibold text-ink">${esc(
-                    provider?.id ? envVarName(provider.id) : "\u2039provider-id\u203a_API_KEY",
+                    "\u2039provider-id\u203a_API_KEY",
                   )}</span>
                 </span>
               </span>
@@ -1767,7 +1754,7 @@ function renderProviderForm(mode, provider) {
   const endpointUrl = () => (managed ? provider.baseUrl ?? "" : field("baseUrl").value.trim());
   const endpointApi = () => (managed ? registeredApi(preset, provider) : field("api").value);
   const providerName = () => (managed ? provider.name ?? "" : field("name").value);
-  const providerKeyId = () => (managed ? provider.id : field("id").value);
+  const providerKeyId = () => (managed ? provider.id : field("providerId").value);
 
   // Tombol Sync: state loading dengan jam pasir berputar selama request jalan.
   const syncButton = $("[data-sync-models]", overlay);
@@ -2005,15 +1992,14 @@ function renderProviderForm(mode, provider) {
   };
   const refreshEnvVar = () => {
     if (!envVarLabel) return;
-    const id = field("id") ? field("id").value.trim() : provider?.id ?? "";
-    // ID kosong: tampilkan pola, bukan "_API_KEY" yang membingungkan.
-    envVarLabel.textContent = id ? envVarName(id) : "\u2039provider-id\u203a_API_KEY";
+    const typedId = field("providerId") ? field("providerId").value : "";
+    envVarLabel.textContent = envVarFor({ provider, typedId, managed });
   };
 
   $$('input[name="keyMode"]', overlay).forEach((radio) => {
     radio.addEventListener("change", refreshKeyMode);
   });
-  field("id")?.addEventListener("input", refreshEnvVar);
+  field("providerId")?.addEventListener("input", refreshEnvVar);
   refreshKeyMode();
   refreshEnvVar();
 
