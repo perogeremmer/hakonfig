@@ -484,7 +484,9 @@ function webTile(entry) {
 function catalogTile(entry) {
   const version = state.versions[entry.id];
   const hasBinary = Boolean(version);
-  const hasInstall = Boolean(entry.installCommand);
+  // Sudah terpasang berarti tidak ada yang perlu dipasang lagi. Tanpa ini,
+  // kartu menampilkan chip "Terpasang" sekaligus tombol Install.
+  const hasInstall = Boolean(entry.installCommand) && !hasBinary;
 
   return `
     <div class="hk-card flex min-h-[148px] flex-col gap-3 p-5">
@@ -504,7 +506,9 @@ function catalogTile(entry) {
             ? `<button data-action data-install="${esc(entry.id)}" class="hk-btn hk-btn-primary w-full">
                  ${icon("download")}<span>${esc(t("install.run"))}</span>
                </button>`
-            : `<span class="text-[12px] leading-relaxed text-ink-muted">${esc(t("install.manualHint"))}</span>`
+            : hasBinary
+              ? ""
+              : `<span class="text-[12px] leading-relaxed text-ink-muted">${esc(t("install.manualHint"))}</span>`
         }
         <div class="flex items-center justify-between gap-2">
           ${
@@ -668,9 +672,11 @@ function renderHome() {
   }
 
   const installed = state.harnesses.filter((harness) => harness.installed);
-  const catalogOnly = state.catalog
+  const catalogEntries = state.catalog
     .filter((entry) => !state.harnesses.some((harness) => harness.id === entry.id))
     .filter((entry) => entry.kind === "planned");
+  const catalogReady = catalogEntries.filter((entry) => state.versions[entry.id]);
+  const catalogOnly = catalogEntries.filter((entry) => !state.versions[entry.id]);
   const webOnly = state.catalog.filter((entry) => entry.kind === "web");
   const notInstalled = state.harnesses.filter((harness) => !harness.installed);
 
@@ -678,6 +684,7 @@ function renderHome() {
     installed.length === 0 &&
     notInstalled.length === 0 &&
     catalogOnly.length === 0 &&
+    catalogReady.length === 0 &&
     webOnly.length === 0
   ) {
     container.innerHTML = `<div class="mx-auto max-w-[960px]">
@@ -710,7 +717,11 @@ function renderHome() {
         <h1 class="text-[26px] font-extrabold leading-tight tracking-tight text-ink">${esc(t("home.title"))}</h1>
         <p class="mt-1 text-[14px] text-ink-secondary">${esc(t("home.subtitle"))}</p>
       </div>
-      ${section(t("home.installed"), t("home.installedHint"), installed.map(harnessTile))}
+      ${section(
+        t("home.installed"),
+        t("home.installedHint"),
+        [...installed.map(harnessTile), ...catalogReady.map(catalogTile)],
+      )}
       ${section(
         t("home.notInstalled"),
         t("home.notInstalledHint"),

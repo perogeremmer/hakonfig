@@ -226,15 +226,42 @@ impl Adapter for OmpAdapter {
                 if provider.is_empty() || model.is_empty() {
                     anyhow::bail!("Provider dan model wajib diisi.");
                 }
+                let reference = format!("{}/{}", provider, model);
                 let settings = docs.require_mut("settings")?;
-                settings.object_at("modelRoles").insert(
-                    "default".to_string(),
-                    Value::String(format!("{}/{}", provider, model)),
+                settings
+                    .object_at("modelRoles")
+                    .insert("default".to_string(), Value::String(reference.clone()));
+
+                // oh-my-pi (turunan Pi) juga memakai model PERTAMA dari scope
+                // `enabledModels` bila scope tidak kosong, dan baru jatuh ke
+                // `modelRoles.default` kalau scope kosong. Tanpa menyisipkan
+                // default ke urutan pertama, pilihan user tidak pernah dipakai.
+                let mut warnings = Vec::new();
+                let mut rescoped = false;
+                let root = settings.root_object();
+                if let Some(list) = root.get_mut("enabledModels").and_then(Value::as_array_mut) {
+                    if !list.is_empty() {
+                        list.retain(|item| item.as_str() != Some(reference.as_str()));
+                        list.insert(0, Value::String(reference.clone()));
+                        rescoped = true;
+                    }
+                }
+
+                if rescoped {
+                    warnings.push(format!(
+                        "'{}' dipindah ke urutan pertama enabledModels: oh-my-pi memakai model pertama scope, bukan modelRoles.default, selama scope tidak kosong.",
+                        reference
+                    ));
+                }
+                warnings.insert(
+                    0,
+                    format!(
+                        "Default Oh My Pi: {} (ditulis ke config.yml{}).",
+                        reference,
+                        if rescoped { " dan urutan enabledModels" } else { "" }
+                    ),
                 );
-                Ok(vec![format!(
-                    "Default Oh My Pi: {}/{} (ditulis ke config.yml).",
-                    provider, model
-                )])
+                Ok(warnings)
             }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();

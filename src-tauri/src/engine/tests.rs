@@ -1109,3 +1109,156 @@ fn katalog_memuat_dsh_dan_openhands() {
         Some("npm install -g @openhands/agent-canvas")
     );
 }
+
+#[test]
+fn default_pi_ikut_masuk_scope_enabled_models() {
+    // Pi memakai model pertama dari `enabledModels` selama scope tidak kosong,
+    // jadi menulis defaultProvider/defaultModel saja tidak cukup.
+    let (_lock, root) = sandbox("pi_default_scope");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{ "providers": { "deepseek": { "name": "DeepSeek", "baseUrl": "https://api.deepseek.com", "api": "openai-completions", "models": [{ "id": "deepseek-flash" }] } } }"#,
+    );
+    write(&dir.join("auth.json"), "{}");
+    write(
+        &dir.join("settings.json"),
+        r#"{ "defaultProvider": "commandcode", "defaultModel": "commandcode/claude-sonnet-5-5",
+        "enabledModels": ["commandcode/*", "deepseek/*"] }"#,
+    );
+
+    commands::apply_edit(
+        "pi".into(),
+        EditOp::SetDefault {
+            provider_id: "deepseek".to_string(),
+            model_id: "deepseek-flash".to_string(),
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert_eq!(settings["defaultProvider"], "deepseek");
+    assert_eq!(settings["defaultModel"], "deepseek/deepseek-flash");
+
+    let scope: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .expect("enabledModels tetap array")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert_eq!(
+        scope.first().copied(),
+        Some("deepseek/deepseek-flash"),
+        "model default harus jadi entri pertama scope: {scope:?}"
+    );
+    assert_eq!(
+        scope.iter().filter(|item| **item == "deepseek/deepseek-flash").count(),
+        1,
+        "tidak boleh ada duplikat: {scope:?}"
+    );
+    // entri glob yang lama tetap ada
+    assert!(scope.contains(&"commandcode/*"), "scope lama hilang: {scope:?}");
+}
+
+#[test]
+fn default_pi_tanpa_scope_tidak_membuat_enabled_models() {
+    let (_lock, root) = sandbox("pi_default_no_scope");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{ "providers": { "groq": { "name": "Groq", "baseUrl": "https://api.groq.com/openai/v1", "api": "openai-completions", "models": [{ "id": "m1" }] } } }"#,
+    );
+    write(&dir.join("auth.json"), "{}");
+    write(&dir.join("settings.json"), r#"{ "theme": "dark" }"#);
+
+    commands::apply_edit(
+        "pi".into(),
+        EditOp::SetDefault {
+            provider_id: "groq".to_string(),
+            model_id: "m1".to_string(),
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert_eq!(settings["defaultModel"], "groq/m1");
+    assert!(
+        settings.get("enabledModels").is_none(),
+        "jangan mengarang scope bila user belum punya"
+    );
+}
+
+#[test]
+fn default_omp_ikut_masuk_scope_enabled_models() {
+    // oh-my-pi adalah turunan Pi: model pertama scope `enabledModels` menang
+    // atas `modelRoles.default`, jadi default harus dipindah ke urutan pertama.
+    let (_lock, root) = sandbox("omp_default_scope");
+    let dir = root.join("omp/agent");
+    write(
+        &dir.join("models.yml"),
+        "providers:\n  deepseek:\n    baseUrl: https://api.deepseek.com\n    api: openai-completions\n    apiKey: k\n    models:\n      - id: deepseek-flash\n",
+    );
+    write(
+        &dir.join("config.yml"),
+        "modelRoles:\n  default: commandcode/claude-sonnet-5-5\nenabledModels:\n  - commandcode/*\n  - deepseek/*\n",
+    );
+
+    commands::apply_edit(
+        "omp".into(),
+        EditOp::SetDefault {
+            provider_id: "deepseek".to_string(),
+            model_id: "deepseek-flash".to_string(),
+        },
+    )
+    .unwrap();
+
+    let settings = yaml(&dir.join("config.yml"));
+    assert_eq!(
+        settings["modelRoles"]["default"],
+        "deepseek/deepseek-flash"
+    );
+    let scope: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .expect("enabledModels tetap list")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert_eq!(
+        scope.first().copied(),
+        Some("deepseek/deepseek-flash"),
+        "default harus jadi entri pertama scope: {scope:?}"
+    );
+    assert_eq!(
+        scope.iter().filter(|item| **item == "deepseek/deepseek-flash").count(),
+        1,
+        "tidak boleh duplikat: {scope:?}"
+    );
+    assert!(scope.contains(&"commandcode/*"), "scope lama hilang: {scope:?}");
+}
+
+#[test]
+fn default_omp_tanpa_scope_tidak_mengarang_enabled_models() {
+    let (_lock, root) = sandbox("omp_default_no_scope");
+    let dir = root.join("omp/agent");
+    write(
+        &dir.join("models.yml"),
+        "providers:\n  groq:\n    baseUrl: https://api.groq.com/openai/v1\n    api: openai-completions\n    apiKey: k\n    models:\n      - id: m1\n",
+    );
+    write(&dir.join("config.yml"), "theme: dark\n");
+
+    commands::apply_edit(
+        "omp".into(),
+        EditOp::SetDefault {
+            provider_id: "groq".to_string(),
+            model_id: "m1".to_string(),
+        },
+    )
+    .unwrap();
+
+    let settings = yaml(&dir.join("config.yml"));
+    assert_eq!(settings["modelRoles"]["default"], "groq/m1");
+    assert!(
+        settings.get("enabledModels").is_none(),
+        "jangan mengarang scope bila user belum punya"
+    );
+}

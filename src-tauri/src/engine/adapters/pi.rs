@@ -295,14 +295,49 @@ impl Adapter for PiAdapter {
                     "defaultProvider".to_string(),
                     Value::String(provider.clone()),
                 );
+                let reference = format!("{}/{}", provider, model);
                 root.insert(
                     "defaultModel".to_string(),
-                    Value::String(format!("{}/{}", provider, model)),
+                    Value::String(reference.clone()),
                 );
-                Ok(vec![format!(
-                    "Default Pi: {}/{} (ditulis ke settings.json).",
-                    provider, model
-                )])
+
+                // Pi memakai model PERTAMA dari scope `enabledModels` bila scope
+                // tidak kosong, dan hanya jatuh ke defaultModel kalau scope kosong
+                // (`findInitialModel` di dist/core/model-resolver.js). Jadi default
+                // harus ikut jadi entri pertama scope, kalau tidak pilihan user
+                // tidak pernah terpakai.
+                let mut warnings = Vec::new();
+                let mut rescoped = false;
+                if let Some(list) = root.get_mut("enabledModels").and_then(Value::as_array_mut) {
+                    if !list.is_empty() {
+                        let before = list.len();
+                        list.retain(|item| item.as_str() != Some(reference.as_str()));
+                        list.insert(0, Value::String(reference.clone()));
+                        rescoped = true;
+                        if before == list.len() - 1 && before > 0 {
+                            warnings.push(format!(
+                                "'{}' dipindah ke urutan pertama enabledModels: Pi memakai model pertama scope, bukan defaultModel, selama scope tidak kosong.",
+                                reference
+                            ));
+                        } else {
+                            warnings.push(format!(
+                                "'{}' ditambahkan sebagai entri pertama enabledModels: Pi memakai model pertama scope, bukan defaultModel, selama scope tidak kosong.",
+                                reference
+                            ));
+                        }
+                    }
+                }
+
+                warnings.insert(
+                    0,
+                    format!(
+                        "Default Pi: {}/{} (ditulis ke settings.json{}).",
+                        provider,
+                        model,
+                        if rescoped { " dan urutan enabledModels" } else { "" }
+                    ),
+                );
+                Ok(warnings)
             }
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();

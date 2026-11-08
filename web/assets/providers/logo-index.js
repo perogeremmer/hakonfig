@@ -55,6 +55,7 @@ export const LOGO_IDS = new Set([
   "opencode",
   "opencode-go",
   "opencode-zen",
+  "openhands",
   "openrouter",
   "perplexity",
   "perplexity-agent",
