@@ -1,47 +1,95 @@
-# Hakonfig
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/assets/brand/lockup-dark.png">
+    <img src="web/assets/brand/lockup-light.png" alt="Hakonfig" width="420">
+  </picture>
+</p>
 
-**Hakonfig = Harness Konfiguration.** A free, open-source desktop app that sets up
-AI providers for your coding tools, without hand-editing JSON or YAML.
+<p align="center">
+  <strong>Your simple way to manage providers</strong><br>
+  A free, open-source desktop app that writes the provider config for your AI coding tools.
+</p>
 
-> The UI ships in **English** by default; Bahasa Indonesia is available in Settings.
-> This document is in English.
+<p align="center">
+  <a href="https://github.com/perogeremmer/hakonfig/releases/latest">Download</a> ·
+  <a href="#get-started">Get started</a> ·
+  <a href="#what-it-does">What it does</a> ·
+  <a href="#development">Build from source</a> ·
+  <a href="LICENSE">MIT license</a>
+</p>
 
-You have a free API key (Groq, Gemini, Cerebras, ...) and no idea where it goes: which
-file, which key, and why the key sometimes lives in a different file than the model
-catalog. Hakonfig does it for you: pick your tool, pick a provider, paste the key,
-review the diff, write it.
+---
 
-Hakonfig is **not** a proxy or a gateway, and it never stores your keys in its own
-place. It only writes to the files your tools already read.
+## Get started
+
+### 1. Install Hakonfig
+
+Grab the latest build from the [releases page](https://github.com/perogeremmer/hakonfig/releases/latest):
+
+| Platform | File | Install |
+|---|---|---|
+| **Windows 10/11** | `Hakonfig_<version>_x64-setup.exe` | Run the installer. SmartScreen may warn because the build is unsigned: choose **More info → Run anyway**. |
+| **macOS** (Apple Silicon + Intel) | `Hakonfig_<version>_universal.dmg` | Open the DMG, drag Hakonfig to Applications. First launch: right click the app, then **Open**. |
+| **Linux** (Debian/Ubuntu) | `Hakonfig_<version>_amd64.deb` | `sudo apt install ./Hakonfig_<version>_amd64.deb` |
+
+No account, no telemetry, no server. The app works completely offline; it only talks to a
+provider endpoint when you press **Test connection** or **Sync models**.
+
+### 2. Let the first-run scan finish
+
+On the first launch Hakonfig walks through your machine and shows which tools are already
+installed, together with how many providers and models each one has. Nothing is written
+during this scan.
+
+### 3. Add a provider in three steps
+
+1. Open a tool (for example **Pi**), pick **+ Add provider**.
+2. Choose a provider card, paste your API key, press **Test & find models**.
+3. Tick the models you want, press **Add N models**, review the diff, then **Apply changes**.
+
+Hakonfig writes the files, keeps a backup of the previous version, and shows the result
+in the tool's provider list. To undo, open **History** and restore a backup.
+
+| Step | What it looks like |
+|---|---|
+| Choose your tool | ![Home](docs/screenshots/home.png) |
+| Pick a provider | ![Add a provider](docs/screenshots/add.png) |
+| Manage providers | ![Providers](docs/screenshots/providers.png) |
+
+## What it does
+
+You have a free API key (Groq, Gemini, Cerebras, and so on) and no idea where it goes:
+which file, which key, and why the key sometimes lives in a different file than the model
+catalog. Hakonfig does it for you: pick your tool, pick a provider, paste the key, review
+the diff, write it.
+
+Hakonfig is **not** a proxy or a gateway, and it never stores your keys in its own place.
+It only writes to the files your tools already read.
 
 - **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS, no frontend framework
-- **UI:** Plus Jakarta Sans bundled locally (offline), light and dark themes, English + Bahasa Indonesia
-- **Tests:** 80 tests (51 Rust + 29 JS), all offline, no network required
+- **UI:** Plus Jakarta Sans bundled locally, light and dark themes, English + Bahasa Indonesia
+- **Tests:** 99 offline tests (51 Rust + 48 JS), no network required
 - **License:** [MIT](LICENSE), free to use, modify, and redistribute
 
-### What it does, in one paragraph
+### Open source
 
-Pick your tool, pick a provider, paste one API key. Hakonfig tests the key, pulls the
-model list straight from the provider, lets you tick the models you want, shows a
-human-readable summary of what will change, and only then writes the config files -
-with an automatic backup you can restore from History.
+Hakonfig is open source under the [MIT License](LICENSE). You can use it commercially, fork
+it, embed it, change it, and ship it, as long as the copyright notice and permission notice
+are kept. There is no paid tier and no telemetry: the app runs entirely on your machine.
+
+Issues and pull requests are welcome. See [Contributing](#contributing).
 
 ---
 
 ## Contents
 
-- [Open source](#open-source)
+- [Get started](#get-started)
+- [What it does](#what-it-does)
 - [Features](#features)
 - [Supported tools](#supported-tools)
+- [Providers and logos](#providers-and-logos)
 - [Requirements](#requirements)
-- [Running (dev mode)](#running-dev-mode)
-- [Building for distribution](#building-for-distribution)
-- [Automated releases](#automated-releases)
-- [Tests](#tests)
-- [How to use it](#how-to-use-it)
-- [Repository layout](#repository-layout)
-- [Sandboxing with `HAKONFIG_ROOT`](#sandboxing-with-hakonfig_root)
-- [Adding a new tool](#adding-a-new-tool)
+- [Development](#development)
 - [Security model](#security-model)
 - [Known limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
@@ -50,58 +98,40 @@ with an automatic backup you can restore from History.
 
 ---
 
-## Open source
-
-Hakonfig is open source under the [MIT License](LICENSE). That means you can use it
-commercially, fork it, embed it, change it, and ship it, as long as the copyright
-notice and permission notice are kept. There is no paid tier, no telemetry, and no
-account: the app runs entirely on your machine and only talks to the provider endpoint
-you configure.
-
-Issues and pull requests are welcome. See [Contributing](#contributing).
-
----
-
 ## Features
 
-- **Three-step provider setup:** pick a provider card with its real logo, paste the API
-  key, hit **Test & find models**, tick the models you want. Base URL, API type, and the
-  model list are filled in for you; unticked models are never written.
-- **61 built-in provider presets**, from Groq and OpenRouter to Anthropic, Cohere,
-  Chutes, Venice, SiliconFlow, BytePlus, Tencent Hunyuan, Volcengine Ark and more,
-  plus **Custom** for any OpenAI-compatible endpoint. Each preset ships with a local
-  logo, and the search box filters by name as well as id.
-- **Environment mode names the variable after the provider.** Choosing "use an
-  environment variable" shows exactly the name that gets written and read, e.g.
-  `COMMANDCODE_API_KEY` for `commandcode` or `OPENCODE_GO_API_KEY` for `opencode-go`.
-  The UI and the backend share one rule (`<PROVIDER_ID>_API_KEY`), so the hint can
-  never disagree with the config.
+- **Three-step provider setup:** pick a provider card with its real logo, paste the API key,
+  hit **Test & find models**, tick the models you want. Base URL, API type, and the model
+  list are filled in for you; unticked models are never written.
+- **61 built-in provider presets**, from Groq and OpenRouter to Anthropic, Cohere, Chutes,
+  Venice, SiliconFlow, BytePlus, Tencent Hunyuan, Volcengine Ark and more, plus **Custom**
+  for any OpenAI-compatible endpoint. Each preset ships with a local logo, and the search
+  box filters by name as well as id.
 - **Custom providers get a neutral mark.** Anything not in the catalog uses the
   OpenAI-compatible logo instead of a two-letter monogram.
-- **Registered providers only ask for the key.** For providers that come from the
-  catalog, the edit form hides Base URL, API type, id, and display name, because the
-  endpoint is already known. Custom providers keep the full form.
-- **Light and dark theme** (light by default), with locally bundled fonts so it looks
-  identical offline.
-- **Bilingual UI:** English by default, Bahasa Indonesia in Settings, and it switches
-  instantly, without a restart.
+- **Registered providers only ask for the key.** For providers that come from the catalog,
+  the edit form hides Base URL, API type, id, and display name, because the endpoint is
+  already known. Custom providers keep the full form.
+- **Environment mode names the variable after the provider.** Choosing "use an environment
+  variable" shows exactly the name that gets written and read, e.g. `COMMANDCODE_API_KEY`
+  for `commandcode`. The UI and the backend share one rule (`<PROVIDER_ID>_API_KEY`).
+- **Light and dark theme**, with locally bundled fonts so it looks identical offline.
+- **Bilingual UI:** English by default, Bahasa Indonesia in Settings, switching instantly.
 - **Tool versions on the tile** (e.g. `v1.5.0`), detected from `<bin> --version`.
 - **Install/uninstall tools** with a progress bar and streamed log, after confirming the
   exact command.
-- **Tool catalog** for tools that are not installed yet (Claude Code, Codex CLI,
-  Gemini CLI, Aider, Crush, Qwen Code) with an **Install** button that runs the official
-  command (shown to you first for confirmation).
+- **Tool catalog** for tools that are not installed yet (Claude Code, Codex CLI, Gemini CLI,
+  Aider, Crush, Qwen Code) with an **Install** button that runs the official command.
 - **Detects config paths** and shows them, with a button to open the folder.
-- **Reads the current config** as a list: provider, base URL, API type, key status
-  (masked), model count.
+- **Reads the current config** as a list: provider, base URL, API type, key status (masked),
+  model count.
 - **Diff preview before writing.** Nothing is written silently.
 - **Disable is not delete.** On Oh My Pi/OpenCode the provider is added to the tool's own
-  disable list; on Pi/Hermes the entry is *commented out* in the file
+  disable list; on Pi/Hermes the entry is commented out in the file
   (`// hakonfig:disabled groq`). Data disappears only when you press **Delete**.
 - **Automatic backup** on every write, kept at 5 per tool, plus a **restore** panel.
 - **Connection test** against the provider endpoint (key validity, latency, sample models).
-- **Change the default model** per tool, written to `settings.json` / `config.yml` /
-  `opencode.json` / `config.yaml` depending on the tool.
+- **Change the default model** per tool with a searchable list that spans all providers.
 - **Safe writes:** merge (unknown fields preserved), atomic write (`tmp` + `rename`),
   `0600` permissions for files that hold credentials.
 - **Secrets masked** everywhere in the preview (API keys, tokens, passwords).
@@ -119,11 +149,42 @@ Issues and pull requests are welcome. See [Contributing](#contributing).
 
 ¹ read-only, used to show the current default provider/model; never written.
 
+Adding another tool means one adapter file; the UI renders itself from backend data.
+See [Adding a new tool](#adding-a-new-tool).
+
+---
+
+## Providers and logos
+
+`src-tauri/presets/providers.json` holds the catalog. Each entry needs an `id`, `name`,
+`baseUrl`, `api` type, `envVar` and a `models` list; `models` may be empty, in which case
+the user fills it with **Sync models** once a key is set.
+
+- The list is curated, filtered to providers that are usable with a plain API key over an
+  OpenAI-compatible (or Anthropic/Google) endpoint. OAuth and cookie-based entries, and
+  non-chat services (TTS, search, image generation), are intentionally left out because
+  this app cannot manage their credentials.
+- Model ids in a preset are a snapshot taken from the provider's own `/models` endpoint;
+  providers that need a key to list models start empty.
+- Logos live in `web/assets/providers/<id>.<svg|png>`. The UI reads the id list from
+  `web/assets/providers/logo-index.js`, which is generated:
+
+```bash
+bun run logos   # node scripts/sync-logos.mjs
+```
+
+`bun run logos` also runs as part of the Tauri `beforeBuildCommand`, and a test fails if the
+generated file is stale. Providers without a logo file fall back to `custom.svg` (the
+OpenAI-compatible mark), never to a two-letter monogram.
+
+Every asset (fonts, logos, icons, CSS) is bundled locally. Tests fail if an external asset
+URL reappears in the HTML, CSS, or JS.
+
 ---
 
 ## Requirements
 
-### All platforms
+Only needed when building from source or running in dev mode.
 
 | Need | Version | Check |
 |---|---|---|
@@ -149,11 +210,7 @@ sudo dnf install -y webkit2gtk4.1-devel openssl-devel curl wget file \
 sudo pacman -S --needed base-devel curl wget file openssl webkit2gtk-4.1 librsvg libxdo
 ```
 
-Verify:
-
-```bash
-pkg-config --modversion webkit2gtk-4.1   # must print a version number
-```
+Verify with `pkg-config --modversion webkit2gtk-4.1`.
 
 ### macOS
 
@@ -166,22 +223,18 @@ xcode-select --install
 1. **Visual Studio Build Tools** with the *Desktop development with C++* workload
    (MSVC + Windows SDK).
 2. **WebView2 Runtime** (preinstalled on Windows 11, downloadable for Windows 10).
-3. MSVC Rust toolchain:
-
-```powershell
-rustup default stable-msvc
-```
+3. MSVC Rust toolchain: `rustup default stable-msvc`.
 
 ---
 
-## Running (dev mode)
+## Development
 
 ```bash
 bun install     # once
-bun run dev     # build CSS, then start the app
+bun run dev     # build CSS, then start the app in dev mode
 ```
 
-`bun run dev` runs `bun run css` first (Tailwind → `web/styles.css`), then `tauri dev`.
+`bun run dev` runs `bun run css` first (Tailwind to `web/styles.css`), then `tauri dev`.
 
 ### Edit loop you should know about
 
@@ -193,18 +246,16 @@ Tauri **embeds the `web/` assets at compile time**, so there is no hot reload:
 | `web/*.html`, `web/*.js` | stop dev and run `bun run dev` again (about 3 s rebuild) |
 | `web/styles.src.css` | run `bun run css` (or `bun run css:watch` in another terminal), then restart dev |
 
-The `tauri dev` watcher only watches `src-tauri`, so changes under `web/` do not trigger
-a restart. That is the trade-off of shipping without a bundler/dev-server.
+The watcher only watches `src-tauri`, so changes under `web/` do not trigger a restart. That
+is the trade-off of shipping without a bundler or dev-server.
 
 To try things without touching your real configs, see
 [Sandboxing with `HAKONFIG_ROOT`](#sandboxing-with-hakonfig_root).
 
----
-
-## Building for distribution
+### Building for distribution
 
 ```bash
-bun run build          # = bun run css && tauri build
+bun run build          # = bun run css && bun run logos && tauri build
 ```
 
 Output:
@@ -213,8 +264,6 @@ Output:
 src-tauri/target/release/hakonfig                      # binary
 src-tauri/target/release/bundle/                       # installers
 ```
-
-Bundles depend on the OS you build on:
 
 | Build OS | Artifacts |
 |---|---|
@@ -230,75 +279,53 @@ bunx tauri build --bundles dmg     # macOS
 bunx tauri build --bundles nsis    # Windows
 ```
 
-> **AppImage note:** creating an AppImage downloads `linuxdeploy`/`appimagetool` on first
-> use. The result is much larger (**~84 MB**) because it bundles GTK/WebKit, while
-> `.deb`/`.rpm` are only **~2.4 MB** since they use system libraries. Offline or
-> size-sensitive? Use `--bundles deb`.
+> **AppImage note:** creating an AppImage downloads `linuxdeploy` and `appimagetool` on
+> first use, and the result is much larger (**~84 MB**) because it bundles GTK/WebKit.
+> `.deb`/`.rpm` are only **~3 MB** since they use system libraries.
 
-Example output of `bun run build` on Linux:
+> **Cross-compilation note:** Tauri **cannot** cross-compile. The three-OS release comes
+> from a GitHub Actions matrix: `macos-latest`, `ubuntu-22.04`, and `windows-latest`.
 
-```
-bundle/deb/Hakonfig_0.1.0_amd64.deb           2.4 MB
-bundle/rpm/Hakonfig-0.1.0-1.x86_64.rpm        2.4 MB
-bundle/appimage/Hakonfig_0.1.0_amd64.AppImage 84 MB
-```
-
-> **Cross-compilation note:** Tauri **cannot** cross-compile. The three-OS release is
-> produced by a GitHub Actions matrix (see [Automated releases](#automated-releases)):
-> `macos-latest`, `ubuntu-22.04`, and `windows-latest`.
-
----
-
-## Automated releases
+### Automated releases
 
 Two workflows live in `.github/workflows/`:
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| `ci.yml` | push to `master`, every PR, manual | version check, JS tests, Tailwind build, `cargo test`, `cargo check`, and a `.deb` dry-run build (no upload) |
+| `ci.yml` | push to `master`, every PR, manual | version check, JS tests, Tailwind build, `cargo test --locked`, `cargo check`, and a `.deb` dry-run build |
 | `release.yml` | tag `v*.*.*`, or manual | builds macOS (universal `.dmg`), Windows (NSIS `.exe`), Ubuntu (`.deb`) and uploads them to one **draft release** |
 
 Release flow:
 
 ```bash
-node scripts/version.mjs bump minor     # 0.1.0 -> 0.2.0 (all files updated)
-git commit -am "chore: release v0.2.0"
-git tag v0.2.0
+node scripts/version.mjs bump minor     # 0.2.0 -> 0.3.0, updates every file
+git commit -am "chore: release v0.3.0"
+git tag v0.3.0
 git push --follow-tags
 ```
 
 When the workflow finishes, open the **Releases** tab, check the assets, then **Publish**.
-Releases are created as drafts on purpose so you can inspect them first.
+Releases are drafts on purpose so you can inspect them first.
 
 What CI guards against:
 
 - `node scripts/version.mjs check` fails if `package.json`, `src-tauri/Cargo.toml`,
-  `src-tauri/tauri.conf.json`, and `web/version.js` drift apart.
-- The tag must match the app version (`v0.2.0` vs `0.2.0`); otherwise the job stops
-  before building anything.
-- `build.beforeBuildCommand` in `tauri.conf.json` runs `bun run css`, so `styles.css`
-  is always regenerated on the runner.
+  `src-tauri/Cargo.lock`, `src-tauri/tauri.conf.json`, and `web/version.js` drift apart.
+- The tag must match the app version (`v0.3.0` vs `0.3.0`); otherwise the job stops before
+  building anything.
+- `build.beforeBuildCommand` runs `bun run css && bun run logos`, so styles and the logo
+  index are always regenerated on the runner.
 
-CI builds are **unsigned**. If you ever need signing, add `APPLE_CERTIFICATE`,
-`APPLE_ID`, `APPLE_TEAM_ID` (macOS) and `TAURI_SIGNING_PRIVATE_KEY` /
-`WINDOWS_CERTIFICATE` (Windows) as repository secrets and pass them to `tauri-action`.
+CI builds are **unsigned**. If you ever need signing, add `APPLE_CERTIFICATE`, `APPLE_ID`,
+`APPLE_TEAM_ID` (macOS) and `TAURI_SIGNING_PRIVATE_KEY` / `WINDOWS_CERTIFICATE` (Windows)
+as repository secrets and pass them to `tauri-action`.
 
-### Signing (optional, for public releases)
-
-- macOS: requires an Apple Developer certificate plus notarization; without it users must
-  `Right click → Open` the first time.
-- Windows: without a code signing certificate, SmartScreen shows an extra warning.
-
-Unsigned builds are usually fine for internal or classroom use.
-
----
-
-## Tests
+### Tests
 
 ```bash
-bun run test        # 51 Rust tests + 29 JS tests
+bun run test        # 51 Rust tests + 48 JS tests
 bun run test:rust   # cargo test
-bun run test:js     # node --test web/diff.test.js web/i18n.test.js web/form.test.js
+bun run test:js     # node --test web/*.test.js
 ```
 
 All tests run **offline** and never touch your real configs (Rust uses a `HAKONFIG_ROOT`
@@ -306,41 +333,32 @@ sandbox).
 
 | Layer | Count | Coverage |
 |---|---|---|
-| Unit (`engine/doc.rs`) | 16 | JSONC parsing (comments + trailing commas), YAML (empty/null/broken), comment detection, `mask_key`, `is_slug`, `env_name_from`, secret redaction, `.env` edits, `is_changed` |
-| Unit (`engine/backup.rs`) | 6 | empty backup, create→list→restore roundtrip, corrupt manifest, newest-first order, retention cap, orphan cleanup |
-| Unit (`engine/write.rs`) | 4 | parent dirs, overwrite, no leftover `.hakonfig-tmp`, `0644` vs `0600` permissions |
+| Unit (`engine/doc.rs`) | 16 | JSONC parsing (comments, trailing commas), YAML (empty/null/broken), comment detection, `mask_key`, `is_slug`, `env_name_from`, secret redaction, `.env` edits, `is_changed` |
+| Unit (`engine/backup.rs`) | 6 | empty backup, create/list/restore roundtrip, corrupt manifest, newest-first order, retention cap, orphan cleanup |
+| Unit (`engine/write.rs`) | 4 | parent dirs, overwrite, no leftover temp file, `0644` vs `0600` |
 | Unit (`engine/paths.rs`) | 2 | `HAKONFIG_ROOT` override, `opencode.jsonc` vs `.json` pick |
-| Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks (anti-hang), XSS escaping, output trimming |
-| Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholder parity, untranslated strings, no em dash |
-| Unit (`web/form.test.js`) | 3 | no DOM reads after the form closes, payload built from copies |
-| Integration (`engine/tests.rs`) | 23 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behavior, remove, no-op remove, backup/restore, preview redaction, input validation, per-adapter `stored_key` |
+| Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks, XSS escaping, output trimming |
+| Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholders, untranslated strings, no em dash |
+| Unit (`web/provider-form.test.js`) | 12 | registered-provider detection, env variable naming |
+| Unit (`web/form.test.js`) | 4 | no DOM reads after the form closes, payload built from copies |
+| Unit (`web/logo-index.test.js`) | 2 | generated logo index matches the assets folder |
+| Unit (`web/offline.test.js`) | 4 | no external asset URLs, fonts present on disk |
+| Integration (`engine/tests.rs`) | 23 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key` |
 
----
-
-## How to use it
-
-1. Open Hakonfig. Installed tools are detected immediately, together with their paths.
-2. Pick a tool (e.g. **Pi**).
-3. Click **+ Add provider** → pick a preset (e.g. **Groq**) → paste the API key →
-   optionally run **Test connection**.
-4. Press **Save** → a **diff preview** appears → press **Write to disk**.
-
-That's it. If something looks wrong, open **History** → **Restore**.
-
----
-
-## Repository layout
+### Repository layout
 
 ```
 hakonfig/
 ├── web/                          # frontend: HTML + Tailwind + vanilla JS (no framework)
 │   ├── index.html
 │   ├── main.js                   # UI and flows
-│   ├── version.js                # APP_VERSION, generated by scripts/version.mjs
+│   ├── version.js                # APP_VERSION, generated
+│   ├── provider-form.js          # registered-provider + env-var logic (pure, tested)
 │   ├── diff.js                   # diff logic (separated so it can be tested)
-│   ├── diff.test.js              # diff unit tests
 │   ├── i18n/                     # en.js, id.js, index.js
-│   ├── assets/providers/         # logos (local files, no CDN)
+│   ├── icons.js                  # inline SVG icon set
+│   ├── assets/brand/             # mark, lockups, app icon sources
+│   ├── assets/providers/         # provider logos + generated logo-index.js
 │   ├── fonts/                    # bundled webfonts + licenses
 │   ├── styles.src.css            # Tailwind source
 │   └── styles.css                # build output (gitignored)
@@ -350,67 +368,33 @@ hakonfig/
 │   │   ├── commands.rs           # UI <-> engine bridge (Tauri commands)
 │   │   └── engine/
 │   │       ├── model.rs          # shared types
-│   │       ├── paths.rs          # per-OS path resolution (only OS-specific place)
+│   │       ├── paths.rs          # per-OS path resolution
 │   │       ├── doc.rs            # documents: parse / mutate / render / redact
 │   │       ├── backup.rs         # snapshot + restore + manifest + retention
 │   │       ├── write.rs          # atomic writes + permissions
-│   │       ├── preset.rs         # preset loader
+│   │       ├── preset.rs         # provider preset loader
 │   │       ├── catalog.rs        # tool catalog for the "not installed" section
 │   │       ├── version.rs        # `<bin> --version` detection
-│   │       ├── tests.rs          # integration tests (through the commands layer)
+│   │       ├── tests.rs          # integration tests
 │   │       ├── testutil.rs       # sandbox + mutex for tests
 │   │       └── adapters/         # one file per tool
-│   │           ├── pi.rs
-│   │           ├── omp.rs
-│   │           ├── opencode.rs
-│   │           └── hermes.rs
-│   ├── presets/providers.json    # provider presets (edit data, not code)
+│   ├── presets/providers.json    # provider presets
 │   ├── presets/harnesses.json    # tool catalog + install commands
-│   ├── capabilities/
 │   ├── icons/
 │   └── tauri.conf.json
 ├── docs/UI-CONTRACT.md           # command and type contract between UI and Rust
-├── scripts/sync-logos.mjs       # regenerates web/assets/providers/logo-index.js
+├── docs/screenshots/             # README images
+├── scripts/sync-logos.mjs        # regenerates logo-index.js
 ├── scripts/version.mjs           # single source of truth for the version number
-├── scripts/make-demo-sandbox.sh  # demo sandbox for UI work
 ├── CHANGELOG.md
-├── PRD.md                        # product document
 ├── LICENSE
 └── README.md
 ```
 
 The engine (`src-tauri/src/engine/`) **does not import Tauri at all**: it is a plain
-library. The UI has no framework either. Both can be reused if the shell is ever
-replaced.
+library. The UI has no framework either. Both can be reused if the shell is replaced.
 
----
-
-## Provider presets and logos
-
-`src-tauri/presets/providers.json` holds the catalog. Each entry needs an `id`, `name`,
-`baseUrl`, `api` type, `envVar` and a `models` list; `models` may be empty, in which case
-the user fills it with **Sync models** once a key is set.
-
-- The list is curated from the Hakonfig provider registry, filtered to providers that are
-  usable with a plain API key over an OpenAI-compatible (or Anthropic/Google) endpoint.
-  OAuth and cookie-based entries, and non-chat services (TTS, search, image generation),
-  are intentionally left out because this app cannot manage their credentials.
-- Model ids in a preset are a snapshot taken from the provider's own `/models` endpoint;
-  providers that need a key to list models start empty.
-- Logos live in `web/assets/providers/<id>.<svg|png>`. The UI reads the id list from
-  `web/assets/providers/logo-index.js`, which is generated:
-
-```bash
-bun run logos   # node scripts/sync-logos.mjs
-```
-
-`bun run logos` also runs as part of the Tauri `beforeBuildCommand`, and a test fails if
-the generated file is stale. Providers without a logo file fall back to
-`custom.svg` (the OpenAI-compatible mark), never to a two-letter monogram.
-
----
-
-## Sandboxing with `HAKONFIG_ROOT`
+### Sandboxing with `HAKONFIG_ROOT`
 
 For development and testing, every tool directory can be redirected to one root:
 
@@ -421,62 +405,56 @@ HAKONFIG_ROOT=/tmp/hk-demo bun run dev
 
 Mapping: `$HAKONFIG_ROOT/pi`, `/omp`, `/hermes`, `/opencode/config`, `/opencode/data`.
 
-The Rust tests use the same mechanism, so your real configs are never touched.
-
----
-
-## Adding a new tool
+### Adding a new tool
 
 1. Create `src-tauri/src/engine/adapters/<name>.rs` implementing the `Adapter` trait:
-   `specs()`, `backup_base()`, `snapshot()`, `build()`, plus optional
-   `stored_key()` (used by the backend for Test/Sync when the key field is left empty),
-   `experimental()`, and `notes()`.
+   `specs()`, `backup_base()`, `snapshot()`, `build()`, plus optional `stored_key()` (used by
+   the backend for Test/Sync when the key field is left empty), `experimental()`, and
+   `notes()`.
 2. Register it in `adapters::all()` (`src-tauri/src/engine/adapters/mod.rs`).
 3. Add integration tests in `engine/tests.rs`.
 
-The UI **does not need changes**: the tool list, provider list, and forms are all
-rendered from backend data.
+The UI **does not need changes**: the tool list, provider list, and forms are rendered from
+backend data.
 
 ---
 
 ## Security model
 
-- Keys stay in the tool's own files (that is how the tools work). Hakonfig never copies
-  them into storage of its own.
+- Keys stay in the tool's own files (that is how the tools work). Hakonfig never copies them
+  into storage of its own.
 - Stored keys are read back **only in the backend** (`Adapter::stored_key`) for Test/Sync;
   the value is never sent to the UI.
 - Keys are never logged.
-- Saving without filling in the key field never touches existing credentials, so renaming
-  a provider or editing its models is safe.
+- Saving without filling in the key field never touches existing credentials, so renaming a
+  provider or editing its models is safe.
 - The preview masks secret values, including inside the diff.
 - Always **backup first**: `<tool dir>/.hakonfig/backups/<timestamp>/` + `manifest.json`.
   Only the 5 newest backups per tool are kept.
 - Atomic writes: a temp file in the same directory, then `rename`.
 - Files holding credentials are written with `0600` permissions.
+- Nothing is fetched at runtime except provider requests you trigger yourself, and the
+  `npm install` command you confirm for a tool.
 
 ---
 
 ## Known limitations
 
 1. **Comments are lost in JSON/JSONC/YAML files.** Rewriting `models.json`, `models.yml`,
-   `opencode.json`, or `config.yaml` drops comments inside them. Hakonfig **warns** you
-   and always makes a backup. `.env` files are unaffected (edited line by line, comments
-   preserved).
-2. **Hermes is still experimental.** Only providers and API keys are written; Hermes
-   fetches its own model list from the endpoint.
-3. **Oh My Pi has no stable separate auth file**, so the key is written as plaintext
-   `apiKey` in `models.yml` (`0600` permissions).
+   `opencode.json`, or `config.yaml` drops comments inside them. Hakonfig warns you and always
+   makes a backup. `.env` files are unaffected (edited line by line).
+2. **Hermes is still experimental.** Only providers and API keys are written; Hermes fetches
+   its own model list from the endpoint.
+3. **Oh My Pi has no stable separate auth file**, so the key is written as plaintext `apiKey`
+   in `models.yml` (`0600` permissions).
 4. **OpenCode paths on macOS/Windows** try several candidates (XDG,
    `Library/Application Support`, `%APPDATA%`). Unusual installs may need a tweak in
    `engine/paths.rs`.
-5. **Preset model lists are static.** Providers add and retire models constantly, so
-   update `src-tauri/presets/providers.json`. The ids are a starting point; the
-   **Sync models** button pulls the live list from the endpoint. Providers whose catalog
-   cannot be read without a key (Fireworks, Nebius) intentionally ship with an empty
-   list, filled in via Sync after the key is set.
-6. **No hot reload** for `web/` (no bundler/dev-server).
-7. Tool config schemas can change between versions. Always review the diff and use the
-   backup panel if the result looks off.
+5. **Preset model lists are static snapshots.** Providers add and retire models constantly.
+   The **Sync models** button pulls the live list from the endpoint.
+6. **No hot reload** for `web/`.
+7. Tool config schemas can change between versions. Always review the diff and use the backup
+   panel if the result looks off.
 
 ---
 
@@ -484,34 +462,36 @@ rendered from backend data.
 
 | Symptom | Cause and fix |
 |---|---|
-| `The system library webkit2gtk-4.1 was not found` | Linux dependencies missing → see [Requirements](#requirements). Check with `pkg-config --modversion webkit2gtk-4.1` |
+| `The system library webkit2gtk-4.1 was not found` | Linux dependencies missing, see [Requirements](#requirements). Check `pkg-config --modversion webkit2gtk-4.1` |
 | `error: linker cc not found` (Linux) | `sudo apt install build-essential` |
 | `link.exe not found` / MSVC errors (Windows) | Install Visual Studio Build Tools, run `rustup default stable-msvc`, open a new shell |
 | `Gtk-Message: Failed to load module "xapp-gtk3-module"` | **Safe to ignore**: a Linux Mint/Cinnamon theme module that is simply absent |
-| White window / empty UI | `web/` assets not rebuilt → `bun run css && bun run dev` |
+| White window / empty UI | `web/` assets not rebuilt, run `bun run css && bun run dev` |
 | Unstyled UI / `styles.css` 404 | `bun run css` was not run |
-| AppImage build fails | It downloads tools from the internet → use `--bundles deb` |
+| Missing provider logos | `bun run logos` was not run after adding icons |
+| AppImage build fails | It downloads tools from the internet, use `--bundles deb` |
 | Provider missing from a tool | Check the path shown in the UI; make sure the tool has been started at least once |
 | `config file could not be parsed` | Hakonfig fails loudly rather than overwriting a broken file. Fix the JSON/YAML first (a backup is available) |
 | Want to experiment safely | Use `HAKONFIG_ROOT=/tmp/hk-demo` |
+| `cannot update the lock file ... --locked` | A version bump skipped `Cargo.lock`, run `node scripts/version.mjs bump <version>` |
 
 ---
 
 ## Contributing
 
 Pull requests, issues, and new tool adapters are very welcome. To add a tool, see
-[Adding a new tool](#adding-a-new-tool); it is a single adapter file, with no UI changes.
+[Adding a new tool](#adding-a-new-tool): it is a single adapter file, with no UI changes.
 
 Before sending a PR:
 
 ```bash
-bun run test            # 51 Rust + 29 JS tests must pass
-bun run version:check   # version must be consistent across files
-bun run css             # make sure Tailwind still builds
+bun run test            # 51 Rust + 48 JS tests must pass
+bun run version:check   # version consistent across files
+bun run css && bun run logos
 ```
 
-Keep UI copy in both `web/i18n/en.js` and `web/i18n/id.js` (a test enforces key parity),
-and keep new logos as local files in `web/assets/providers/` (no CDN links).
+Keep UI copy in both `web/i18n/en.js` and `web/i18n/id.js` (a test enforces key parity), keep
+new logos as local files in `web/assets/providers/`, and avoid em dashes in user-facing copy.
 
 ---
 
@@ -519,6 +499,6 @@ and keep new logos as local files in `web/assets/providers/` (no CDN links).
 
 [MIT](LICENSE) © 2026 perogeremmer and contributors.
 
-In short: anyone is free to use, copy, modify, merge, publish, distribute, sublicense,
-and/or sell copies of this software, provided the copyright notice and permission notice
-are included. The software is provided **without warranty** of any kind.
+Anyone is free to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of this software, provided the copyright notice and permission notice are included.
+The software is provided **without warranty** of any kind.
