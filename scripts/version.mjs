@@ -27,6 +27,7 @@ const FILES = {
   cargo: join(root, "src-tauri/Cargo.toml"),
   tauri: join(root, "src-tauri/tauri.conf.json"),
   web: join(root, "web/version.js"),
+  lock: join(root, "src-tauri/Cargo.lock"),
 };
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
@@ -41,7 +42,14 @@ function collect() {
   const cargo = /^version = "([^"]+)"/m.exec(readFileSync(FILES.cargo, "utf8"))?.[1];
   const tauri = JSON.parse(readFileSync(FILES.tauri, "utf8")).version;
   const web = /APP_VERSION = "([^"]+)"/.exec(readFileSync(FILES.web, "utf8"))?.[1];
-  return { package: pkg, cargo, tauri, web };
+  let lock = "";
+  try {
+    const text = readFileSync(FILES.lock, "utf8");
+    lock = /\[\[package\]\]\nname = "hakonfig"\nversion = "([^"]+)"/.exec(text)?.[1] ?? "";
+  } catch {
+    // tanpa Cargo.lock, lewati pemeriksaan ini
+  }
+  return { package: pkg, cargo, tauri, web, lock };
 }
 
 function bump(current, kind) {
@@ -70,6 +78,19 @@ function write(next) {
   // tauri.conf.json
   const tauriText = readFileSync(FILES.tauri, "utf8");
   writeFileSync(FILES.tauri, tauriText.replace(/"version":\s*"[^"]+"/, `"version": "${next}"`));
+
+  // Cargo.lock: entri package milik aplikasi ini ikut berubah saat versi naik.
+  try {
+    const lockPath = join(root, "src-tauri/Cargo.lock");
+    const lock = readFileSync(lockPath, "utf8");
+    const patched = lock.replace(
+      /(\[\[package\]\]\nname = "hakonfig"\nversion = ")[^"]+(")/,
+      `$1${next}$2`,
+    );
+    if (patched !== lock) writeFileSync(lockPath, patched);
+  } catch {
+    // Cargo.lock belum ada (checkout bersih): tidak masalah.
+  }
 
   // web/version.js
   writeFileSync(
