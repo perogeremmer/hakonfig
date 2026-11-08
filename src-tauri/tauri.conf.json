@@ -1,6 +1,6 @@
 {
   "productName": "Hakonfig",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "identifier": "dev.perogeremmer.hakonfig",
   "build": {
     "frontendDist": "../web",
