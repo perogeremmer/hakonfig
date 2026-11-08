@@ -1086,23 +1086,26 @@ fn key_baru_tetap_menimpa_key_lama() {
 }
 
 #[test]
-fn katalog_memuat_web_tool_dan_openhands() {
+fn katalog_memuat_dsh_dan_openhands() {
     let entries = crate::engine::catalog::all();
     let ids: Vec<&str> = entries.iter().map(|e| e.id.as_str()).collect();
-    assert!(ids.contains(&"deepseek"), "deepseek harus ada di katalog");
+    assert!(ids.contains(&"dsh"), "DeepSeek Harness harus ada di katalog");
     assert!(ids.contains(&"openhands"), "openhands harus ada di katalog");
+    // entri web chat yang lama tidak boleh kembali
+    assert!(!ids.contains(&"deepseek"), "web chat bukan harness, jangan didaftarkan");
 
-    let web = crate::engine::catalog::get("deepseek").unwrap();
-    assert_eq!(web.kind, "web");
-    assert_eq!(web.launch_url.as_deref(), Some("https://chat.deepseek.com"));
-    // web tool tidak boleh punya perintah install: tidak ada yang dijalankan
-    assert!(web.install_command().is_none(), "web tool tidak perlu install");
+    let dsh = crate::engine::catalog::get("dsh").unwrap();
+    assert_eq!(dsh.name, "DeepSeek Harness");
+    assert_eq!(
+        dsh.install_command().as_deref(),
+        Some("npm install -g @deepseek-ai/dsh")
+    );
+    assert_eq!(dsh.binary.as_deref(), Some("dsh"));
+    assert_eq!(dsh.kind, "planned");
 
     let hands = crate::engine::catalog::get("openhands").unwrap();
-    assert_eq!(hands.kind, "planned");
     assert_eq!(
         hands.install_command().as_deref(),
         Some("npm install -g @openhands/agent-canvas")
     );
-    assert_eq!(hands.binary.as_deref(), Some("agent-canvas"));
 }

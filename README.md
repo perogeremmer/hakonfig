@@ -121,9 +121,10 @@ Issues and pull requests are welcome. See [Contributing](#contributing).
 - **Install/uninstall tools** with a progress bar and streamed log, after confirming the
   exact command.
 - **Tool catalog** for tools that are not installed yet (Claude Code, Codex CLI, Gemini CLI,
-  Aider, Crush, Qwen Code, OpenHands) with an **Install** button that runs the official command.
-- **Web apps** (for example DeepSeek) get their own section with an **Open** button and a
-  short install-as-app guide, because they have no config file to manage.
+  Aider, Crush, Qwen Code, OpenHands, DeepSeek Harness) with an **Install** button that runs the
+  official command.
+- **Web apps** (tools that only exist in a browser) can be listed with an **Open** button and a
+  short install-as-app guide. No entry uses this yet, so the section stays hidden.
 - **Detects config paths** and shows them, with a button to open the folder.
 - **Reads the current config** as a list: provider, base URL, API type, key status (masked),
   model count.

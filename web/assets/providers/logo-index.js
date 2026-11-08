@@ -29,6 +29,7 @@ export const LOGO_IDS = new Set([
   "dashscope",
   "deepinfra",
   "deepseek",
+  "dsh",
   "featherless",
   "fireworks",
   "gemini",

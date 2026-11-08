@@ -136,16 +136,6 @@
     "descriptionId": "Fork Gemini CLI dari Qwen, cocok untuk model Qwen."
   },
   {
-    "id": "deepseek",
-    "name": "DeepSeek",
-    "kind": "web",
-    "description": "DeepSeek chat in the browser. No config file, so Hakonfig only opens it and walks you through installing it as an app.",
-    "descriptionId": "Chat DeepSeek di browser. Tidak ada file config, jadi Hakonfig hanya membuka dan memandu memasangnya sebagai aplikasi.",
-    "docsUrl": "https://chat.deepseek.com",
-    "launchUrl": "https://chat.deepseek.com",
-    "verified": true
-  },
-  {
     "id": "openhands",
     "name": "OpenHands",
     "kind": "planned",
@@ -158,5 +148,19 @@
     "uninstallWindows": "npm uninstall -g @openhands/agent-canvas",
     "verified": true,
     "binary": "agent-canvas"
+  },
+  {
+    "id": "dsh",
+    "name": "DeepSeek Harness",
+    "kind": "planned",
+    "description": "DeepSeek's plugin-based agent harness (developer preview). Provider routes live in a profile patch layer; keys are referenced by environment variable name.",
+    "descriptionId": "Harness agent berbasis plugin dari DeepSeek (developer preview). Route provider disimpan di lapisan patch profil; key dirujuk lewat nama variabel environment.",
+    "docsUrl": "https://deepseek-harness.github.io/deepseek-harness/",
+    "installUnix": "npm install -g @deepseek-ai/dsh",
+    "installWindows": "npm install -g @deepseek-ai/dsh",
+    "uninstallUnix": "npm uninstall -g @deepseek-ai/dsh",
+    "uninstallWindows": "npm uninstall -g @deepseek-ai/dsh",
+    "verified": true,
+    "binary": "dsh"
   }
 ]
