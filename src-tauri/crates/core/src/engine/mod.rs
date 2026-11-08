@@ -3,11 +3,11 @@
 pub mod adapters;
 pub mod backup;
 pub mod catalog;
-pub mod version;
 pub mod doc;
 pub mod model;
 pub mod paths;
 pub mod preset;
+pub mod version;
 pub mod write;
 
 #[cfg(test)]

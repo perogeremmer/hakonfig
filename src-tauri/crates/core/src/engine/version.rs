@@ -11,7 +11,10 @@ fn binary_for(id: &str) -> Option<String> {
             return Some(binary);
         }
     }
-    if id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+    if id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
         Some(id.to_string())
     } else {
         None
@@ -81,10 +84,7 @@ fn parse_version(text: &str) -> Option<String> {
                 !(c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '+')
             });
             let candidate = cleaned.trim_start_matches('v');
-            let digits = candidate
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .count();
+            let digits = candidate.chars().take_while(|c| c.is_ascii_digit()).count();
             if digits > 0 && candidate.contains('.') {
                 return Some(candidate.chars().take(24).collect());
             }
@@ -98,7 +98,7 @@ mod unit_tests {
     use super::parse_version;
 
     #[test]
-    fn mengambil_versi_dari_berbagai_format() {
+    fn parses_version_from_various_formats() {
         assert_eq!(parse_version("0.9.12").as_deref(), Some("0.9.12"));
         assert_eq!(parse_version("v1.2.3").as_deref(), Some("1.2.3"));
         assert_eq!(parse_version("pi 1.5.0\n").as_deref(), Some("1.5.0"));

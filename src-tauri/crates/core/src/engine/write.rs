@@ -8,7 +8,7 @@ use std::path::Path;
 pub fn atomic_write(path: &Path, contents: &str, sensitive: bool) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .with_context(|| format!("gagal membuat direktori {}", parent.display()))?;
+            .with_context(|| format!("failed to create directory {}", parent.display()))?;
     }
 
     let file_name = path
@@ -19,9 +19,9 @@ pub fn atomic_write(path: &Path, contents: &str, sensitive: bool) -> Result<()> 
 
     {
         let mut file = std::fs::File::create(&tmp)
-            .with_context(|| format!("gagal menulis {}", tmp.display()))?;
+            .with_context(|| format!("failed to write {}", tmp.display()))?;
         file.write_all(contents.as_bytes())
-            .with_context(|| format!("gagal menulis {}", tmp.display()))?;
+            .with_context(|| format!("failed to write {}", tmp.display()))?;
         file.sync_all().ok();
 
         #[cfg(unix)]
@@ -32,12 +32,12 @@ pub fn atomic_write(path: &Path, contents: &str, sensitive: bool) -> Result<()> 
         }
     }
 
-    std::fs::rename(&tmp, path).with_context(|| format!("gagal mengganti {}", path.display()))?;
+    std::fs::rename(&tmp, path).with_context(|| format!("failed to replace {}", path.display()))?;
     Ok(())
 }
 
 pub fn read_to_string(path: &Path) -> Result<String> {
-    std::fs::read_to_string(path).with_context(|| format!("gagal membaca {}", path.display()))
+    std::fs::read_to_string(path).with_context(|| format!("failed to read {}", path.display()))
 }
 
 #[cfg(test)]
@@ -46,7 +46,7 @@ mod unit_tests {
     use crate::engine::testutil::temp_dir;
 
     #[test]
-    fn menulis_dan_membuat_direktori_induk() {
+    fn write_creates_parent_directories() {
         let dir = temp_dir("write-basic");
         let path = dir.join("a/b/c.json");
         atomic_write(&path, "{\"x\":1}", false).unwrap();
@@ -54,7 +54,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn menimpa_file_lama_dan_tidak_meninggalkan_file_sementara() {
+    fn overwriting_old_file_leaves_no_temp_file() {
         let dir = temp_dir("write-overwrite");
         let path = dir.join("config.json");
         atomic_write(&path, "lama", false).unwrap();
@@ -65,7 +65,7 @@ mod unit_tests {
 
     #[cfg(unix)]
     #[test]
-    fn permission_ketat_untuk_file_sensitif() {
+    fn strict_permissions_for_sensitive_files() {
         use std::os::unix::fs::PermissionsExt;
         let dir = temp_dir("write-perms");
 
@@ -85,7 +85,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn membaca_file_yang_tidak_ada_mengembalikan_error() {
+    fn reading_missing_file_returns_error() {
         let dir = temp_dir("write-missing");
         assert!(read_to_string(&dir.join("nope")).is_err());
     }

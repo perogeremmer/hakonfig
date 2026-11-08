@@ -78,7 +78,7 @@ impl Adapter for PiAdapter {
         let mut warnings = Vec::new();
         if models.has_comments {
             warnings.push(
-                "models.json memuat komentar. Komentar tidak dipertahankan saat Hakonfig menulis (backup otomatis dibuat)."
+                "models.json contains comments. Comments are not preserved when Hakonfig writes (a backup is created automatically)."
                     .to_string(),
             );
         }
@@ -194,9 +194,9 @@ impl Adapter for PiAdapter {
                     // Edit tanpa key baru: **pertahankan** apiKey yang sudah ada.
                     // Menghapusnya di sini akan membuang kunci milik pengguna
                     // hanya karena ia mengganti nama atau model.
-                    (None, _) => {
-                        existing_entry.as_ref().and_then(|entry| get_str(entry, "apiKey"))
-                    }
+                    (None, _) => existing_entry
+                        .as_ref()
+                        .and_then(|entry| get_str(entry, "apiKey")),
                 };
 
                 let models = docs.require_mut("models")?;
@@ -222,14 +222,14 @@ impl Adapter for PiAdapter {
                                 auth.root_object().remove(draft.id.trim());
                             }
                             warnings.push(format!(
-                                "Mode environment: key tidak ditulis. Set variabel {} di shell kamu.",
+                                "Environment mode: the key is not written. Set {} in your shell.",
                                 env_var
                             ));
                         }
                     }
                 } else if is_new {
                     warnings.push(
-                        "Provider dibuat tanpa API key. Isi key lewat tombol Ubah agar Pi bisa mengautentikasi."
+                        "Provider created without an API key. Fill the key in via Change so Pi can authenticate."
                             .to_string(),
                     );
                 }
@@ -253,17 +253,17 @@ impl Adapter for PiAdapter {
                         if existing.is_some() {
                             return Ok(vec![]); // sudah aktif
                         }
-                        anyhow::bail!("Provider '{}' tidak ditemukan.", target);
+                        anyhow::bail!("Provider '{}' not found.", target);
                     };
                     models.object_at("providers").insert(target.clone(), value);
                     models.drop_parked(&target);
-                    Ok(vec![format!("Provider '{}' diaktifkan kembali.", target)])
+                    Ok(vec![format!("Provider '{}' re-enabled.", target)])
                 } else {
                     let Some(entry) = existing else {
                         if models.parked_value(&target).is_some() {
                             return Ok(vec![]); // sudah nonaktif
                         }
-                        anyhow::bail!("Provider '{}' tidak ditemukan.", target);
+                        anyhow::bail!("Provider '{}' not found.", target);
                     };
                     let removed = models
                         .tree_mut()
@@ -275,7 +275,7 @@ impl Adapter for PiAdapter {
                         models.park(&target, &entry);
                     }
                     Ok(vec![format!(
-                        "Provider '{}' dinonaktifkan (dikomentari di models.json).",
+                        "Provider '{}' disabled (commented out in models.json).",
                         target
                     )])
                 }
@@ -287,7 +287,7 @@ impl Adapter for PiAdapter {
                 let provider = provider_id.trim().to_string();
                 let model = model_id.trim().to_string();
                 if provider.is_empty() || model.is_empty() {
-                    anyhow::bail!("Provider dan model wajib diisi.");
+                    anyhow::bail!("Provider and model are required.");
                 }
                 let settings = docs.require_mut("settings")?;
                 let root = settings.root_object();
@@ -296,10 +296,7 @@ impl Adapter for PiAdapter {
                     Value::String(provider.clone()),
                 );
                 let reference = format!("{}/{}", provider, model);
-                root.insert(
-                    "defaultModel".to_string(),
-                    Value::String(reference.clone()),
-                );
+                root.insert("defaultModel".to_string(), Value::String(reference.clone()));
 
                 // Pi memakai model PERTAMA dari scope `enabledModels` bila scope
                 // tidak kosong, dan hanya jatuh ke defaultModel kalau scope kosong
@@ -316,12 +313,12 @@ impl Adapter for PiAdapter {
                         rescoped = true;
                         if before == list.len() - 1 && before > 0 {
                             warnings.push(format!(
-                                "'{}' dipindah ke urutan pertama enabledModels: Pi memakai model pertama scope, bukan defaultModel, selama scope tidak kosong.",
+                                "'{}' moved to the first position of enabledModels: Pi uses the first model in the scope, not defaultModel, as long as the scope is not empty.",
                                 reference
                             ));
                         } else {
                             warnings.push(format!(
-                                "'{}' ditambahkan sebagai entri pertama enabledModels: Pi memakai model pertama scope, bukan defaultModel, selama scope tidak kosong.",
+                                "'{}' added as the first enabledModels entry: Pi uses the first model in the scope, not defaultModel, as long as the scope is not empty.",
                                 reference
                             ));
                         }
@@ -331,10 +328,14 @@ impl Adapter for PiAdapter {
                 warnings.insert(
                     0,
                     format!(
-                        "Default Pi: {}/{} (ditulis ke settings.json{}).",
+                        "Pi default: {}/{} (written to settings.json{}).",
                         provider,
                         model,
-                        if rescoped { " dan urutan enabledModels" } else { "" }
+                        if rescoped {
+                            " dan urutan enabledModels"
+                        } else {
+                            ""
+                        }
                     ),
                 );
                 Ok(warnings)
@@ -367,10 +368,7 @@ impl Adapter for PiAdapter {
 
                 let mut warnings = Vec::new();
                 if !removed {
-                    warnings.push(format!(
-                        "Provider '{}' tidak ditemukan di models.json.",
-                        target
-                    ));
+                    warnings.push(format!("Provider '{}' not found in models.json.", target));
                 }
                 Ok(warnings)
             }

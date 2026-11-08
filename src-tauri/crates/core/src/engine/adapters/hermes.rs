@@ -41,7 +41,7 @@ impl Adapter for HermesAdapter {
     }
 
     fn notes(&self) -> &'static str {
-        "Eksperimental. Provider di config.yaml, key disimpan di .env lewat key_env. Daftar model diambil Hermes dari endpoint."
+        "Experimental. Providers live in config.yaml, the key is stored in .env via key_env. Hermes fetches the model list from the endpoint."
     }
 
     fn specs(&self) -> Vec<FileSpec> {
@@ -72,12 +72,12 @@ impl Adapter for HermesAdapter {
         let data = config.data();
 
         let mut warnings = vec![
-            "Dukungan Hermes masih eksperimental: hanya provider dan API key yang ditulis."
+            "Hermes support is still experimental: only providers and the API key are written."
                 .to_string(),
         ];
         if config.has_comments {
             warnings.push(
-                "config.yaml memuat komentar. Komentar tidak dipertahankan saat Hakonfig menulis (backup otomatis dibuat)."
+                "config.yaml contains comments. Comments are not preserved when Hakonfig writes (a backup is created automatically)."
                     .to_string(),
             );
         }
@@ -93,7 +93,7 @@ impl Adapter for HermesAdapter {
                     .and_then(|var| env.and_then(|doc| doc.env_get(var)));
                 let key_display = match (&stored, &key_env) {
                     (Some(value), _) => Some(mask_key(value)),
-                    (None, Some(var)) => Some(format!("${} (belum diisi)", var)),
+                    (None, Some(var)) => Some(format!("${} (not set)", var)),
                     (None, None) => None,
                 };
                 providers.push(ProviderSummary {
@@ -121,7 +121,7 @@ impl Adapter for HermesAdapter {
                 .and_then(|var| env.and_then(|doc| doc.env_get(var)));
             let key_display = match (&stored, &key_env) {
                 (Some(value), _) => Some(mask_key(value)),
-                (None, Some(var)) => Some(format!("${} (belum diisi)", var)),
+                (None, Some(var)) => Some(format!("${} (not set)", var)),
                 (None, None) => None,
             };
             providers.push(ProviderSummary {
@@ -176,7 +176,7 @@ impl Adapter for HermesAdapter {
 
                 if !draft.models.is_empty() {
                     warnings.push(
-                        "Hermes mengambil daftar model dari endpoint provider, jadi daftar model tidak ditulis ke config."
+                        "Hermes fetches the model list from the provider endpoint, so models are not written to the config."
                             .to_string(),
                     );
                 }
@@ -223,20 +223,18 @@ impl Adapter for HermesAdapter {
                         KeyMode::Inline => {
                             docs.require_mut("env")?.env_set(&key_env, key);
                             warnings.push(format!(
-                                "API key ditulis ke ~/.hermes/.env sebagai {} (permission 0600).",
+                                "API key written to ~/.hermes/.env as {} (permission 0600).",
                                 key_env
                             ));
                         }
                         KeyMode::Env => {
-                            warnings.push(format!(
-                                "Mode environment: pastikan variabel {} sudah diset.",
-                                key_env
-                            ));
+                            warnings
+                                .push(format!("Environment mode: make sure {} is set.", key_env));
                         }
                     }
                 } else if is_new {
                     warnings.push(format!(
-                        "Provider dibuat tanpa key. Isi variabel {} di ~/.hermes/.env.",
+                        "Provider created without a key. Fill {} in ~/.hermes/.env.",
                         key_env
                     ));
                 }
@@ -260,17 +258,17 @@ impl Adapter for HermesAdapter {
                         if existing.is_some() {
                             return Ok(vec![]);
                         }
-                        anyhow::bail!("Provider '{}' tidak ditemukan.", target);
+                        anyhow::bail!("Provider '{}' not found.", target);
                     };
                     config.object_at("providers").insert(target.clone(), value);
                     config.drop_parked(&target);
-                    Ok(vec![format!("Provider '{}' diaktifkan kembali.", target)])
+                    Ok(vec![format!("Provider '{}' re-enabled.", target)])
                 } else {
                     let Some(entry) = existing else {
                         if config.parked_value(&target).is_some() {
                             return Ok(vec![]);
                         }
-                        anyhow::bail!("Provider '{}' tidak ditemukan.", target);
+                        anyhow::bail!("Provider '{}' not found.", target);
                     };
                     let removed = config
                         .tree_mut()
@@ -282,7 +280,7 @@ impl Adapter for HermesAdapter {
                         config.park(&target, &entry);
                     }
                     Ok(vec![format!(
-                        "Provider '{}' dinonaktifkan (dikomentari di config.yaml).",
+                        "Provider '{}' disabled (commented out in config.yaml).",
                         target
                     )])
                 }
@@ -294,7 +292,7 @@ impl Adapter for HermesAdapter {
                 let provider = provider_id.trim().to_string();
                 let model = model_id.trim().to_string();
                 if provider.is_empty() || model.is_empty() {
-                    anyhow::bail!("Provider dan model wajib diisi.");
+                    anyhow::bail!("Provider and model are required.");
                 }
 
                 // Hermes memakai provider kustom dengan awalan "custom:".
@@ -317,7 +315,7 @@ impl Adapter for HermesAdapter {
                 }
 
                 Ok(vec![format!(
-                    "Default Hermes: custom:{} / {} (ditulis ke config.yaml).",
+                    "Hermes default: custom:{} / {} (written to config.yaml).",
                     provider, model
                 )])
             }
@@ -356,10 +354,7 @@ impl Adapter for HermesAdapter {
 
                 let mut warnings = Vec::new();
                 if !removed {
-                    warnings.push(format!(
-                        "Provider '{}' tidak ditemukan di config.yaml.",
-                        target
-                    ));
+                    warnings.push(format!("Provider '{}' not found in config.yaml.", target));
                 }
                 Ok(warnings)
             }

@@ -1,0 +1,729 @@
+//! Automation test: menjalankan binary `hakonfig-cli` seperti pengguna sungguhan.
+//!
+//! Setiap test memakai `HAKONFIG_ROOT` sendiri (lewat `--root`), jadi tidak
+//! pernah menyentuh config asli dan aman berjalan paralel.
+//!
+//! Yang diuji di sini adalah kontrak CLI: exit code, pesan error, dan isi file
+//! yang benar-benar ditulis. Logika keputusan murni diuji sebagai unit test di
+//! `src/draft.rs` dan `src/output.rs`.
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
+
+const BIN: &str = env!("CARGO_BIN_EXE_hakonfig-cli");
+const GROQ_BASE_URL: &str = "https://api.groq.com/openai/v1";
+const GROQ_PRESET_MODELS: usize = 6;
+
+fn sandbox(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("hakonfig-cli-{}-{}", std::process::id(), name));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("gagal membuat sandbox");
+    dir
+}
+
+fn run(root: &Path, args: &[&str]) -> Output {
+    Command::new(BIN)
+        .arg("--root")
+        .arg(root)
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .expect("gagal menjalankan binary")
+}
+
+fn run_stdin(root: &Path, args: &[&str], input: &str) -> Output {
+    let mut child = Command::new(BIN)
+        .arg("--root")
+        .arg(root)
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("gagal menjalankan binary");
+
+    {
+        let mut stdin = child.stdin.take().expect("stdin tidak tersedia");
+        stdin
+            .write_all(input.as_bytes())
+            .expect("gagal menulis ke stdin");
+    }
+
+    child.wait_with_output().expect("gagal menunggu proses")
+}
+
+fn stdout(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stdout).to_string()
+}
+
+fn stderr(output: &Output) -> String {
+    String::from_utf8_lossy(&output.stderr).to_string()
+}
+
+fn models_path(root: &Path) -> PathBuf {
+    root.join("pi/agent/models.json")
+}
+
+fn auth_path(root: &Path) -> PathBuf {
+    root.join("pi/agent/auth.json")
+}
+
+fn read_json(path: &Path) -> serde_json::Value {
+    let text = std::fs::read_to_string(path)
+        .unwrap_or_else(|error| panic!("gagal membaca {}: {error}", path.display()));
+    serde_json::from_str(&text)
+        .unwrap_or_else(|error| panic!("{} bukan JSON valid: {error}\n{text}", path.display()))
+}
+
+// ------------------------------------------------------------------ tulis
+
+#[test]
+fn add_writes_provider_key_and_selected_models() {
+    let root = sandbox("add-basic");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--key-stdin",
+            "--models",
+            "llama-3.3-70b-versatile,llama-3.1-8b-instant",
+            "--no-test",
+        ],
+        "gsk-rahasia-123\n",
+    );
+
+    assert!(output.status.success(), "harus sukses: {}", stderr(&output));
+
+    let models = read_json(&models_path(&root));
+    let groq = &models["providers"]["groq"];
+    assert_eq!(groq["baseUrl"], GROQ_BASE_URL, "base URL harus ikut preset");
+    assert_eq!(
+        groq["models"].as_array().map(Vec::len),
+        Some(2),
+        "hanya model yang dipilih yang ditulis"
+    );
+    assert_eq!(groq["models"][0]["id"], "llama-3.3-70b-versatile");
+
+    let auth = read_json(&auth_path(&root));
+    assert_eq!(
+        auth["groq"]["key"], "gsk-rahasia-123",
+        "key inline disimpan di auth.json"
+    );
+    assert!(
+        !std::fs::read_to_string(models_path(&root))
+            .unwrap()
+            .contains("gsk-rahasia-123"),
+        "models.json tidak boleh memuat key mentah"
+    );
+}
+
+#[test]
+fn add_without_models_uses_all_preset_models() {
+    let root = sandbox("add-default-models");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--key-stdin",
+            "--no-test",
+        ],
+        "gsk-x\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["groq"]["models"]
+            .as_array()
+            .map(Vec::len),
+        Some(GROQ_PRESET_MODELS),
+        "default non-interaktif = semua model preset"
+    );
+}
+
+#[test]
+fn add_twice_without_change_writes_nothing() {
+    let root = sandbox("add-idempotent");
+    let args = [
+        "add",
+        "--harness",
+        "pi",
+        "--provider",
+        "groq",
+        "--key-stdin",
+        "--models",
+        "a,b",
+        "--no-test",
+    ];
+    let first = run_stdin(&root, &args, "gsk-sama\n");
+    assert!(first.status.success(), "{}", stderr(&first));
+
+    let before = std::fs::read_to_string(models_path(&root)).unwrap();
+    let second = run_stdin(&root, &args, "gsk-sama\n");
+
+    assert!(second.status.success(), "{}", stderr(&second));
+    assert!(
+        stdout(&second).contains("nothing to write"),
+        "harus melaporkan tidak ada perubahan: {}",
+        stdout(&second)
+    );
+    assert_eq!(
+        before,
+        std::fs::read_to_string(models_path(&root)).unwrap(),
+        "isi file tidak boleh berubah"
+    );
+}
+
+#[test]
+fn add_dry_run_writes_no_file() {
+    let root = sandbox("add-dry-run");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--key-stdin",
+            "--dry-run",
+        ],
+        "gsk-x\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !models_path(&root).exists(),
+        "--dry-run tidak boleh membuat models.json"
+    );
+    assert!(stdout(&output).contains("dry-run"), "{}", stdout(&output));
+}
+
+#[test]
+fn add_env_mode_writes_a_reference_not_the_key() {
+    let root = sandbox("add-key-env");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--key-stdin",
+            "--key-env",
+            "--models",
+            "a",
+            "--no-test",
+        ],
+        "gsk-jangan-ditulis\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["groq"]["apiKey"], "$GROQ_API_KEY",
+        "mode env menulis referensi variabel"
+    );
+    assert!(
+        !std::fs::read_to_string(auth_path(&root))
+            .unwrap_or_default()
+            .contains("gsk-jangan-ditulis"),
+        "mode env tidak menyimpan key mentah di auth.json"
+    );
+    assert!(
+        stdout(&output).contains("GROQ_API_KEY"),
+        "harus memberi tahu nama variabel yang perlu diisi: {}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn add_custom_provider_uses_its_own_base_url() {
+    let root = sandbox("add-custom");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "toko-saya",
+            "--name",
+            "Toko",
+            "--base-url",
+            "https://api.toko.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk-toko\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["toko-saya"]["baseUrl"],
+        "https://api.toko.test/v1"
+    );
+    assert_eq!(models["providers"]["toko-saya"]["name"], "Toko");
+    assert_eq!(
+        models["providers"]["toko-saya"]["api"], "openai-completions",
+        "tipe API custom memakai bawaan OpenAI-compatible"
+    );
+}
+
+#[test]
+fn add_creates_a_backup_when_overwriting_an_existing_file() {
+    let root = sandbox("add-backup");
+    let first = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--key-stdin",
+            "--models",
+            "a",
+            "--no-test",
+        ],
+        "gsk-satu\n",
+    );
+    assert!(first.status.success(), "{}", stderr(&first));
+
+    let second = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--key-stdin",
+            "--models",
+            "a,b",
+            "--no-test",
+        ],
+        "gsk-dua\n",
+    );
+    assert!(second.status.success(), "{}", stderr(&second));
+    assert!(
+        stdout(&second).contains("backup:"),
+        "harus melaporkan backup: {}",
+        stdout(&second)
+    );
+
+    let backups = root.join("pi/agent/.hakonfig/backups");
+    let count = std::fs::read_dir(&backups)
+        .expect("direktori backup harus ada")
+        .count();
+    assert!(count >= 1, "minimal satu backup dibuat, dapat {count}");
+}
+
+// ------------------------------------------------------------------ error
+
+#[test]
+fn add_without_provider_fails_with_a_flag_hint() {
+    let root = sandbox("err-no-provider");
+    let output = run(&root, &["add", "--harness", "pi", "--no-test"]);
+
+    assert!(!output.status.success(), "harus gagal tanpa --provider");
+    let message = stderr(&output);
+    assert!(
+        message.contains("--provider"),
+        "pesan harus menyebut flag: {message}"
+    );
+    assert!(
+        message.contains("hakonfig-cli providers"),
+        "pesan harus menunjukkan cara melihat daftar: {message}"
+    );
+}
+
+#[test]
+fn add_provider_typo_suggests_a_candidate() {
+    let root = sandbox("err-typo");
+    let output = run(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "openroutr",
+            "--no-test",
+        ],
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("openrouter"),
+        "harus menyarankan kandidat terdekat: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn add_preset_without_models_requires_explicit_models() {
+    let root = sandbox("err-no-models");
+    let output = run(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "anthropic",
+            "--no-test",
+        ],
+    );
+
+    assert!(
+        !output.status.success(),
+        "preset tanpa model harus menolak tanpa --models"
+    );
+    assert!(
+        stderr(&output).contains("--models"),
+        "pesan harus menjelaskan jalan keluarnya: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn add_custom_without_base_url_is_rejected() {
+    let root = sandbox("err-custom");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "toko",
+            "--name",
+            "Toko",
+            "--key-stdin",
+            "--no-test",
+        ],
+        "sk\n",
+    );
+
+    assert!(!output.status.success());
+    assert!(
+        stderr(&output).contains("--base-url"),
+        "{}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn add_unknown_harness_is_rejected() {
+    let root = sandbox("err-harness");
+    let output = run(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "tidak-ada",
+            "--provider",
+            "groq",
+            "--no-test",
+        ],
+    );
+
+    assert!(!output.status.success());
+    assert!(stderr(&output).contains("tidak-ada"), "{}", stderr(&output));
+}
+
+// ------------------------------------------------------------------ baca
+
+#[test]
+fn show_lists_providers_without_leaking_the_key() {
+    let root = sandbox("show-redaction");
+    let add = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--key-stdin",
+            "--models",
+            "a",
+            "--no-test",
+        ],
+        "gsk-sangat-rahasia\n",
+    );
+    assert!(add.status.success(), "{}", stderr(&add));
+
+    let output = run(&root, &["show", "pi"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let text = stdout(&output);
+    assert!(text.contains("groq"), "harus menampilkan provider: {text}");
+    assert!(
+        !text.contains("gsk-sangat-rahasia"),
+        "key tidak boleh muncul di output: {text}"
+    );
+}
+
+#[test]
+fn list_json_is_parseable_by_scripts() {
+    let root = sandbox("list-json");
+    let output = run(&root, &["list", "--json"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout(&output)).expect("output --json harus JSON valid");
+    assert!(
+        parsed
+            .as_array()
+            .map(|items| !items.is_empty())
+            .unwrap_or(false),
+        "harus berisi daftar harness"
+    );
+}
+
+#[test]
+fn providers_can_be_filtered() {
+    let root = sandbox("providers-filter");
+    let output = run(&root, &["providers", "--search", "groq"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.contains("groq"));
+    assert!(
+        text.contains(GROQ_BASE_URL) || text.contains("GROQ_API_KEY"),
+        "{text}"
+    );
+}
+
+#[test]
+fn paths_shows_config_locations() {
+    let root = sandbox("paths");
+    let output = run(&root, &["paths", "pi"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains(&root.display().to_string()),
+        "path harus berada di dalam sandbox: {}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn add_explicit_test_failure_aborts_without_writing() {
+    let root = sandbox("test-explicit-fail");
+    // Port 1 di localhost selalu menolak koneksi: deterministik, tanpa jaringan.
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "lokal",
+            "--name",
+            "Lokal",
+            "--base-url",
+            "http://127.0.0.1:1/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--test",
+        ],
+        "sk-lokal\n",
+    );
+
+    assert!(
+        !output.status.success(),
+        "--test eksplisit yang gagal harus menggagalkan perintah: {}",
+        stdout(&output)
+    );
+    assert!(
+        stderr(&output).contains("connection test failed"),
+        "harus menjelaskan penyebabnya: {}",
+        stderr(&output)
+    );
+    assert!(
+        stderr(&output).contains("--no-test"),
+        "pesan harus menunjukkan jalan keluar: {}",
+        stderr(&output)
+    );
+    assert!(
+        !models_path(&root).exists(),
+        "tidak boleh ada yang ditulis ketika gerbang --test gagal"
+    );
+}
+
+#[test]
+fn add_without_a_test_flag_skips_the_test_and_still_writes() {
+    // Tanpa --test/--no-test, mode non-interaktif tidak mencoba endpoint,
+    // jadi endpoint yang mati pun tidak menghalangi penulisan.
+    let root = sandbox("test-implicit-skip");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "lokal",
+            "--name",
+            "Lokal",
+            "--base-url",
+            "http://127.0.0.1:1/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+        ],
+        "sk-lokal\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("connection test failed"),
+        "tanpa --test tidak boleh ada percobaan koneksi: {}",
+        stderr(&output)
+    );
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["lokal"]["baseUrl"],
+        "http://127.0.0.1:1/v1"
+    );
+}
+
+// ------------------------------------------------------------------ bahasa
+
+#[test]
+fn default_language_is_english() {
+    let root = sandbox("lang-default");
+    let output = run(&root, &["list"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("harnesses have a config"),
+        "default harus English: {}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn lang_id_switches_the_output_language() {
+    let root = sandbox("lang-id");
+    let output = run(&root, &["--lang", "id", "list"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("harness punya config"),
+        "output harus Bahasa Indonesia: {}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn unknown_language_is_rejected() {
+    let root = sandbox("lang-unknown");
+    let output = run(&root, &["--lang", "jawa", "list"]);
+
+    assert!(!output.status.success(), "bahasa asing harus ditolak");
+    assert!(stderr(&output).contains("jawa"), "{}", stderr(&output));
+}
+
+// ------------------------------------------------------------------ kerapian
+
+#[test]
+fn the_same_warning_is_not_printed_twice() {
+    let root = sandbox("warn-dedupe");
+    // Tanpa key: engine memberi peringatan "provider dibuat tanpa API key".
+    // Peringatan itu muncul di pratinjau; laporan akhir tidak boleh mengulang.
+    let output = run(
+        &root,
+        &["add", "--harness", "pi", "--provider", "groq", "--no-test"],
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let combined = format!("{}{}", stdout(&output), stderr(&output));
+    let occurrences = combined.matches("without an API key").count();
+    assert_eq!(
+        occurrences, 1,
+        "peringatan harus muncul sekali saja:\n{combined}"
+    );
+}
+
+#[test]
+fn a_large_diff_is_truncated_and_reported() {
+    let root = sandbox("diff-truncate");
+    let models = (0..100)
+        .map(|index| format!("model-{index}"))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--key-stdin",
+            "--models",
+            &models,
+            "--dry-run",
+        ],
+        "gsk-x\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    // Batas dihitung per file, jadi yang diuji: model terakhir tidak ikut
+    // dicetak dan sisa barisnya dilaporkan.
+    assert!(
+        !text.contains("model-99"),
+        "diff harus dipotong, bukan dicetak semua:\n{text}"
+    );
+    assert!(
+        text.contains("more lines"),
+        "harus menyebut sisa baris:\n{text}"
+    );
+}
+
+#[test]
+fn key_stdin_rejects_an_interactive_terminal() {
+    // `script` membuat pty supaya stdin benar-benar terlihat seperti terminal.
+    if Command::new("script").arg("--version").output().is_err() {
+        eprintln!("dilewati: `script` tidak tersedia");
+        return;
+    }
+
+    let root = sandbox("key-stdin-tty");
+    let command = format!(
+        "{} --root {} add --harness pi --provider groq --key-stdin --no-test",
+        BIN,
+        root.display()
+    );
+    let output = Command::new("script")
+        .args(["-qec", &command, "/dev/null"])
+        .output()
+        .expect("gagal menjalankan script");
+
+    let text = format!("{}{}", stdout(&output), stderr(&output));
+    assert!(
+        text.contains("--key-stdin needs piped input"),
+        "harus menolak terminal dengan jelas, bukan menggantung:\n{text}"
+    );
+    assert!(!models_path(&root).exists(), "tidak boleh ada yang ditulis");
+}

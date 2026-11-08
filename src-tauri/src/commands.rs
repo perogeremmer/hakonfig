@@ -104,10 +104,10 @@ pub async fn install_harness(
     harness_id: String,
 ) -> Result<InstallResult, String> {
     let entry = catalog::get(&harness_id)
-        .ok_or_else(|| format!("harness '{}' tidak ada di katalog", harness_id))?;
+        .ok_or_else(|| format!("harness '{}' is not in the catalog", harness_id))?;
     let command = entry
         .install_command()
-        .ok_or_else(|| format!("Belum ada perintah install otomatis untuk {}.", entry.name))?;
+        .ok_or_else(|| format!("No automatic install command for {} yet.", entry.name))?;
     run_package(app, harness_id, command).await
 }
 
@@ -117,10 +117,10 @@ pub async fn uninstall_harness(
     harness_id: String,
 ) -> Result<InstallResult, String> {
     let entry = catalog::get(&harness_id)
-        .ok_or_else(|| format!("harness '{}' tidak ada di katalog", harness_id))?;
+        .ok_or_else(|| format!("harness '{}' is not in the catalog", harness_id))?;
     let command = entry
         .uninstall_command()
-        .ok_or_else(|| format!("Belum ada perintah uninstall otomatis untuk {}.", entry.name))?;
+        .ok_or_else(|| format!("No automatic uninstall command for {} yet.", entry.name))?;
     run_package(app, harness_id, command).await
 }
 
@@ -184,7 +184,7 @@ fn execute_with<F: Fn(&str)>(harness_id: &str, command: &str, on_line: F) -> Ins
             return InstallResult {
                 ok: false,
                 command: command.to_string(),
-                output: format!("gagal menjalankan perintah: {}", error),
+                output: format!("failed to run command: {}", error),
             }
         }
     };
@@ -235,7 +235,7 @@ fn execute_with<F: Fn(&str)>(harness_id: &str, command: &str, on_line: F) -> Ins
     let ok = !timed_out && status.map(|s| s.success()).unwrap_or(false);
     let mut tail = output;
     if timed_out {
-        tail.push_str("\n[waktu habis: proses dihentikan]");
+        tail.push_str("\n[timed out: process stopped]");
     }
     let trimmed: String = tail
         .chars()
@@ -258,14 +258,18 @@ mod unit_tests {
     use super::execute_with;
 
     #[test]
-    fn perintah_sukses_menghasilkan_ok_dan_output() {
+    fn successful_command_yields_ok_and_output() {
         let lines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let sink = std::sync::Arc::clone(&lines);
         let result = execute_with("test", "echo hakonfig-ok", move |line| {
             sink.lock().unwrap().push(line.to_string());
         });
         assert!(
-            lines.lock().unwrap().iter().any(|l| l.contains("hakonfig-ok")),
+            lines
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|l| l.contains("hakonfig-ok")),
             "streaming harus melaporkan baris output"
         );
         assert!(result.ok, "harus sukses: {:?}", result);
@@ -274,23 +278,27 @@ mod unit_tests {
     }
 
     #[test]
-    fn perintah_gagal_tidak_dianggap_sukses() {
+    fn failed_command_is_not_reported_as_ok() {
         let result = execute_with("test", "exit 3", |_| {});
         assert!(!result.ok);
     }
 
     #[test]
-    fn perintah_tidak_ada_tidak_panik() {
+    fn missing_command_does_not_panic() {
         let result = execute_with("test", "perintah-yang-tidak-ada-xyz", |_| {});
         assert!(!result.ok);
         assert!(!result.output.is_empty());
     }
 
     #[test]
-    fn stderr_ikut_tertangkap() {
+    fn stderr_is_captured_too() {
         let result = execute_with("test", "echo pesan-error 1>&2; exit 1", |_| {});
         assert!(!result.ok);
-        assert!(result.output.contains("pesan-error"), "output: {:?}", result.output);
+        assert!(
+            result.output.contains("pesan-error"),
+            "output: {:?}",
+            result.output
+        );
     }
 }
 
@@ -301,7 +309,7 @@ mod unit_tests {
 pub fn open_external(url: String) -> Result<(), String> {
     let trimmed = url.trim();
     if !(trimmed.starts_with("https://") || trimmed.starts_with("http://")) {
-        return Err("hanya URL http(s) yang boleh dibuka".to_string());
+        return Err("only http(s) URLs can be opened".to_string());
     }
 
     let mut command = if cfg!(windows) {
@@ -320,7 +328,7 @@ pub fn open_external(url: String) -> Result<(), String> {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|error| format!("tidak bisa membuka browser: {}", error))?;
+        .map_err(|error| format!("could not open the browser: {}", error))?;
 
     Ok(())
 }
@@ -361,7 +369,7 @@ pub fn open_in_file_manager(path: String) -> Result<(), String> {
     command
         .spawn()
         .map(|_| ())
-        .map_err(|error| format!("gagal membuka {}: {}", directory.display(), error))
+        .map_err(|error| format!("failed to open {}: {}", directory.display(), error))
 }
 
 // ---------------------------------------------------------------- sync model

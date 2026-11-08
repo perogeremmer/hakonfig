@@ -55,7 +55,7 @@ impl Doc {
         let exists = spec.path.exists();
         let before = if exists {
             std::fs::read_to_string(&spec.path)
-                .with_context(|| format!("gagal membaca {}", spec.path.display()))?
+                .with_context(|| format!("failed to read {}", spec.path.display()))?
         } else {
             String::new()
         };
@@ -154,14 +154,14 @@ impl Doc {
         }
         root.get_mut(key)
             .and_then(Value::as_array_mut)
-            .expect("baru saja dipastikan array")
+            .expect("just verified to be an array")
     }
 
     pub fn tree_mut(&mut self) -> &mut Value {
         self.dirty = true;
         match &mut self.payload {
             Payload::Tree(v) => v,
-            Payload::Text(_) => panic!("tree_mut tidak tersedia untuk format teks"),
+            Payload::Text(_) => panic!("tree_mut is not available for text format"),
         }
     }
 
@@ -173,7 +173,7 @@ impl Doc {
         }
         self.payload_value()
             .as_object_mut()
-            .expect("baru saja dipastikan object")
+            .expect("just verified to be an object")
     }
 
     /// Sub-object pada `key` di root. Dibuat bila belum ada.
@@ -185,13 +185,13 @@ impl Doc {
         }
         root.get_mut(key)
             .and_then(Value::as_object_mut)
-            .expect("baru saja dipastikan object")
+            .expect("just verified to be an object")
     }
 
     fn payload_value(&mut self) -> &mut Value {
         match &mut self.payload {
             Payload::Tree(v) => v,
-            Payload::Text(_) => panic!("payload_value tidak tersedia untuk format teks"),
+            Payload::Text(_) => panic!("payload_value is not available for text format"),
         }
     }
 
@@ -224,7 +224,10 @@ impl Doc {
     }
 
     pub fn parked_ids(&self) -> Vec<String> {
-        self.parked_blocks().into_iter().map(|(id, _, _)| id).collect()
+        self.parked_blocks()
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .collect()
     }
 
     pub fn parked_value(&self, id: &str) -> Option<Value> {
@@ -545,7 +548,7 @@ pub fn parse_json_like(text: &str) -> Result<Value> {
     match jsonc_parser::parse_to_serde_value(text, &options) {
         Ok(Some(value)) => Ok(value),
         Ok(None) => Ok(Value::Object(Map::new())),
-        Err(err) => Err(anyhow!("JSON tidak valid: {}", err)),
+        Err(err) => Err(anyhow!("invalid JSON: {}", err)),
     }
 }
 
@@ -553,7 +556,7 @@ pub fn parse_yaml(text: &str) -> Result<Value> {
     if text.trim().is_empty() {
         return Ok(Value::Object(Map::new()));
     }
-    let value: Value = serde_yaml::from_str(text).context("YAML tidak valid")?;
+    let value: Value = serde_yaml::from_str(text).context("invalid YAML")?;
     if value.is_null() {
         return Ok(Value::Object(Map::new()));
     }
@@ -640,12 +643,12 @@ impl Docs {
         self.items
             .iter_mut()
             .find(|d| d.role == role)
-            .ok_or_else(|| anyhow!("dokumen '{}' tidak tersedia untuk harness ini", role))
+            .ok_or_else(|| anyhow!("document '{}' is not available for this harness", role))
     }
 
     pub fn require(&self, role: &str) -> Result<&Doc> {
         self.get(role)
-            .ok_or_else(|| anyhow!("dokumen '{}' tidak tersedia untuk harness ini", role))
+            .ok_or_else(|| anyhow!("document '{}' is not available for this harness", role))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Doc> {
@@ -746,7 +749,7 @@ mod unit_tests {
     // ------------------------------------------------------------- parsing
 
     #[test]
-    fn parse_json_like_menerima_komentar_dan_trailing_comma() {
+    fn parse_json_like_accepts_comments_and_trailing_commas() {
         let text = r#"{
             // komentar baris
             /* komentar blok */
@@ -759,14 +762,14 @@ mod unit_tests {
     }
 
     #[test]
-    fn parse_json_like_menangani_kosong_dan_rusak() {
+    fn parse_json_like_handles_empty_and_broken_input() {
         assert!(parse_json_like("").unwrap().is_object());
         assert!(parse_json_like("   \n\t ").unwrap().is_object());
         assert!(parse_json_like("{ ini bukan json }").is_err());
     }
 
     #[test]
-    fn parse_yaml_menangani_kosong_null_dan_isi() {
+    fn parse_yaml_handles_empty_null_and_content() {
         assert!(parse_yaml("").unwrap().is_object());
         assert!(parse_yaml("null").unwrap().is_object());
         assert!(parse_yaml("~\n").unwrap().is_object());
@@ -778,16 +781,18 @@ mod unit_tests {
     // -------------------------------------------------- deteksi komentar
 
     #[test]
-    fn deteksi_komentar_json() {
+    fn detects_json_comments() {
         assert!(has_json_comments("{ // x\n }"));
         assert!(has_json_comments("{ /* x */ }"));
-        assert!(!has_json_comments(r#"{"url": "https://api.example.com/v1"}"#));
+        assert!(!has_json_comments(
+            r#"{"url": "https://api.example.com/v1"}"#
+        ));
         assert!(!has_json_comments(r#"{"a": "teks // bukan komentar"}"#));
         assert!(!has_json_comments(r#"{"a": 1}"#));
     }
 
     #[test]
-    fn deteksi_komentar_yaml() {
+    fn detects_yaml_comments() {
         assert!(has_yaml_comments("# komentar\n"));
         assert!(has_yaml_comments("  # komentar menjorok\n"));
         assert!(has_yaml_comments("color: #fff\n"));
@@ -799,7 +804,7 @@ mod unit_tests {
     // ------------------------------------------------------------ masking
 
     #[test]
-    fn mask_key_tidak_pernah_membocorkan_utuh() {
+    fn mask_key_never_leaks_the_full_value() {
         assert_eq!(mask_key("$GROQ_API_KEY"), "$GROQ_API_KEY");
         assert_eq!(mask_key("${GROQ_API_KEY}"), "${GROQ_API_KEY}");
         assert_eq!(mask_key("sk-abcdefghijklmnop"), "•••• mnop");
@@ -819,7 +824,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn env_name_dari_id() {
+    fn env_name_from_id() {
         assert_eq!(env_name_from("groq"), "GROQ_API_KEY");
         assert_eq!(env_name_from("opencode-go"), "OPENCODE_GO_API_KEY");
         assert_eq!(env_name_from("a.b_c"), "A_B_C_API_KEY");
@@ -829,7 +834,7 @@ mod unit_tests {
     // ------------------------------------------------------------ redaksi
 
     #[test]
-    fn redaksi_menyamarkan_field_rahasia() {
+    fn redaction_masks_secret_fields() {
         let input = serde_json::json!({
             "apiKey": "VALUE-apiKey",
             "key": "VALUE-key",
@@ -865,7 +870,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn redaksi_env_menjaga_komentar_dan_nama() {
+    fn env_redaction_keeps_comments_and_names() {
         let text = "# komentar\nA=rahasia\nB = \"dua kata\"\nTANPA_SAMA_DENGAN\n";
         let out = redact_env_text(text);
         assert!(out.contains("# komentar"));
@@ -878,7 +883,7 @@ mod unit_tests {
     // ------------------------------------------------------- dokumen .env
 
     #[test]
-    fn env_set_update_tidak_menduplikasi_dan_komentar_awet() {
+    fn env_set_update_does_not_duplicate_and_keeps_comments() {
         let dir = temp_dir("dotenv");
         let path = dir.join(".env");
         std::fs::write(&path, "# kredensial\nA=lama\nB=biarkan\n").unwrap();
@@ -896,7 +901,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn env_set_menambah_key_baru_di_akhir() {
+    fn env_set_appends_new_key_at_the_end() {
         let dir = temp_dir("dotenv-add");
         let path = dir.join(".env");
         std::fs::write(&path, "A=1\n").unwrap();
@@ -909,7 +914,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn env_set_mengutip_nilai_ber_spasi_dan_menghapus() {
+    fn env_set_quotes_spaced_values_and_removes_entries() {
         let dir = temp_dir("dotenv-quote");
         let path = dir.join(".env");
         std::fs::write(&path, "A=1\nB=2\n").unwrap();
@@ -926,7 +931,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn env_file_tidak_ada_dianggap_kosong() {
+    fn missing_env_file_is_treated_as_empty() {
         let dir = temp_dir("dotenv-missing");
         let doc = Doc::load(&spec(dir.join(".env"), Format::DotEnv)).unwrap();
         assert!(!doc.exists);
@@ -938,7 +943,7 @@ mod unit_tests {
     // -------------------------------------------------- dokumen JSON/YAML
 
     #[test]
-    fn dokumen_json_render_pretty_dan_is_changed_akurat() {
+    fn json_document_renders_pretty_and_is_changed_is_accurate() {
         let dir = temp_dir("json-doc");
         let path = dir.join("config.json");
         std::fs::write(&path, "{\"a\":1}").unwrap();
@@ -949,7 +954,7 @@ mod unit_tests {
         assert!(rendered.contains("\n  \"a\": 1"));
 
         // render identik dengan file → belum dianggap berubah
-        std::fs::write(&dir.join("config.json"), rendered.clone()).unwrap();
+        std::fs::write(dir.join("config.json"), rendered.clone()).unwrap();
         let mut reloaded = Doc::load(&spec(dir.join("config.json"), Format::Json)).unwrap();
         assert!(!reloaded.is_changed());
         reloaded.object_at("x").insert("y".into(), 1.into());
@@ -964,7 +969,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn dokumen_missing_tidak_pernah_dianggap_berubah_tanpa_mutasi() {
+    fn missing_document_is_never_changed_without_mutation() {
         let dir = temp_dir("json-missing");
         let doc = Doc::load(&spec(dir.join("x.json"), Format::Json)).unwrap();
         assert!(!doc.exists);
@@ -974,20 +979,21 @@ mod unit_tests {
     }
 
     #[test]
-    fn object_at_membuat_subobject_dan_mempertahankan_field_lain() {
+    fn object_at_creates_subobject_and_keeps_other_fields() {
         let dir = temp_dir("json-object-at");
         let path = dir.join("c.json");
         std::fs::write(&path, r#"{"providers":{"a":{"custom":1}}}"#).unwrap();
 
         let mut doc = Doc::load(&spec(path, Format::Json)).unwrap();
-        doc.object_at("providers").insert("b".into(), serde_json::json!({}));
+        doc.object_at("providers")
+            .insert("b".into(), serde_json::json!({}));
         let value: serde_json::Value = serde_json::from_str(&doc.render()).unwrap();
         assert_eq!(value["providers"]["a"]["custom"], 1);
         assert!(value["providers"]["b"].is_object());
     }
 
     #[test]
-    fn before_redacted_aman_untuk_file_rusak() {
+    fn before_is_redacted_safely_for_broken_file() {
         let dir = temp_dir("before-redacted");
         let path = dir.join("a.json");
         std::fs::write(&path, r#"{"key":"sk-rahasia"}"#).unwrap();
@@ -995,11 +1001,10 @@ mod unit_tests {
         let before = doc.before_redacted();
         assert!(!before.contains("sk-rahasia"));
         assert!(before.contains(MASK));
-
     }
 
     #[test]
-    fn file_rusak_gagal_dimuat_bukan_ditimpa() {
+    fn broken_file_fails_to_load_instead_of_being_overwritten() {
         // Keputusan desain: file yang tidak bisa diparse tidak boleh ditulis
         // ulang secara diam-diam - lebih baik gagal keras dan biarkan pengguna
         // memperbaikinya.

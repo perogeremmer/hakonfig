@@ -34,7 +34,7 @@ impl Adapter for OmpAdapter {
     }
 
     fn notes(&self) -> &'static str {
-        "Katalog di models.yml. Key ditulis pada field apiKey (tidak ada auth.json terpisah)."
+        "Catalog in models.yml. The key is written to the apiKey field (there is no separate auth.json)."
     }
 
     fn supports_toggle(&self) -> bool {
@@ -70,7 +70,7 @@ impl Adapter for OmpAdapter {
         let mut warnings = Vec::new();
         if models.has_comments {
             warnings.push(
-                "models.yml memuat komentar. Komentar tidak dipertahankan saat Hakonfig menulis (backup otomatis dibuat)."
+                "models.yml contains comments. Comments are not preserved when Hakonfig writes (a backup is created automatically)."
                     .to_string(),
             );
         }
@@ -159,16 +159,13 @@ impl Adapter for OmpAdapter {
                 let api_key_field = match (draft.key_value(), mode) {
                     (Some(key), KeyMode::Inline) => {
                         warnings.push(
-                            "Oh My Pi: API key ditulis plaintext di models.yml (file diberi permission 0600)."
+                            "Oh My Pi: the API key is written in plaintext to models.yml (the file is given permission 0600)."
                                 .to_string(),
                         );
                         Some(key.to_string())
                     }
                     (Some(_), KeyMode::Env) => {
-                        warnings.push(format!(
-                            "Mode environment: set variabel {} di shell kamu.",
-                            env_var
-                        ));
+                        warnings.push(format!("Environment mode: set {} in your shell.", env_var));
                         Some(format!("${}", env_var))
                     }
                     // Edit tanpa key baru: pertahankan apiKey yang sudah ada.
@@ -181,7 +178,7 @@ impl Adapter for OmpAdapter {
                     .insert(draft.id.trim().to_string(), entry);
 
                 if is_new && draft.key_value().is_none() {
-                    warnings.push("Provider dibuat tanpa API key.".to_string());
+                    warnings.push("Provider created without an API key.".to_string());
                 }
 
                 Ok(warnings)
@@ -198,7 +195,7 @@ impl Adapter for OmpAdapter {
                     .and_then(|p| p.get(&target))
                     .is_some();
                 if !known {
-                    anyhow::bail!("Provider '{}' tidak ditemukan di models.yml.", target);
+                    anyhow::bail!("Provider '{}' not found in models.yml.", target);
                 }
 
                 let settings = docs.require_mut("settings")?;
@@ -209,10 +206,10 @@ impl Adapter for OmpAdapter {
                 }
 
                 Ok(vec![if *enabled {
-                    format!("Provider '{}' diaktifkan kembali.", target)
+                    format!("Provider '{}' re-enabled.", target)
                 } else {
                     format!(
-                        "Provider '{}' dinonaktifkan (entry tetap ada di models.yml).",
+                        "Provider '{}' disabled (the entry stays in models.yml).",
                         target
                     )
                 }])
@@ -224,7 +221,7 @@ impl Adapter for OmpAdapter {
                 let provider = provider_id.trim().to_string();
                 let model = model_id.trim().to_string();
                 if provider.is_empty() || model.is_empty() {
-                    anyhow::bail!("Provider dan model wajib diisi.");
+                    anyhow::bail!("Provider and model are required.");
                 }
                 let reference = format!("{}/{}", provider, model);
                 let settings = docs.require_mut("settings")?;
@@ -249,16 +246,20 @@ impl Adapter for OmpAdapter {
 
                 if rescoped {
                     warnings.push(format!(
-                        "'{}' dipindah ke urutan pertama enabledModels: oh-my-pi memakai model pertama scope, bukan modelRoles.default, selama scope tidak kosong.",
+                        "'{}' moved to the first position of enabledModels: oh-my-pi uses the first model in the scope, not modelRoles.default, as long as the scope is not empty.",
                         reference
                     ));
                 }
                 warnings.insert(
                     0,
                     format!(
-                        "Default Oh My Pi: {} (ditulis ke config.yml{}).",
+                        "Oh My Pi default: {} (written to config.yml{}).",
                         reference,
-                        if rescoped { " dan urutan enabledModels" } else { "" }
+                        if rescoped {
+                            " dan urutan enabledModels"
+                        } else {
+                            ""
+                        }
                     ),
                 );
                 Ok(warnings)
@@ -278,10 +279,7 @@ impl Adapter for OmpAdapter {
                 }
                 let mut warnings = Vec::new();
                 if !removed {
-                    warnings.push(format!(
-                        "Provider '{}' tidak ditemukan di models.yml.",
-                        target
-                    ));
+                    warnings.push(format!("Provider '{}' not found in models.yml.", target));
                 }
                 Ok(warnings)
             }

@@ -23,5 +23,5 @@ fn main() {
             commands::open_external,
         ])
         .run(tauri::generate_context!())
-        .expect("gagal menjalankan Hakonfig");
+        .expect("failed to start Hakonfig");
 }

@@ -68,7 +68,7 @@ fn simulate(harness_id: &str, op: &EditOp) -> Result<(Box<dyn Adapter>, Docs, Ve
 
     for doc in docs.comment_files() {
         let message = format!(
-            "{} memuat komentar yang akan hilang setelah ditulis.",
+            "{} contains comments that will be lost after writing.",
             doc.path.display()
         );
         if !warnings.contains(&message) {
@@ -117,11 +117,11 @@ pub fn preview_edit(harness_id: String, op: EditOp) -> Result<PreviewResult, Str
         }
 
         if will_create.is_empty() && will_modify.is_empty() {
-            warnings.push("Tidak ada perubahan yang perlu ditulis.".to_string());
+            warnings.push("No changes to write.".to_string());
         }
         if redacted_any {
             warnings
-                .push("Nilai rahasia (API key, token) disamarkan pada pratinjau ini.".to_string());
+                .push("Secret values (API key, token) are redacted in this preview.".to_string());
         }
 
         Ok(PreviewResult {
@@ -158,7 +158,7 @@ pub fn apply_edit(harness_id: String, op: EditOp) -> Result<ApplyResult, String>
         let pruned = backup::prune(&adapter.backup_base(), backup::MAX_BACKUPS);
         if pruned > 0 {
             warnings.push(format!(
-                "{} backup lama dihapus. Maksimal {} backup disimpan per harness.",
+                "{} old backups removed. At most {} backups are kept per harness.",
                 pruned,
                 backup::MAX_BACKUPS
             ));
@@ -189,10 +189,7 @@ pub fn restore_backup(harness_id: String, backup_id: String) -> Result<ApplyResu
         let base = adapter.backup_base();
         let files = backup::restore(&base, &backup_id)?;
         if files.is_empty() {
-            bail!(
-                "backup '{}' tidak berisi file yang bisa dipulihkan",
-                backup_id
-            );
+            bail!("backup '{}' contains no restorable files", backup_id);
         }
 
         // Snapshot keadaan sekarang supaya restore juga bisa dibatalkan.
@@ -209,7 +206,7 @@ pub fn restore_backup(harness_id: String, backup_id: String) -> Result<ApplyResu
         Ok(ApplyResult {
             files_written,
             backup_dir: safety.map(|path| path.display().to_string()),
-            warnings: vec![format!("Dipulihkan dari backup {}.", backup_id)],
+            warnings: vec![format!("Restored from backup {}.", backup_id)],
         })
     })()
     .map_err(err)
@@ -254,7 +251,7 @@ pub async fn test_connection(
 ) -> Result<TestResult, String> {
     let base = base_url.trim().trim_end_matches('/').to_string();
     if base.is_empty() {
-        return Err("Base URL belum diisi.".to_string());
+        return Err("Base URL is empty.".to_string());
     }
     let resolved = request_key(&key, harness_id.as_deref(), provider_id.as_deref()).map_err(err)?;
     let url = format!("{}/models", base);
@@ -265,7 +262,7 @@ pub async fn test_connection(
         .build()
     {
         Ok(client) => client,
-        Err(error) => return Err(format!("gagal menyiapkan HTTP client: {}", error)),
+        Err(error) => return Err(format!("failed to build HTTP client: {}", error)),
     };
 
     let mut request = client.get(&url).header("Accept", "application/json");
@@ -283,7 +280,7 @@ pub async fn test_connection(
             return Ok(TestResult {
                 ok: false,
                 status: None,
-                message: format!("Tidak bisa menghubungi {}. {}", url, error),
+                message: format!("Could not reach {}. {}", url, error),
                 latency_ms: Some(started.elapsed().as_millis() as u64),
                 models_sample: Vec::new(),
             })
@@ -297,21 +294,21 @@ pub async fn test_connection(
     let models_sample = extract_model_ids(&body);
 
     let message = if status.is_success() {
-        format!("Koneksi berhasil (HTTP {}).", status.as_u16())
+        format!("Connection ok (HTTP {}).", status.as_u16())
     } else if status.as_u16() == 401 || status.as_u16() == 403 {
         format!(
-            "API key ditolak (HTTP {}). Periksa kembali key kamu.",
+            "API key rejected (HTTP {}). Check the key again.",
             status.as_u16()
         )
     } else if status.as_u16() == 404 {
         format!(
-            "Endpoint {} tidak ditemukan (404). Base URL mungkin salah; untuk OpenAI-compatible biasanya diakhiri /v1.",
+            "Endpoint {} not found (404). The base URL may be wrong; OpenAI-compatible endpoints usually end with /v1.",
             url
         )
     } else {
         let snippet: String = body.chars().take(240).collect();
         format!(
-            "Server membalas HTTP {}. {}",
+            "Server returned HTTP {}. {}",
             status.as_u16(),
             snippet.trim()
         )
@@ -405,7 +402,7 @@ pub async fn fetch_models(
 ) -> Result<Vec<ModelOption>, String> {
     let base = base_url.trim().trim_end_matches('/').to_string();
     if base.is_empty() {
-        return Err("Base URL belum diisi.".to_string());
+        return Err("Base URL is empty.".to_string());
     }
     let resolved = request_key(&key, harness_id.as_deref(), provider_id.as_deref()).map_err(err)?;
 
@@ -413,7 +410,7 @@ pub async fn fetch_models(
         .timeout(Duration::from_secs(25))
         .user_agent("hakonfig/0.1")
         .build()
-        .map_err(|error| format!("gagal menyiapkan HTTP client: {}", error))?;
+        .map_err(|error| format!("failed to build HTTP client: {}", error))?;
 
     let mut request = client
         .get(format!("{}/models", base))
@@ -428,20 +425,20 @@ pub async fn fetch_models(
     let response = request
         .send()
         .await
-        .map_err(|error| format!("tidak bisa menghubungi {}. {}", base, error))?;
+        .map_err(|error| format!("could not reach {}. {}", base, error))?;
 
     let status = response.status();
     let body = response.text().await.unwrap_or_default();
     if !status.is_success() {
         return Err(format!(
-            "endpoint membalas HTTP {}. {}",
+            "endpoint returned HTTP {}. {}",
             status.as_u16(),
             body.chars().take(200).collect::<String>().trim()
         ));
     }
 
     let value: Value = serde_json::from_str(&body)
-        .map_err(|_| "balasan endpoint bukan JSON yang dikenali.".to_string())?;
+        .map_err(|_| "endpoint response is not recognizable JSON.".to_string())?;
 
     let mut models: Vec<ModelOption> = Vec::new();
     for key_name in ["data", "models"] {

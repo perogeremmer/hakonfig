@@ -1,6 +1,5 @@
 //! Test integrasi engine pada sandbox (`HAKONFIG_ROOT`), sehingga config asli
 //! di mesin tidak pernah tersentuh.
-#![cfg(test)]
 
 use serde_json::Value;
 use std::fs;
@@ -62,7 +61,7 @@ fn stored_key(harness: &str, provider_id: &str) -> Option<String> {
 }
 
 #[test]
-fn ganti_default_model_per_harness() {
+fn change_default_model_per_harness() {
     let (_lock, root) = sandbox("defaults");
     let pi_dir = root.join("pi/agent");
     let omp_dir = root.join("omp/agent");
@@ -90,7 +89,10 @@ fn ganti_default_model_per_harness() {
     assert_eq!(snapshot("pi").default_provider.as_deref(), Some("groq"));
 
     // --- oh-my-pi: config.yml modelRoles.default
-    write(&omp_dir.join("config.yml"), "setupVersion: 2\nmodelRoles:\n  advisor: a/b\n  default: lama/m0\n");
+    write(
+        &omp_dir.join("config.yml"),
+        "setupVersion: 2\nmodelRoles:\n  advisor: a/b\n  default: lama/m0\n",
+    );
     api::apply_edit(
         "omp".into(),
         EditOp::SetDefault {
@@ -104,7 +106,10 @@ fn ganti_default_model_per_harness() {
     assert_eq!(cfg["modelRoles"]["advisor"], "a/b", "role lain tetap");
 
     // --- OpenCode: root "model"
-    write(&oc_dir.join("opencode.json"), r#"{"model":"lama/m0","theme":"x"}"#);
+    write(
+        &oc_dir.join("opencode.json"),
+        r#"{"model":"lama/m0","theme":"x"}"#,
+    );
     write(&oc_data.join("auth.json"), "{}");
     api::apply_edit(
         "opencode".into(),
@@ -143,8 +148,8 @@ fn ganti_default_model_per_harness() {
 }
 
 #[test]
-fn pi_merge_backup_dan_redaksi() {
-    let (_lock, root) = sandbox("pi_merge_backup_dan_redaksi");
+fn pi_merge_backup_and_redaction() {
+    let (_lock, root) = sandbox("pi_merge_backup_and_redaction");
     let dir = root.join("pi/agent");
 
     write(
@@ -175,7 +180,7 @@ fn pi_merge_backup_dan_redaksi() {
     assert_eq!(snap.providers.len(), 1);
     assert_eq!(snap.default_provider.as_deref(), Some("existing"));
     assert!(
-        snap.warnings.iter().any(|w| w.contains("komentar")),
+        snap.warnings.iter().any(|w| w.contains("comments")),
         "harus ada peringatan komentar: {:?}",
         snap.warnings
     );
@@ -256,7 +261,7 @@ fn pi_merge_backup_dan_redaksi() {
         !before.contains("sk-rahasia-1234"),
         "key lama bocor di pratinjau"
     );
-    assert!(preview.warnings.iter().any(|w| w.contains("disamarkan")));
+    assert!(preview.warnings.iter().any(|w| w.contains("redacted")));
 
     // --- endpoint junction: mode env menulis referensi $VAR
     api::apply_edit(
@@ -307,7 +312,7 @@ fn pi_merge_backup_dan_redaksi() {
 
 #[test]
 fn omp_yaml_merge() {
-    let (_lock, root) = sandbox("pi_merge_backup_dan_redaksi");
+    let (_lock, root) = sandbox("pi_merge_backup_and_redaction");
     let dir = root.join("omp/agent");
 
     write(
@@ -384,7 +389,7 @@ providers:
 }
 
 #[test]
-fn omp_toggle_nonaktif_reversible() {
+fn omp_disable_toggle_is_reversible() {
     let (_lock, root) = sandbox("omp-toggle");
     let dir = root.join("omp/agent");
 
@@ -411,7 +416,10 @@ fn omp_toggle_nonaktif_reversible() {
     let settings = yaml(&dir.join("config.yml"));
     assert_eq!(settings["disabledProviders"][0], "groq");
     let models = yaml(&dir.join("models.yml"));
-    assert!(models["providers"].get("groq").is_some(), "entry tidak boleh hilang");
+    assert!(
+        models["providers"].get("groq").is_some(),
+        "entry tidak boleh hilang"
+    );
     assert!(!snapshot("omp").providers[0].enabled);
 
     // nonaktifkan dua kali tidak menduplikasi
@@ -441,7 +449,7 @@ fn omp_toggle_nonaktif_reversible() {
 }
 
 #[test]
-fn pi_nonaktifkan_mengomentari_bukan_menghapus() {
+fn pi_disable_comments_out_instead_of_removing() {
     let (_lock, root) = sandbox("pi-park");
     let dir = root.join("pi/agent");
     write(
@@ -457,7 +465,10 @@ fn pi_nonaktifkan_mengomentari_bukan_menghapus() {
   }
 }"#,
     );
-    write(&dir.join("auth.json"), r#"{"groq":{"type":"api_key","key":"gsk-abc"}}"#);
+    write(
+        &dir.join("auth.json"),
+        r#"{"groq":{"type":"api_key","key":"gsk-abc"}}"#,
+    );
 
     let snap = snapshot("pi");
     assert!(snap.providers[0].enabled);
@@ -495,7 +506,11 @@ fn pi_nonaktifkan_mengomentari_bukan_menghapus() {
     assert!(!groq.enabled);
     assert!(groq.can_toggle);
     assert_eq!(groq.name, "Groq");
-    assert_eq!(groq.models.len(), 1, "model ikut terbaca dari blok komentar");
+    assert_eq!(
+        groq.models.len(),
+        1,
+        "model ikut terbaca dari blok komentar"
+    );
     assert!(groq.has_key);
 
     // aktifkan lagi -> kembali ke tree, komentar hilang
@@ -515,7 +530,7 @@ fn pi_nonaktifkan_mengomentari_bukan_menghapus() {
 }
 
 #[test]
-fn hapus_provider_nonaktif_membuang_blok_komentar() {
+fn removing_disabled_provider_drops_comment_block() {
     let (_lock, root) = sandbox("pi-park-delete");
     let dir = root.join("pi/agent");
     write(
@@ -544,13 +559,16 @@ fn hapus_provider_nonaktif_membuang_blok_komentar() {
     )
     .unwrap();
     let raw = std::fs::read_to_string(dir.join("models.json")).unwrap();
-    assert!(!raw.contains("hakonfig:disabled"), "blok parkir harus hilang: {raw}");
+    assert!(
+        !raw.contains("hakonfig:disabled"),
+        "blok parkir harus hilang: {raw}"
+    );
     assert!(!raw.contains("Groq"), "nama provider harus hilang: {raw}");
     assert!(snapshot("pi").providers.is_empty());
 }
 
 #[test]
-fn hermes_nonaktifkan_mengomentari_di_yaml() {
+fn hermes_disable_comments_out_in_yaml() {
     let (_lock, root) = sandbox("hermes-park");
     let dir = root.join("hermes");
     write(
@@ -568,7 +586,10 @@ fn hermes_nonaktifkan_mengomentari_di_yaml() {
     )
     .unwrap();
     let raw = std::fs::read_to_string(dir.join("config.yaml")).unwrap();
-    assert!(raw.contains("# hakonfig:disabled groq"), "yaml parkir: {raw}");
+    assert!(
+        raw.contains("# hakonfig:disabled groq"),
+        "yaml parkir: {raw}"
+    );
     let parsed: serde_json::Value = serde_yaml::from_str(&raw).unwrap();
     assert!(parsed["providers"].get("groq").is_none());
     // key di .env tetap
@@ -593,10 +614,9 @@ fn hermes_nonaktifkan_mengomentari_di_yaml() {
     assert_eq!(parsed["providers"]["groq"]["name"], "Groq");
 }
 
-
 #[test]
-fn opencode_provider_dan_auth() {
-    let (_lock, root) = sandbox("pi_merge_backup_dan_redaksi");
+fn opencode_provider_and_auth() {
+    let (_lock, root) = sandbox("pi_merge_backup_and_redaction");
     let config_dir = root.join("opencode/config");
     let data_dir = root.join("opencode/data");
 
@@ -714,8 +734,8 @@ fn opencode_provider_dan_auth() {
 }
 
 #[test]
-fn hermes_config_dan_env() {
-    let (_lock, root) = sandbox("pi_merge_backup_dan_redaksi");
+fn hermes_config_and_env() {
+    let (_lock, root) = sandbox("pi_merge_backup_and_redaction");
     let dir = root.join("hermes");
 
     write(
@@ -796,7 +816,7 @@ providers:
 }
 
 #[test]
-fn validasi_input_ditolak() {
+fn invalid_input_is_rejected() {
     let (_lock, _root) = sandbox("validasi");
     let mut bad = draft("Groq Salah!", Some("k"), KeyMode::Inline);
     assert!(api::preview_edit("pi".into(), EditOp::Upsert(bad.clone())).is_err());
@@ -813,7 +833,7 @@ fn validasi_input_ditolak() {
 // ------------------------------------------------------------ stored key
 
 #[test]
-fn stored_key_dibaca_per_adapter() {
+fn stored_key_is_read_per_adapter() {
     let (_lock, root) = sandbox("stored_key");
 
     // --- Pi: auth.json menang atas apiKey; apiKey boleh berupa $VAR.
@@ -879,7 +899,10 @@ fn stored_key_dibaca_per_adapter() {
         &root.join("opencode/data/auth.json"),
         r#"{ "login": { "type": "api", "key": "oc-auth" } }"#,
     );
-    assert_eq!(stored_key("opencode", "langsung").as_deref(), Some("oc-key"));
+    assert_eq!(
+        stored_key("opencode", "langsung").as_deref(),
+        Some("oc-key")
+    );
     assert_eq!(
         stored_key("opencode", "envvar").as_deref(),
         Some("$MY_KEY"),
@@ -913,7 +936,7 @@ fn stored_key_dibaca_per_adapter() {
 }
 
 #[test]
-fn stored_key_konsisten_dengan_has_key_snapshot() {
+fn stored_key_matches_snapshot_has_key() {
     let (_lock, root) = sandbox("stored_key_has_key");
     let pi = root.join("pi/agent");
     write(
@@ -936,7 +959,7 @@ fn stored_key_konsisten_dengan_has_key_snapshot() {
 }
 
 #[test]
-fn request_key_memakai_key_tersimpan_bila_kolom_kosong() {
+fn request_key_uses_stored_key_when_field_is_empty() {
     let (_lock, root) = sandbox("request_key");
     let pi = root.join("pi/agent");
     write(
@@ -976,7 +999,7 @@ fn request_key_memakai_key_tersimpan_bila_kolom_kosong() {
 // ------------------------------------------------- edit tanpa key baru
 
 #[test]
-fn edit_tanpa_key_baru_tidak_membuang_kredensial() {
+fn edit_without_new_key_keeps_credentials() {
     let (_lock, root) = sandbox("edit_tanpa_key");
 
     // --- Pi: apiKey inline di models.json harus selamat saat nama diganti.
@@ -1059,7 +1082,7 @@ fn edit_tanpa_key_baru_tidak_membuang_kredensial() {
 }
 
 #[test]
-fn key_baru_tetap_menimpa_key_lama() {
+fn new_key_still_overwrites_old_key() {
     let (_lock, root) = sandbox("edit_key_baru");
     let pi = root.join("pi/agent");
     write(
@@ -1068,7 +1091,11 @@ fn key_baru_tetap_menimpa_key_lama() {
     );
     write(&pi.join("auth.json"), "{}");
 
-    api::apply_edit("pi".into(), upsert("groq", Some("sk-baru"), KeyMode::Inline)).unwrap();
+    api::apply_edit(
+        "pi".into(),
+        upsert("groq", Some("sk-baru"), KeyMode::Inline),
+    )
+    .unwrap();
 
     // Inline → key pindah ke auth.json, apiKey lama dibersihkan.
     let auth = json(&pi.join("auth.json"));
@@ -1086,13 +1113,19 @@ fn key_baru_tetap_menimpa_key_lama() {
 }
 
 #[test]
-fn katalog_memuat_dsh_dan_openhands() {
+fn catalog_contains_dsh_and_openhands() {
     let entries = crate::engine::catalog::all();
     let ids: Vec<&str> = entries.iter().map(|e| e.id.as_str()).collect();
-    assert!(ids.contains(&"dsh"), "DeepSeek Harness harus ada di katalog");
+    assert!(
+        ids.contains(&"dsh"),
+        "DeepSeek Harness harus ada di katalog"
+    );
     assert!(ids.contains(&"openhands"), "openhands harus ada di katalog");
     // entri web chat yang lama tidak boleh kembali
-    assert!(!ids.contains(&"deepseek"), "web chat bukan harness, jangan didaftarkan");
+    assert!(
+        !ids.contains(&"deepseek"),
+        "web chat bukan harness, jangan didaftarkan"
+    );
 
     let dsh = crate::engine::catalog::get("dsh").unwrap();
     assert_eq!(dsh.name, "DeepSeek Harness");
@@ -1111,7 +1144,7 @@ fn katalog_memuat_dsh_dan_openhands() {
 }
 
 #[test]
-fn default_pi_ikut_masuk_scope_enabled_models() {
+fn default_pi_write_also_updates_enabled_models() {
     // Pi memakai model pertama dari `enabledModels` selama scope tidak kosong,
     // jadi menulis defaultProvider/defaultModel saja tidak cukup.
     let (_lock, root) = sandbox("pi_default_scope");
@@ -1152,16 +1185,22 @@ fn default_pi_ikut_masuk_scope_enabled_models() {
         "model default harus jadi entri pertama scope: {scope:?}"
     );
     assert_eq!(
-        scope.iter().filter(|item| **item == "deepseek/deepseek-flash").count(),
+        scope
+            .iter()
+            .filter(|item| **item == "deepseek/deepseek-flash")
+            .count(),
         1,
         "tidak boleh ada duplikat: {scope:?}"
     );
     // entri glob yang lama tetap ada
-    assert!(scope.contains(&"commandcode/*"), "scope lama hilang: {scope:?}");
+    assert!(
+        scope.contains(&"commandcode/*"),
+        "scope lama hilang: {scope:?}"
+    );
 }
 
 #[test]
-fn default_pi_tanpa_scope_tidak_membuat_enabled_models() {
+fn default_pi_without_scope_does_not_create_enabled_models() {
     let (_lock, root) = sandbox("pi_default_no_scope");
     let dir = root.join("pi/agent");
     write(
@@ -1189,7 +1228,7 @@ fn default_pi_tanpa_scope_tidak_membuat_enabled_models() {
 }
 
 #[test]
-fn default_omp_ikut_masuk_scope_enabled_models() {
+fn default_omp_write_also_updates_enabled_models() {
     // oh-my-pi adalah turunan Pi: model pertama scope `enabledModels` menang
     // atas `modelRoles.default`, jadi default harus dipindah ke urutan pertama.
     let (_lock, root) = sandbox("omp_default_scope");
@@ -1213,10 +1252,7 @@ fn default_omp_ikut_masuk_scope_enabled_models() {
     .unwrap();
 
     let settings = yaml(&dir.join("config.yml"));
-    assert_eq!(
-        settings["modelRoles"]["default"],
-        "deepseek/deepseek-flash"
-    );
+    assert_eq!(settings["modelRoles"]["default"], "deepseek/deepseek-flash");
     let scope: Vec<&str> = settings["enabledModels"]
         .as_array()
         .expect("enabledModels tetap list")
@@ -1229,15 +1265,21 @@ fn default_omp_ikut_masuk_scope_enabled_models() {
         "default harus jadi entri pertama scope: {scope:?}"
     );
     assert_eq!(
-        scope.iter().filter(|item| **item == "deepseek/deepseek-flash").count(),
+        scope
+            .iter()
+            .filter(|item| **item == "deepseek/deepseek-flash")
+            .count(),
         1,
         "tidak boleh duplikat: {scope:?}"
     );
-    assert!(scope.contains(&"commandcode/*"), "scope lama hilang: {scope:?}");
+    assert!(
+        scope.contains(&"commandcode/*"),
+        "scope lama hilang: {scope:?}"
+    );
 }
 
 #[test]
-fn default_omp_tanpa_scope_tidak_mengarang_enabled_models() {
+fn default_omp_without_scope_does_not_invent_enabled_models() {
     let (_lock, root) = sandbox("omp_default_no_scope");
     let dir = root.join("omp/agent");
     write(
