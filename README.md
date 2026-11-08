@@ -149,9 +149,35 @@ The engine ships as a standalone binary, `hakonfig-cli`, for servers, scripts,
 and anyone who prefers a terminal. It calls the exact same `hakonfig_core::api`
 as the desktop app, so writes, backups, and redaction behave identically.
 
-```bash
-cargo install --path src-tauri/crates/cli   # from a source checkout
+### Install
 
+macOS and Linux (bash/zsh):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/perogeremmer/hakonfig/master/scripts/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/perogeremmer/hakonfig/master/scripts/install.ps1 | iex
+```
+
+Also available as:
+
+| Channel | Command |
+|---|---|
+| Homebrew (macOS/Linux) | `brew install perogeremmer/tap/hakonfig-cli` |
+| npm | `npm i -g hakonfig` (or one-off: `bunx hakonfig-cli list`) |
+| crates.io | `cargo install hakonfig-cli` |
+
+Installs go to `~/.local/bin` (override with `HAKONFIG_INSTALL_DIR`); binaries
+are checksum-verified against the release's `SHA256SUMS` before anything is
+written. The script follows the latest **published** release, not drafts.
+
+### Usage
+
+```bash
 hakonfig-cli list                           # what is installed, with versions
 hakonfig-cli show pi                        # current providers of one tool
 hakonfig-cli providers --search groq        # browse the preset catalog

@@ -13,8 +13,17 @@ file oleh `scripts/version.mjs`.
   `list`, `show`, `providers`, `paths`, `add` (wizard interaktif atau
   non-interaktif penuh untuk skrip/server), dengan `--json` untuk output
   yang stabil. Dokumentasi ada di `docs/CLI.md`.
+- Instalasi CLI satu perintah: `install.sh` (macOS/Linux) dan `install.ps1`
+  (Windows) yang mengunduh binary release, memverifikasi `SHA256SUMS`, dan
+  memasang ke `~/.local/bin`. Jalur lain: Homebrew tap
+  (`brew install perogeremmer/tap/hakonfig-cli`), npm (`npm i -g hakonfig`,
+  paket `hakonfig` dengan binary per-platform), dan crates.io
+  (`cargo install hakonfig-cli`).
 - Release workflow kini mengunggah binary `hakonfig-cli` per platform
-  (macOS universal, Linux, Windows) ke draft release yang sama.
+  (macOS universal, Linux, Windows) plus `SHA256SUMS` ke draft release,
+  lalu mem-publish ke npm dan crates.io (dilewati dengan pesan jelas bila
+  secret-nya belum di-set). Workflow `homebrew-tap.yml` (manual, per tag)
+  menulis ulang formula di `perogeremmer/homebrew-tap`.
 - CI kini menjalankan `cargo clippy -D warnings` dan `cargo fmt --check`.
 
 ### Changed

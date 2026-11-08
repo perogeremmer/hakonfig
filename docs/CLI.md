@@ -6,11 +6,30 @@ behave identically to the GUI.
 
 ## Install
 
+macOS and Linux:
+
 ```bash
-cargo install --path src-tauri/crates/cli   # from a source checkout
+curl -fsSL https://raw.githubusercontent.com/perogeremmer/hakonfig/master/scripts/install.sh | sh
 ```
 
-Prebuilt binaries (`hakonfig-cli-<target>`) are attached to every release.
+Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/perogeremmer/hakonfig/master/scripts/install.ps1 | iex
+```
+
+Other channels:
+
+| Channel | Command |
+|---|---|
+| Homebrew | `brew install perogeremmer/tap/hakonfig-cli` |
+| npm | `npm i -g hakonfig` |
+| crates.io | `cargo install hakonfig-cli` |
+
+The install scripts download the binary from the latest **published** release,
+verify it against the release's `SHA256SUMS`, and install into
+`~/.local/bin` (override with `HAKONFIG_INSTALL_DIR`). A specific version can
+be installed by passing the tag, e.g. `install.sh v0.4.0`.
 
 ## Global flags
 

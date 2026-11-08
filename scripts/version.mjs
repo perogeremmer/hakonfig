@@ -70,6 +70,8 @@ function collect() {
     cargo: cargoVersion(FILES.cargo),
     core: cargoVersion(FILES.core),
     cli: cargoVersion(FILES.cli),
+    cliDepCore: /hakonfig-core = \{[^}]*version = "([^"]+)"/
+      .exec(readFileSync(FILES.cli, "utf8"))?.[1],
     tauri,
     web,
     lock: lockVersion(lockText, "hakonfig"),
@@ -105,7 +107,13 @@ function write(next) {
     } catch {
       continue;
     }
-    writeFileSync(manifest, text.replace(/^version = "[^"]+"/m, `version = "${next}"`));
+    let patched = text.replace(/^version = "[^"]+"/m, `version = "${next}"`);
+    // Dep versi untuk crates.io: CLI bergantung pada core dengan versi sama.
+    patched = patched.replace(
+      /(hakonfig-core = \{[^}]*version = ")[^"]+(")/,
+      `$1${next}$2`,
+    );
+    writeFileSync(manifest, patched);
   }
 
   // tauri.conf.json

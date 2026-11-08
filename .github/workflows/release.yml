@@ -166,3 +166,68 @@ jobs:
 
           gh release upload "$TAG" "$ASSET" --clobber --repo "$GITHUB_REPOSITORY"
           echo "terunggah: $ASSET"
+
+  # Setelah semua aset CLI terkumpul di draft release: checksums untuk
+  # installer, package npm, dan crate crates.io. Dua yang terakhir dilewati
+  # dengan pesan jelas kalau secret-nya belum di-set, jadi release desktop
+  # tidak pernah terhalang oleh distribusi opsional.
+  publish-cli:
+    name: "CLI: checksums, npm, crates.io"
+    needs: [guard, build]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Unduh aset CLI dari draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p dist
+          gh release download "v${{ needs.guard.outputs.version }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern 'hakonfig-cli-*' \
+            --dir dist
+          ls -la dist
+
+      - name: Buat & unggah SHA256SUMS
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd dist
+          sha256sum hakonfig-cli-* > SHA256SUMS
+          cat SHA256SUMS
+          gh release upload "v${{ needs.guard.outputs.version }}" \
+            SHA256SUMS --clobber --repo "$GITHUB_REPOSITORY"
+
+      - name: Publish ke npm (hakonfig + platform packages)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::notice::NPM_TOKEN belum di-set; publish npm dilewati."
+            exit 0
+          fi
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          node scripts/publish-npm.mjs \
+            dist/hakonfig-cli-universal-apple-darwin \
+            dist/hakonfig-cli-x86_64-unknown-linux-gnu \
+            dist/hakonfig-cli-x86_64-pc-windows-msvc.exe
+
+      - name: Publish ke crates.io (hakonfig-core + hakonfig-cli)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::notice::CARGO_REGISTRY_TOKEN belum di-set; publish crates.io dilewati."
+            exit 0
+          fi
+          cd src-tauri
+          cargo publish -p hakonfig-core
+          # crates.io perlu waktu mengindeks core sebelum cli bisa memvalidasi
+          # dependency-nya.
+          sleep 30
+          cargo publish -p hakonfig-cli

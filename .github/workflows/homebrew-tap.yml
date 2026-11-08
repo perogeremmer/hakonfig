@@ -1,0 +1,63 @@
+name: Homebrew tap
+
+# Jalankan SETELAH sebuah release di-publish (draft -> publish):
+#   gh workflow run homebrew-tap.yml -f tag=v0.4.0
+#
+# Workflow ini menulis ulang Formula/hakonfig-cli.rb di repo
+# perogeremmer/homebrew-tap dengan url + sha256 aset release tersebut.
+#
+# Butuh secret HOMEBREW_TAP_TOKEN: PAT (scope repo) yang boleh men-push
+# ke repo tap. Tanpa itu, job berhenti dengan pesan yang jelas.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag release yang sudah di-publish (mis. v0.4.0)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  update-formula:
+    name: Update formula di homebrew-tap
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Cek token tap
+        env:
+          HAS_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::error::Secret HOMEBREW_TAP_TOKEN belum di-set. Buat PAT dengan scope repo, lalu:"
+            echo "  gh secret set HOMEBREW_TAP_TOKEN --repo $GITHUB_REPOSITORY"
+            exit 1
+          fi
+
+      - name: Buat formula dari aset release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node scripts/gen-homebrew-formula.mjs "${{ inputs.tag }}" > /tmp/hakonfig-cli.rb
+          head -20 /tmp/hakonfig-cli.rb
+
+      - name: Push ke perogeremmer/homebrew-tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          git config --global user.name "hakonfig-release-bot"
+          git config --global user.email "noreply@github.com"
+          git clone https://x-access-token:"$TAP_TOKEN"@github.com/perogeremmer/homebrew-tap.git tap
+          mkdir -p tap/Formula
+          cp /tmp/hakonfig-cli.rb tap/Formula/hakonfig-cli.rb
+          cd tap
+          if git diff --quiet; then
+            echo "formula tidak berubah; tidak ada yang di-push"
+            exit 0
+          fi
+          git add Formula/hakonfig-cli.rb
+          git commit -m "hakonfig-cli ${{ inputs.tag }}"
+          git push
