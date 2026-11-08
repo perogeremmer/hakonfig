@@ -6,7 +6,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
-use crate::commands;
+use crate::api;
 use crate::engine::adapters;
 use crate::engine::doc::Docs;
 use crate::engine::model::{EditOp, KeyMode, ModelDraft, ProviderDraft};
@@ -75,7 +75,7 @@ fn ganti_default_model_per_harness() {
         &pi_dir.join("settings.json"),
         r#"{"theme":"dark","defaultProvider":"lama","defaultModel":"lama/m0"}"#,
     );
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::SetDefault {
             provider_id: "groq".to_string(),
@@ -91,7 +91,7 @@ fn ganti_default_model_per_harness() {
 
     // --- oh-my-pi: config.yml modelRoles.default
     write(&omp_dir.join("config.yml"), "setupVersion: 2\nmodelRoles:\n  advisor: a/b\n  default: lama/m0\n");
-    commands::apply_edit(
+    api::apply_edit(
         "omp".into(),
         EditOp::SetDefault {
             provider_id: "opencode-go".to_string(),
@@ -106,7 +106,7 @@ fn ganti_default_model_per_harness() {
     // --- OpenCode: root "model"
     write(&oc_dir.join("opencode.json"), r#"{"model":"lama/m0","theme":"x"}"#);
     write(&oc_data.join("auth.json"), "{}");
-    commands::apply_edit(
+    api::apply_edit(
         "opencode".into(),
         EditOp::SetDefault {
             provider_id: "deepseek".to_string(),
@@ -124,7 +124,7 @@ fn ganti_default_model_per_harness() {
         "model:\n  default: lama/m0\n  provider: custom:lama\nproviders:\n  groq:\n    name: Groq\n    base_url: https://api.groq.com/openai/v1\n    key_env: GROQ_API_KEY\n    api_mode: chat_completions\n",
     );
     write(&hm_dir.join(".env"), "");
-    commands::apply_edit(
+    api::apply_edit(
         "hermes".into(),
         EditOp::SetDefault {
             provider_id: "groq".to_string(),
@@ -181,7 +181,7 @@ fn pi_merge_backup_dan_redaksi() {
     );
 
     // --- tulis provider baru (key inline)
-    let result = commands::apply_edit(
+    let result = api::apply_edit(
         "pi".into(),
         upsert("groq", Some("sk-rahasia-1234"), KeyMode::Inline),
     )
@@ -235,7 +235,7 @@ fn pi_merge_backup_dan_redaksi() {
     assert_eq!(auth["groq"]["key"], "sk-rahasia-1234");
 
     // --- pratinjau tidak boleh membocorkan key
-    let preview = commands::preview_edit(
+    let preview = api::preview_edit(
         "pi".into(),
         upsert("groq", Some("sk-baru-9999"), KeyMode::Inline),
     )
@@ -259,7 +259,7 @@ fn pi_merge_backup_dan_redaksi() {
     assert!(preview.warnings.iter().any(|w| w.contains("disamarkan")));
 
     // --- endpoint junction: mode env menulis referensi $VAR
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         upsert("groq-env", Some("apa-saja"), KeyMode::Env),
     )
@@ -273,7 +273,7 @@ fn pi_merge_backup_dan_redaksi() {
     assert!(auth.get("groq-env").is_none());
 
     // --- hapus provider
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::Remove {
             provider_id: "groq".to_string(),
@@ -287,7 +287,7 @@ fn pi_merge_backup_dan_redaksi() {
     assert!(auth.get("groq").is_none());
 
     // --- hapus provider yang tidak ada: tidak boleh mengubah apa pun
-    let preview = commands::preview_edit(
+    let preview = api::preview_edit(
         "pi".into(),
         EditOp::Remove {
             provider_id: "tidak-ada".to_string(),
@@ -297,9 +297,9 @@ fn pi_merge_backup_dan_redaksi() {
     assert!(preview.files.iter().all(|file| !file.changed));
 
     // --- backup bisa dipulihkan
-    let backups = commands::list_backups("pi".into()).unwrap();
+    let backups = api::list_backups("pi".into()).unwrap();
     assert!(!backups.is_empty(), "harus ada backup");
-    let restored = commands::restore_backup("pi".into(), backups[0].id.clone()).unwrap();
+    let restored = api::restore_backup("pi".into(), backups[0].id.clone()).unwrap();
     assert!(!restored.files_written.is_empty());
     // backup restore sendiri juga memicu backup baru
     assert!(restored.backup_dir.is_some());
@@ -335,7 +335,7 @@ providers:
     assert_eq!(snap.providers.len(), 1);
     assert_eq!(snap.default_provider.as_deref(), Some("existing"));
 
-    commands::apply_edit(
+    api::apply_edit(
         "omp".into(),
         upsert("groq", Some("gsk-rahasia"), KeyMode::Inline),
     )
@@ -365,7 +365,7 @@ providers:
     }
 
     // pratinjau menyamarkan apiKey
-    let preview = commands::preview_edit(
+    let preview = api::preview_edit(
         "omp".into(),
         upsert("groq", Some("gsk-baru"), KeyMode::Inline),
     )
@@ -400,7 +400,7 @@ fn omp_toggle_nonaktif_reversible() {
     assert!(snap.providers[0].can_toggle);
 
     // nonaktifkan → tercatat di disabledProviders, entry tetap ada
-    commands::apply_edit(
+    api::apply_edit(
         "omp".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -415,7 +415,7 @@ fn omp_toggle_nonaktif_reversible() {
     assert!(!snapshot("omp").providers[0].enabled);
 
     // nonaktifkan dua kali tidak menduplikasi
-    commands::apply_edit(
+    api::apply_edit(
         "omp".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -427,7 +427,7 @@ fn omp_toggle_nonaktif_reversible() {
     assert_eq!(settings["disabledProviders"].as_array().unwrap().len(), 1);
 
     // aktifkan lagi → daftar bersih
-    commands::apply_edit(
+    api::apply_edit(
         "omp".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -464,7 +464,7 @@ fn pi_nonaktifkan_mengomentari_bukan_menghapus() {
     assert!(snap.providers[0].can_toggle, "Pi sekarang mendukung toggle");
 
     // nonaktifkan
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -499,7 +499,7 @@ fn pi_nonaktifkan_mengomentari_bukan_menghapus() {
     assert!(groq.has_key);
 
     // aktifkan lagi -> kembali ke tree, komentar hilang
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -523,7 +523,7 @@ fn hapus_provider_nonaktif_membuang_blok_komentar() {
         r#"{"providers":{"groq":{"name":"Groq","baseUrl":"https://x/v1","api":"openai-completions"}}}"#,
     );
 
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -536,7 +536,7 @@ fn hapus_provider_nonaktif_membuang_blok_komentar() {
         .contains("hakonfig:disabled"));
 
     // hapus = benar-benar buang, termasuk blok komentarnya
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::Remove {
             provider_id: "groq".to_string(),
@@ -559,7 +559,7 @@ fn hermes_nonaktifkan_mengomentari_di_yaml() {
     );
     write(&dir.join(".env"), "GROQ_API_KEY=gsk-abc\n");
 
-    commands::apply_edit(
+    api::apply_edit(
         "hermes".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -579,7 +579,7 @@ fn hermes_nonaktifkan_mengomentari_di_yaml() {
     let snap = snapshot("hermes");
     assert!(!snap.providers[0].enabled);
 
-    commands::apply_edit(
+    api::apply_edit(
         "hermes".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -627,7 +627,7 @@ fn opencode_provider_dan_auth() {
     assert_eq!(snap.providers[0].models[0].id, "m1");
     assert_eq!(snap.default_model.as_deref(), Some("m1"));
 
-    commands::apply_edit(
+    api::apply_edit(
         "opencode".into(),
         upsert("groq", Some("gsk-oc-rahasia"), KeyMode::Inline),
     )
@@ -668,7 +668,7 @@ fn opencode_provider_dan_auth() {
 
     // toggle nonaktif: entry tetap ada, tercatat di disabled_providers
     assert!(snapshot("opencode").providers.iter().all(|p| p.enabled));
-    commands::apply_edit(
+    api::apply_edit(
         "opencode".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -687,7 +687,7 @@ fn opencode_provider_dan_auth() {
     assert!(!groq.enabled);
     assert!(groq.can_toggle);
 
-    commands::apply_edit(
+    api::apply_edit(
         "opencode".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -699,7 +699,7 @@ fn opencode_provider_dan_auth() {
     assert_eq!(config["disabled_providers"].as_array().unwrap().len(), 0);
 
     // hapus
-    commands::apply_edit(
+    api::apply_edit(
         "opencode".into(),
         EditOp::Remove {
             provider_id: "groq".to_string(),
@@ -741,7 +741,7 @@ providers:
     assert_eq!(snap.default_provider.as_deref(), Some("existing"));
     assert!(snap.providers[0].has_key);
 
-    commands::apply_edit(
+    api::apply_edit(
         "hermes".into(),
         upsert("groq", Some("gsk-hermes"), KeyMode::Inline),
     )
@@ -771,7 +771,7 @@ providers:
     );
 
     // mengganti key yang sama tidak menduplikasi baris
-    commands::apply_edit(
+    api::apply_edit(
         "hermes".into(),
         upsert("groq", Some("gsk-hermes-baru"), KeyMode::Inline),
     )
@@ -781,7 +781,7 @@ providers:
     assert!(env.contains("GROQ_API_KEY=gsk-hermes-baru"));
 
     // hapus provider ikut membersihkan env-nya
-    commands::apply_edit(
+    api::apply_edit(
         "hermes".into(),
         EditOp::Remove {
             provider_id: "groq".to_string(),
@@ -799,15 +799,15 @@ providers:
 fn validasi_input_ditolak() {
     let (_lock, _root) = sandbox("validasi");
     let mut bad = draft("Groq Salah!", Some("k"), KeyMode::Inline);
-    assert!(commands::preview_edit("pi".into(), EditOp::Upsert(bad.clone())).is_err());
+    assert!(api::preview_edit("pi".into(), EditOp::Upsert(bad.clone())).is_err());
 
     bad = draft("groq", Some("k"), KeyMode::Inline);
     bad.base_url = "api.example.com".to_string();
-    assert!(commands::preview_edit("pi".into(), EditOp::Upsert(bad.clone())).is_err());
+    assert!(api::preview_edit("pi".into(), EditOp::Upsert(bad.clone())).is_err());
 
     bad = draft("groq", Some("k"), KeyMode::Inline);
     bad.models.clear();
-    assert!(commands::preview_edit("pi".into(), EditOp::Upsert(bad)).is_err());
+    assert!(api::preview_edit("pi".into(), EditOp::Upsert(bad)).is_err());
 }
 
 // ------------------------------------------------------------ stored key
@@ -842,7 +842,7 @@ fn stored_key_dibaca_per_adapter() {
     assert_eq!(stored_key("pi", "tidak-ada"), None);
 
     // Provider yang dinonaktifkan (dikomentari) tetap punya key tersimpan.
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::SetEnabled {
             provider_id: "groq".to_string(),
@@ -950,25 +950,25 @@ fn request_key_memakai_key_tersimpan_bila_kolom_kosong() {
 
     // key yang diketik pengguna selalu menang
     assert_eq!(
-        commands::request_key("diketik", Some("pi"), Some("dari-file")).unwrap(),
+        api::request_key("diketik", Some("pi"), Some("dari-file")).unwrap(),
         "diketik"
     );
     // kolom kosong → baca dari config
     assert_eq!(
-        commands::request_key("   ", Some("pi"), Some("dari-file")).unwrap(),
+        api::request_key("   ", Some("pi"), Some("dari-file")).unwrap(),
         "file-key"
     );
     // $VAR di-resolve dari environment
     std::env::set_var("HAKONFIG_TEST_KEY", "env-key");
     assert_eq!(
-        commands::request_key("", Some("pi"), Some("dari-env")).unwrap(),
+        api::request_key("", Some("pi"), Some("dari-env")).unwrap(),
         "env-key"
     );
     std::env::remove_var("HAKONFIG_TEST_KEY");
     // tanpa identitas provider / provider tak dikenal → kosong, bukan error
-    assert_eq!(commands::request_key("", None, None).unwrap(), "");
+    assert_eq!(api::request_key("", None, None).unwrap(), "");
     assert_eq!(
-        commands::request_key("", Some("pi"), Some("tidak-ada")).unwrap(),
+        api::request_key("", Some("pi"), Some("tidak-ada")).unwrap(),
         ""
     );
 }
@@ -992,7 +992,7 @@ fn edit_tanpa_key_baru_tidak_membuang_kredensial() {
 
     let mut renamed = draft("inline", None, KeyMode::Inline);
     renamed.name = "Nama Baru".to_string();
-    commands::apply_edit("pi".into(), EditOp::Upsert(renamed)).unwrap();
+    api::apply_edit("pi".into(), EditOp::Upsert(renamed)).unwrap();
 
     let models = json(&pi.join("models.json"));
     assert_eq!(
@@ -1009,7 +1009,7 @@ fn edit_tanpa_key_baru_tidak_membuang_kredensial() {
     // Referensi environment juga tidak boleh dihapus.
     let mut env_edit = draft("envref", None, KeyMode::Inline);
     env_edit.name = "Env Baru".to_string();
-    commands::apply_edit("pi".into(), EditOp::Upsert(env_edit)).unwrap();
+    api::apply_edit("pi".into(), EditOp::Upsert(env_edit)).unwrap();
     let models = json(&pi.join("models.json"));
     assert_eq!(models["providers"]["envref"]["apiKey"], "$ENVREF_API_KEY");
 
@@ -1026,7 +1026,7 @@ fn edit_tanpa_key_baru_tidak_membuang_kredensial() {
 
     let mut oc_edit = draft("langsung", None, KeyMode::Inline);
     oc_edit.name = "Langsung Baru".to_string();
-    commands::apply_edit("opencode".into(), EditOp::Upsert(oc_edit)).unwrap();
+    api::apply_edit("opencode".into(), EditOp::Upsert(oc_edit)).unwrap();
 
     let config = json(&oc.join("opencode.json"));
     assert_eq!(
@@ -1037,7 +1037,7 @@ fn edit_tanpa_key_baru_tidak_membuang_kredensial() {
 
     let mut oc_env = draft("envvar", None, KeyMode::Inline);
     oc_env.name = "Envvar Baru".to_string();
-    commands::apply_edit("opencode".into(), EditOp::Upsert(oc_env)).unwrap();
+    api::apply_edit("opencode".into(), EditOp::Upsert(oc_env)).unwrap();
     let config = json(&oc.join("opencode.json"));
     assert_eq!(
         config["provider"]["envvar"]["env"][0], "OC_KEY",
@@ -1053,7 +1053,7 @@ fn edit_tanpa_key_baru_tidak_membuang_kredensial() {
     write(&hermes.join(".env"), "TOG_API_KEY=tok-asli\n");
     let mut h_edit = draft("tog", None, KeyMode::Inline);
     h_edit.name = "Tog Baru".to_string();
-    commands::apply_edit("hermes".into(), EditOp::Upsert(h_edit)).unwrap();
+    api::apply_edit("hermes".into(), EditOp::Upsert(h_edit)).unwrap();
     let env = fs::read_to_string(hermes.join(".env")).unwrap();
     assert!(env.contains("TOG_API_KEY=tok-asli"), "env: {env}");
 }
@@ -1068,7 +1068,7 @@ fn key_baru_tetap_menimpa_key_lama() {
     );
     write(&pi.join("auth.json"), "{}");
 
-    commands::apply_edit("pi".into(), upsert("groq", Some("sk-baru"), KeyMode::Inline)).unwrap();
+    api::apply_edit("pi".into(), upsert("groq", Some("sk-baru"), KeyMode::Inline)).unwrap();
 
     // Inline → key pindah ke auth.json, apiKey lama dibersihkan.
     let auth = json(&pi.join("auth.json"));
@@ -1078,7 +1078,7 @@ fn key_baru_tetap_menimpa_key_lama() {
     assert_eq!(stored_key("pi", "groq").as_deref(), Some("sk-baru"));
 
     // Mode env → apiKey jadi referensi $VAR.
-    commands::apply_edit("pi".into(), upsert("groq", Some("apa saja"), KeyMode::Env)).unwrap();
+    api::apply_edit("pi".into(), upsert("groq", Some("apa saja"), KeyMode::Env)).unwrap();
     let models = json(&pi.join("models.json"));
     assert_eq!(models["providers"]["groq"]["apiKey"], "$GROQ_API_KEY");
     let auth = json(&pi.join("auth.json"));
@@ -1127,7 +1127,7 @@ fn default_pi_ikut_masuk_scope_enabled_models() {
         "enabledModels": ["commandcode/*", "deepseek/*"] }"#,
     );
 
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::SetDefault {
             provider_id: "deepseek".to_string(),
@@ -1171,7 +1171,7 @@ fn default_pi_tanpa_scope_tidak_membuat_enabled_models() {
     write(&dir.join("auth.json"), "{}");
     write(&dir.join("settings.json"), r#"{ "theme": "dark" }"#);
 
-    commands::apply_edit(
+    api::apply_edit(
         "pi".into(),
         EditOp::SetDefault {
             provider_id: "groq".to_string(),
@@ -1203,7 +1203,7 @@ fn default_omp_ikut_masuk_scope_enabled_models() {
         "modelRoles:\n  default: commandcode/claude-sonnet-5-5\nenabledModels:\n  - commandcode/*\n  - deepseek/*\n",
     );
 
-    commands::apply_edit(
+    api::apply_edit(
         "omp".into(),
         EditOp::SetDefault {
             provider_id: "deepseek".to_string(),
@@ -1246,7 +1246,7 @@ fn default_omp_tanpa_scope_tidak_mengarang_enabled_models() {
     );
     write(&dir.join("config.yml"), "theme: dark\n");
 
-    commands::apply_edit(
+    api::apply_edit(
         "omp".into(),
         EditOp::SetDefault {
             provider_id: "groq".to_string(),

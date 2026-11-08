@@ -62,10 +62,10 @@ jobs:
           workspaces: src-tauri
 
       - name: cargo test
-        run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --workspace
 
       - name: cargo check (bundle binary)
-        run: cargo check --manifest-path src-tauri/Cargo.toml --locked --all-targets
+        run: cargo check --manifest-path src-tauri/Cargo.toml --locked --all-targets --workspace
 
   bundle-dry-run:
     name: Bundle check (Ubuntu, no upload)
