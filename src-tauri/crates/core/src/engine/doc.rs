@@ -604,10 +604,8 @@ fn has_yaml_comments(text: &str) -> bool {
             match ch {
                 '\'' if !in_double => in_single = !in_single,
                 '"' if !in_single => in_double = !in_double,
-                '#' if !in_single && !in_double => {
-                    if idx == 0 || chars[idx - 1].is_whitespace() {
-                        return true;
-                    }
+                '#' if !in_single && !in_double && (idx == 0 || chars[idx - 1].is_whitespace()) => {
+                    return true;
                 }
                 _ => {}
             }
