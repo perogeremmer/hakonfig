@@ -37,7 +37,7 @@ function handlerBlock(marker) {
 
 const formSave = handlerBlock('[data-save]", overlay).addEventListener("click", async () => {');
 
-test("handler simpan provider membaca semua field sebelum close()", () => {
+test("provider save handler reads every field before close()", () => {
   const closeAt = formSave.indexOf("close();");
   assert.notEqual(closeAt, -1, "handler harus memanggil close()");
 
@@ -51,7 +51,7 @@ test("handler simpan provider membaca semua field sebelum close()", () => {
   );
 });
 
-test("payload upsert memakai salinan nilai, bukan pembacaan DOM langsung", () => {
+test("upsert payload uses copies of values, not direct DOM reads", () => {
   // Nilai endpoint diambil lewat helper, karena provider dari katalog tidak
   // merender field baseUrl/api/name sama sekali.
   assert.match(formSave, /const api = endpointApi\(\);/, "api harus lewat endpointApi()");
@@ -61,14 +61,14 @@ test("payload upsert memakai salinan nilai, bukan pembacaan DOM langsung", () =>
   assert.doesNotMatch(formSave, /key: field\(/, "payload tidak boleh memanggil field()");
 });
 
-test("model draft dibaca sebelum form ditutup", () => {
+test("model draft is read before the form closes", () => {
   const closeAt = formSave.indexOf("close();");
   const builtAt = formSave.indexOf("readModels()");
   assert.notEqual(builtAt, -1, "handler harus memanggil readModels()");
   assert.ok(builtAt < closeAt, "readModels() harus dipanggil sebelum close()");
 });
 
-test("input id provider tidak memakai data-field=\"id\"", () => {
+test("provider id input does not use data-field=\"id\"", () => {
   // Baris model juga memakai data-field="id". Kalau input id provider memakai
   // nama yang sama, `field("id")` bisa mengambil model pertama (lihat bug
   // variabel environment CLAUDE_SONNET_5_5_API_KEY) dan id provider bisa salah

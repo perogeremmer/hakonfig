@@ -33,7 +33,7 @@ function expected() {
   return { ids: [...ids].sort(), png: [...png].sort(), dual: [...dual].sort() };
 }
 
-test("logo-index.js cocok dengan file di assets/providers", () => {
+test("logo-index.js matches the files in assets/providers", () => {
   const want = expected();
   assert.deepEqual(
     [...LOGO_IDS].sort(),
@@ -44,7 +44,7 @@ test("logo-index.js cocok dengan file di assets/providers", () => {
   assert.deepEqual([...LOGO_DARK_VARIANT].sort(), want.dual, "daftar varian gelap tidak sinkron");
 });
 
-test("setiap provider di presets punya jalur logo yang jelas", () => {
+test("every provider in presets has a clear logo path", () => {
   // Provider tanpa file logo memakai mark custom; yang punya harus terdaftar
   // supaya tidak jatuh ke monogram dua huruf.
   const missing = [...LOGO_DARK_VARIANT].filter((id) => !LOGO_IDS.has(id));

@@ -68,7 +68,8 @@ It only writes to the files your tools already read.
 
 - **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS, no frontend framework
 - **UI:** Plus Jakarta Sans bundled locally, light and dark themes, English + Bahasa Indonesia
-- **Tests:** 99 offline tests (51 Rust + 48 JS), no network required
+- **CLI:** `hakonfig-cli`, the same engine without a GUI, for servers and scripts
+- **Tests:** 155 offline tests (107 Rust + 48 JS), no network required
 - **License:** [MIT](LICENSE), free to use, modify, and redistribute
 
 ### Open source
@@ -86,6 +87,7 @@ Issues and pull requests are welcome. See [Contributing](#contributing).
 - [Get started](#get-started)
 - [What it does](#what-it-does)
 - [Features](#features)
+- [CLI](#cli)
 - [Supported tools](#supported-tools)
 - [Providers and logos](#providers-and-logos)
 - [Requirements](#requirements)
@@ -138,6 +140,34 @@ Issues and pull requests are welcome. See [Contributing](#contributing).
 - **Safe writes:** merge (unknown fields preserved), atomic write (`tmp` + `rename`),
   `0600` permissions for files that hold credentials.
 - **Secrets masked** everywhere in the preview (API keys, tokens, passwords).
+
+---
+
+## CLI
+
+The engine ships as a standalone binary, `hakonfig-cli`, for servers, scripts,
+and anyone who prefers a terminal. It calls the exact same `hakonfig_core::api`
+as the desktop app, so writes, backups, and redaction behave identically.
+
+```bash
+cargo install --path src-tauri/crates/cli   # from a source checkout
+
+hakonfig-cli list                           # what is installed, with versions
+hakonfig-cli show pi                        # current providers of one tool
+hakonfig-cli providers --search groq        # browse the preset catalog
+hakonfig-cli add --harness pi --provider groq --key-stdin
+```
+
+Rules it holds since day one:
+
+- Default output is English; `--lang id` or `HAKONFIG_LANG=id` for Bahasa Indonesia.
+- Any flag or `--json` means fully non-interactive: it never prompts (safe for scripts and servers).
+- In a terminal without flags, `add` runs as a wizard.
+- An explicit `--test` that fails aborts with a non-zero exit code and writes nothing.
+- Read-only commands (`list`, `show`, `providers`, `paths`) never touch files.
+
+Every command accepts `--json` for stable, scriptable output. The command
+reference and the JSON schemas live in [docs/CLI.md](docs/CLI.md).
 
 ---
 
@@ -326,8 +356,8 @@ as repository secrets and pass them to `tauri-action`.
 ### Tests
 
 ```bash
-bun run test        # 51 Rust tests + 48 JS tests
-bun run test:rust   # cargo test
+bun run test        # 107 Rust tests + 48 JS tests
+bun run test:rust   # cargo test --workspace
 bun run test:js     # node --test web/*.test.js
 ```
 
@@ -336,17 +366,23 @@ sandbox).
 
 | Layer | Count | Coverage |
 |---|---|---|
-| Unit (`engine/doc.rs`) | 16 | JSONC parsing (comments, trailing commas), YAML (empty/null/broken), comment detection, `mask_key`, `is_slug`, `env_name_from`, secret redaction, `.env` edits, `is_changed` |
+| Unit (`engine/doc.rs`) | 19 | JSONC parsing (comments, trailing commas), YAML (empty/null/broken), comment detection, `mask_key`, `is_slug`, `env_name_from`, secret redaction, `.env` edits, `is_changed` |
 | Unit (`engine/backup.rs`) | 6 | empty backup, create/list/restore roundtrip, corrupt manifest, newest-first order, retention cap, orphan cleanup |
 | Unit (`engine/write.rs`) | 4 | parent dirs, overwrite, no leftover temp file, `0644` vs `0600` |
 | Unit (`engine/paths.rs`) | 2 | `HAKONFIG_ROOT` override, `opencode.jsonc` vs `.json` pick |
+| Unit (`engine/version.rs`) | 1 | `<bin> --version` output parsing |
+| Unit (`cli/src/draft.rs`) | 14 | preset-to-draft mapping, `--models` parsing, custom provider validation, typo suggestions (Levenshtein) |
+| Unit (`cli/src/output.rs`) | 8 | line diff trimming, removed/added budget split, preview rendering |
+| Unit (`cli/src/i18n.rs`) | 5 | language parsing, EN/ID message parity |
+| Unit (`src/commands.rs`) | 4 | streamed install command execution, failure detection |
+| Integration (`engine/tests.rs`) | 20 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key` |
+| Integration (`cli/tests/cli.rs`) | 24 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, language switch, JSON output |
 | Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks, XSS escaping, output trimming |
 | Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholders, untranslated strings, no em dash |
 | Unit (`web/provider-form.test.js`) | 12 | registered-provider detection, env variable naming |
 | Unit (`web/form.test.js`) | 4 | no DOM reads after the form closes, payload built from copies |
 | Unit (`web/logo-index.test.js`) | 2 | generated logo index matches the assets folder |
 | Unit (`web/offline.test.js`) | 4 | no external asset URLs, fonts present on disk |
-| Integration (`engine/tests.rs`) | 23 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key` |
 
 ### Repository layout
 
@@ -368,24 +404,32 @@ hakonfig/
 ├── src-tauri/
 │   ├── src/
 │   │   ├── main.rs
-│   │   ├── commands.rs           # UI <-> engine bridge (Tauri commands)
-│   │   └── engine/
-│   │       ├── model.rs          # shared types
-│   │       ├── paths.rs          # per-OS path resolution
-│   │       ├── doc.rs            # documents: parse / mutate / render / redact
-│   │       ├── backup.rs         # snapshot + restore + manifest + retention
-│   │       ├── write.rs          # atomic writes + permissions
-│   │       ├── preset.rs         # provider preset loader
-│   │       ├── catalog.rs        # tool catalog for the "not installed" section
-│   │       ├── version.rs        # `<bin> --version` detection
-│   │       ├── tests.rs          # integration tests
-│   │       ├── testutil.rs       # sandbox + mutex for tests
-│   │       └── adapters/         # one file per tool
+│   │   └── commands.rs           # UI <-> engine bridge (Tauri commands)
+│   ├── crates/
+│   │   ├── core/                 # hakonfig-core: the engine as a plain library
+│   │   │   └── src/
+│   │   │       ├── api.rs        # single entry point shared by UI and CLI
+│   │   │       └── engine/
+│   │   │           ├── model.rs          # shared types
+│   │   │           ├── paths.rs          # per-OS path resolution
+│   │   │           ├── doc.rs            # documents: parse / mutate / render / redact
+│   │   │           ├── backup.rs         # snapshot + restore + manifest + retention
+│   │   │           ├── write.rs          # atomic writes + permissions
+│   │   │           ├── preset.rs         # provider preset loader
+│   │   │           ├── catalog.rs        # tool catalog for the "not installed" section
+│   │   │           ├── version.rs        # `<bin> --version` detection
+│   │   │           ├── tests.rs          # integration tests
+│   │   │           ├── testutil.rs       # sandbox + mutex for tests
+│   │   │           └── adapters/         # one file per tool
+│   │   └── cli/                  # hakonfig-cli: the same engine without a GUI
+│   │       ├── src/              # main.rs, add.rs, draft.rs, output.rs, i18n.rs
+│   │       └── tests/cli.rs      # end-to-end tests of the real binary
 │   ├── presets/providers.json    # provider presets
 │   ├── presets/harnesses.json    # tool catalog + install commands
 │   ├── icons/
 │   └── tauri.conf.json
 ├── docs/UI-CONTRACT.md           # command and type contract between UI and Rust
+├── docs/CLI.md                   # CLI command reference + JSON schemas
 ├── docs/screenshots/             # README images
 ├── scripts/sync-logos.mjs        # regenerates logo-index.js
 ├── scripts/version.mjs           # single source of truth for the version number
@@ -394,8 +438,9 @@ hakonfig/
 └── README.md
 ```
 
-The engine (`src-tauri/src/engine/`) **does not import Tauri at all**: it is a plain
-library. The UI has no framework either. Both can be reused if the shell is replaced.
+The engine (`crates/core`) **does not import Tauri at all**: it is a plain
+library. The UI has no framework either, and the CLI has no GUI. All three
+shells sit on the same `api.rs`, so behaviour cannot drift between them.
 
 ### Sandboxing with `HAKONFIG_ROOT`
 
@@ -410,11 +455,11 @@ Mapping: `$HAKONFIG_ROOT/pi`, `/omp`, `/hermes`, `/opencode/config`, `/opencode/
 
 ### Adding a new tool
 
-1. Create `src-tauri/src/engine/adapters/<name>.rs` implementing the `Adapter` trait:
+1. Create `crates/core/src/engine/adapters/<name>.rs` implementing the `Adapter` trait:
    `specs()`, `backup_base()`, `snapshot()`, `build()`, plus optional `stored_key()` (used by
    the backend for Test/Sync when the key field is left empty), `experimental()`, and
    `notes()`.
-2. Register it in `adapters::all()` (`src-tauri/src/engine/adapters/mod.rs`).
+2. Register it in `adapters::all()` (`crates/core/src/engine/adapters/mod.rs`).
 3. Add integration tests in `engine/tests.rs`.
 
 The UI **does not need changes**: the tool list, provider list, and forms are rendered from
@@ -488,7 +533,7 @@ Pull requests, issues, and new tool adapters are very welcome. To add a tool, se
 Before sending a PR:
 
 ```bash
-bun run test            # 51 Rust + 48 JS tests must pass
+bun run test            # 107 Rust + 48 JS tests must pass
 bun run version:check   # version consistent across files
 bun run css && bun run logos
 ```

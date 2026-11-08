@@ -64,6 +64,12 @@ jobs:
       - name: cargo test
         run: cargo test --manifest-path src-tauri/Cargo.toml --locked --workspace
 
+      - name: cargo clippy (warning dianggap error)
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked --workspace --all-targets -- -D warnings
+
+      - name: cargo fmt (harus sudah rapi)
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
       - name: cargo check (bundle binary)
         run: cargo check --manifest-path src-tauri/Cargo.toml --locked --all-targets --workspace
 

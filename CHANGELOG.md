@@ -6,6 +6,91 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+### Added
+
+- Crate CLI `hakonfig-cli`: kelola config harness tanpa GUI, memakai jalur
+  kode yang sama dengan aplikasi desktop (`hakonfig_core::api`). Perintah:
+  `list`, `show`, `providers`, `paths`, `add` (wizard interaktif atau
+  non-interaktif penuh untuk skrip/server), dengan `--json` untuk output
+  yang stabil. Dokumentasi ada di `docs/CLI.md`.
+- Release workflow kini mengunggah binary `hakonfig-cli` per platform
+  (macOS universal, Linux, Windows) ke draft release yang sama.
+- CI kini menjalankan `cargo clippy -D warnings` dan `cargo fmt --check`.
+
+### Changed
+
+- CLI: `--test` eksplisit yang gagal kini menggagalkan perintah
+  (exit non-zero, tidak ada yang ditulis), karena automation
+  memintanya sebagai gerbang sebelum menulis. Tanpa `--test`/`--no-test`,
+  mode non-interaktif tetap tidak mencoba endpoint sama sekali.
+- CLI: `--json` dan stdout yang dipipe kini memaksa mode non-interaktif,
+  sehingga wizard tidak pernah tercampur dengan output JSON.
+- CLI: kuota potongan diff dibagi merata antara baris yang dihapus dan
+  ditambah (sisa satu sisi diberikan ke sisi lain), bukan dihabiskan pada
+  baris yang dihapus lebih dulu.
+- String warning/error di `hakonfig-core` kini seluruhnya English (sebelumnya
+  Indonesia). Nama semua test Rust dan JS kini juga English.
+
+### Notes
+
+- String warning engine yang English berlaku juga di aplikasi desktop:
+  pengguna desktop yang memakai Bahasa Indonesia akan melihat warning dalam
+  bahasa Inggris sampai string engine masuk katalog i18n yang sama.
+
+## [0.3.2] - 2025
+
+### Fixed
+
+- Katalog: nama yang benar untuk DeepSeek Harness (bukan "DeepSeek chat").
+
+## [0.3.1] - 2025
+
+### Fixed
+
+- Default model benar-benar diterapkan di Pi dan Oh My Pi.
+
+## [0.3.0] - 2025
+
+### Added
+
+- Katalog tool: web tools dan OpenHands.
+
+## [0.2.1] - 2025
+
+### Changed
+
+- README: "Get started" dipindah ke atas dan logo brand ditambahkan.
+
+## [0.2.0] - 2025
+
+### Fixed
+
+- CI: `Cargo.lock` tetap sinkron dengan versi aplikasi.
+
+## [0.1.4] - 2025
+
+### Added
+
+- 37 preset provider baru dengan logo lokal; semua aset sepenuhnya offline.
+
+## [0.1.3] - 2025
+
+### Changed
+
+- UI: checkbox digambar sendiri dengan sudut membulat yang lembut.
+
+## [0.1.2] - 2025
+
+### Added
+
+- Brand Hakonfig: mark, app icon, dan design token.
+
+## [0.1.1] - 2025
+
+### Fixed
+
+- UI: nama variabel env diambil dari provider, bukan dari baris model.
+
 ## [0.1.0]
 
 Rilis pertama.
