@@ -134,5 +134,29 @@
     "uninstallUnix": "npm uninstall -g @qwen-code/qwen-code",
     "uninstallWindows": "npm uninstall -g @qwen-code/qwen-code",
     "descriptionId": "Fork Gemini CLI dari Qwen, cocok untuk model Qwen."
+  },
+  {
+    "id": "deepseek",
+    "name": "DeepSeek",
+    "kind": "web",
+    "description": "DeepSeek chat in the browser. No config file, so Hakonfig only opens it and walks you through installing it as an app.",
+    "descriptionId": "Chat DeepSeek di browser. Tidak ada file config, jadi Hakonfig hanya membuka dan memandu memasangnya sebagai aplikasi.",
+    "docsUrl": "https://chat.deepseek.com",
+    "launchUrl": "https://chat.deepseek.com",
+    "verified": true
+  },
+  {
+    "id": "openhands",
+    "name": "OpenHands",
+    "kind": "planned",
+    "description": "Self-hosted control center for coding agents. Providers are configured in its own UI and stored encrypted, so Hakonfig can install it but not edit them.",
+    "descriptionId": "Pusat kendali coding agent yang di-self-host. Provider diatur di UI-nya dan disimpan terenkripsi, jadi Hakonfig hanya bisa memasang, belum bisa mengubah provider-nya.",
+    "docsUrl": "https://docs.openhands.dev",
+    "installUnix": "npm install -g @openhands/agent-canvas",
+    "installWindows": "npm install -g @openhands/agent-canvas",
+    "uninstallUnix": "npm uninstall -g @openhands/agent-canvas",
+    "uninstallWindows": "npm uninstall -g @openhands/agent-canvas",
+    "verified": true,
+    "binary": "agent-canvas"
   }
 ]

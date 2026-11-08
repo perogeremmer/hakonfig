@@ -450,6 +450,37 @@ function harnessTile(harness) {
     </div>`;
 }
 
+/**
+ * Kartu untuk tool berbasis web (mis. DeepSeek). Tidak ada file config dan
+ * tidak ada provider yang bisa diatur, jadi Hakonfig hanya membuka alamatnya
+ * dan menjelaskan cara memasangnya sebagai aplikasi.
+ */
+function webTile(entry) {
+  const url = entry.launchUrl ?? entry.docsUrl ?? "";
+
+  return `
+    <div class="hk-card flex min-h-[148px] flex-col gap-3 p-5">
+      <div class="flex items-start justify-between gap-2">
+        ${logo(entry.id, 44)}
+        ${chip("info", t("web.badge"), "book")}
+      </div>
+      <div class="min-w-0">
+        <p class="truncate text-[15px] font-semibold text-ink">${esc(entry.name)}</p>
+        <p class="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-ink-secondary">${esc(
+          getLang() === "id" ? (entry.descriptionId ?? entry.description ?? "") : (entry.description ?? ""),
+        )}</p>
+      </div>
+      <div class="mt-auto flex flex-col gap-2 pt-1">
+        <button data-action data-open-web="${esc(url)}" class="hk-btn hk-btn-primary w-full">
+          ${icon("arrowUpRight")}<span>${esc(t("web.open"))}</span>
+        </button>
+        <button data-action data-pwa-help class="hk-btn hk-btn-ghost hk-btn-sm justify-start">
+          ${icon("download", "h-3.5 w-3.5")}${esc(t("web.installHint"))}
+        </button>
+      </div>
+    </div>`;
+}
+
 function catalogTile(entry) {
   const version = state.versions[entry.id];
   const hasBinary = Boolean(version);
@@ -640,9 +671,15 @@ function renderHome() {
   const catalogOnly = state.catalog
     .filter((entry) => !state.harnesses.some((harness) => harness.id === entry.id))
     .filter((entry) => entry.kind === "planned");
+  const webOnly = state.catalog.filter((entry) => entry.kind === "web");
   const notInstalled = state.harnesses.filter((harness) => !harness.installed);
 
-  if (installed.length === 0 && notInstalled.length === 0 && catalogOnly.length === 0) {
+  if (
+    installed.length === 0 &&
+    notInstalled.length === 0 &&
+    catalogOnly.length === 0 &&
+    webOnly.length === 0
+  ) {
     container.innerHTML = `<div class="mx-auto max-w-[960px]">
       <div class="hk-card mx-auto max-w-lg p-8 text-center">
         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-muted text-ink-muted">${icon("search", "h-6 w-6")}</div>
@@ -679,12 +716,30 @@ function renderHome() {
         t("home.notInstalledHint"),
         [...notInstalled.map(harnessTile), ...catalogOnly.map(catalogTile)],
       )}
+      ${
+        webOnly.length
+          ? section(t("home.webTitle"), t("home.webHint"), webOnly.map(webTile))
+          : ""
+      }
     </div>`;
 
   wiringHome(container);
 }
 
 function wiringHome(container) {
+  $$("[data-open-web]", container).forEach((button) => {
+    button.addEventListener("click", async () => {
+      try {
+        await api.external(button.dataset.openWeb);
+      } catch (error) {
+        toast(t("toast.generic"), { variant: "err", detail: String(error) });
+      }
+    });
+  });
+  $$("[data-pwa-help]", container).forEach((button) => {
+    button.addEventListener("click", () => openPwaHelp());
+  });
+
   $$("[data-harness]", container).forEach((card) => {
     card.addEventListener("click", (event) => {
       if (event.target.closest("[data-menu-harness]")) return;
@@ -2494,6 +2549,31 @@ async function runPackage(harnessId, mode) {
 // ============================================================================
 // SETTINGS & HISTORY
 // ============================================================================
+
+/** Panduan memasang web tool sebagai aplikasi. Tidak ada perintah yang dijalankan. */
+function openPwaHelp() {
+  const { overlay, close } = openModal({
+    title: t("web.pwaTitle"),
+    subtitle: t("web.pwaSubtitle"),
+    size: "sm",
+    body: `
+      <div class="space-y-3 text-[13px] leading-relaxed text-ink-secondary">
+        ${["chrome", "safari", "mobile"]
+          .map(
+            (key) => `<div class="rounded-[14px] border border-line bg-surface px-3.5 py-3">
+              <p class="mb-1 text-[12px] font-bold uppercase tracking-wide text-ink-muted">${esc(
+                t(`web.pwa.${key}.title`),
+              )}</p>
+              <p>${esc(t(`web.pwa.${key}.body`))}</p>
+            </div>`,
+          )
+          .join("")}
+      </div>`,
+    footer: `<button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.close"))}</button>`,
+  });
+
+  $("[data-cancel]", overlay).addEventListener("click", close);
+}
 
 function openSettings() {
   const { overlay, close } = openModal({

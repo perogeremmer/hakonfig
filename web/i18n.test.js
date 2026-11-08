@@ -83,6 +83,9 @@ test("tidak ada terjemahan yang identik karena lupa diterjemahkan", () => {
     "advanced.modelMax",
     "advanced.addManual",
     "advanced.modelReasoning",
+    // nama produk dan merek browser
+    "web.badge",
+    "web.pwa.chrome.title",
   ]);
 
   const untouched = Object.keys(en).filter(

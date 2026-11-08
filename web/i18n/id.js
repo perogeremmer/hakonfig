@@ -215,6 +215,21 @@ export default {
   "onboard.section": "Panduan awal",
   "onboard.rerun": "Jalankan pindai lagi",
 
+  // ---- web tools ----
+  "home.webTitle": "Aplikasi web",
+  "home.webHint": "Jalan di browser. Hakonfig membukanya dan menunjukkan cara memasangnya sebagai aplikasi.",
+  "web.badge": "Web",
+  "web.open": "Buka",
+  "web.installHint": "Pasang sebagai aplikasi",
+  "web.pwaTitle": "Pasang sebagai aplikasi",
+  "web.pwaSubtitle": "Tool ini hidup di browser, jadi tidak ada yang perlu diatur di disk.",
+  "web.pwa.chrome.title": "Chrome, Edge, Brave",
+  "web.pwa.chrome.body": "Buka situsnya, klik ikon install di address bar, lalu konfirmasi. Situs muncul sebagai jendela aplikasi biasa.",
+  "web.pwa.safari.title": "Safari di macOS",
+  "web.pwa.safari.body": "Buka situsnya, lalu pilih File > Add to Dock. Butuh Safari 17 atau lebih baru.",
+  "web.pwa.mobile.title": "Ponsel atau tablet",
+  "web.pwa.mobile.body": "Buka situsnya lewat menu browser, lalu pilih Add to Home Screen.",
+
   "settings.title": "Pengaturan",
   "settings.language": "Bahasa",
   "settings.appearance": "Tampilan",

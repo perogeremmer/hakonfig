@@ -25,6 +25,9 @@ pub struct HarnessCatalogEntry {
     pub uninstall_unix: Option<String>,
     #[serde(default)]
     pub uninstall_windows: Option<String>,
+    /// Untuk `kind: "web"`: alamat yang dibuka tombol Open.
+    #[serde(default)]
+    pub launch_url: Option<String>,
     /// Nama biner untuk deteksi versi (`<bin> --version`).
     #[serde(default)]
     pub binary: Option<String>,

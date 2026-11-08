@@ -1084,3 +1084,25 @@ fn key_baru_tetap_menimpa_key_lama() {
     let auth = json(&pi.join("auth.json"));
     assert!(auth.get("groq").is_none(), "mode env tidak menyimpan key");
 }
+
+#[test]
+fn katalog_memuat_web_tool_dan_openhands() {
+    let entries = crate::engine::catalog::all();
+    let ids: Vec<&str> = entries.iter().map(|e| e.id.as_str()).collect();
+    assert!(ids.contains(&"deepseek"), "deepseek harus ada di katalog");
+    assert!(ids.contains(&"openhands"), "openhands harus ada di katalog");
+
+    let web = crate::engine::catalog::get("deepseek").unwrap();
+    assert_eq!(web.kind, "web");
+    assert_eq!(web.launch_url.as_deref(), Some("https://chat.deepseek.com"));
+    // web tool tidak boleh punya perintah install: tidak ada yang dijalankan
+    assert!(web.install_command().is_none(), "web tool tidak perlu install");
+
+    let hands = crate::engine::catalog::get("openhands").unwrap();
+    assert_eq!(hands.kind, "planned");
+    assert_eq!(
+        hands.install_command().as_deref(),
+        Some("npm install -g @openhands/agent-canvas")
+    );
+    assert_eq!(hands.binary.as_deref(), Some("agent-canvas"));
+}

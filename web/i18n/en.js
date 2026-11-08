@@ -227,6 +227,21 @@ export default {
   "onboard.section": "Getting started",
   "onboard.rerun": "Run the scan again",
 
+  // ---- web tools ----
+  "home.webTitle": "Web apps",
+  "home.webHint": "Runs in your browser. Hakonfig opens it and shows how to install it as an app.",
+  "web.badge": "Web",
+  "web.open": "Open",
+  "web.installHint": "Install as an app",
+  "web.pwaTitle": "Install as an app",
+  "web.pwaSubtitle": "This tool lives in the browser, so there is nothing to configure on disk.",
+  "web.pwa.chrome.title": "Chrome, Edge, Brave",
+  "web.pwa.chrome.body": "Open the site, click the install icon in the address bar, then confirm. It shows up as a normal app window.",
+  "web.pwa.safari.title": "Safari on macOS",
+  "web.pwa.safari.body": "Open the site, then choose File > Add to Dock. Safari 17 or newer is required.",
+  "web.pwa.mobile.title": "Phone or tablet",
+  "web.pwa.mobile.body": "Open the site in the browser menu and choose Add to Home Screen.",
+
   // ---- settings ----
   "settings.title": "Settings",
   "settings.language": "Language",
