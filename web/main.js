@@ -560,13 +560,23 @@ function providerCard(provider) {
 // HEADER & VIEW
 // ============================================================================
 
-const LOGO_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" class="h-5 w-5"><path d="M4 7h8.5M16.5 7H20M4 12h4M12 12h8M4 17h8.5M16.5 17H20"/><circle cx="14.2" cy="7" r="2.1" fill="currentColor" stroke="none"/><circle cx="9.8" cy="12" r="2.1" fill="currentColor" stroke="none"/><circle cx="14.2" cy="17" r="2.1" fill="currentColor" stroke="none"/></svg>`;
+// Mark dari ~/Documents/Hakonfig (H + dua kenop). Inline supaya warnanya ikut
+// tema: garis memakai currentColor, kenop memakai --logo-knob.
+const LOGO_SVG = `<svg viewBox="191 167 601 690" fill="none" class="h-6 w-auto" aria-hidden="true">
+  <g stroke="currentColor" stroke-width="96" stroke-linecap="round">
+    <line x1="319.5" y1="295.5" x2="319.5" y2="751"/>
+    <line x1="703.5" y1="272" x2="703.5" y2="727.5"/>
+    <line x1="319.5" y1="511.5" x2="703.5" y2="511.5"/>
+  </g>
+  <circle cx="319.5" cy="295.5" r="88.5" fill="currentColor"/>
+  <circle cx="703.5" cy="727.5" r="89" fill="var(--logo-knob)"/>
+</svg>`;
 
 function renderHomeHeader() {
   $("#topbar").innerHTML = `
     <div class="mx-auto flex w-full max-w-[1008px] items-center justify-between gap-3 px-6 py-3.5">
       <div class="flex min-w-0 items-center gap-3">
-        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-on-brand shadow-sm">${LOGO_SVG}</div>
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-muted text-ink shadow-xs">${LOGO_SVG}</div>
         <div class="min-w-0">
           <p class="text-[15px] font-bold leading-tight text-ink">Hakonfig</p>
           <p class="text-[12px] leading-tight text-ink-secondary">${esc(t("app.tagline"))}</p>
@@ -2224,7 +2234,7 @@ function finishOnboarding() {
 function renderOnboardingHeader() {
   $("#topbar").innerHTML = `
     <div class="mx-auto flex w-full max-w-[1008px] items-center gap-3 px-6 py-3.5">
-      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-on-brand shadow-sm">${LOGO_SVG}</div>
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-muted text-ink shadow-xs">${LOGO_SVG}</div>
       <div class="min-w-0">
         <p class="text-[15px] font-bold leading-tight text-ink">Hakonfig</p>
         <p class="text-[12px] leading-tight text-ink-secondary">${esc(t("app.tagline"))}</p>

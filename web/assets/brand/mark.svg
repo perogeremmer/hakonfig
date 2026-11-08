@@ -1,0 +1,13 @@
+<!-- Mark Hakonfig: H dari dua balok + palang, kenop di kiri-atas dan kanan-bawah.
+     Warna ikut konteks: garis pakai currentColor, kenop pakai --logo-knob
+     (maroon di tema terang, rose di tema gelap). Geometri sama persis dengan
+     app-icon-1024.png di ~/Documents/Hakonfig. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="191 167 601 690" role="img" aria-label="Hakonfig">
+  <g stroke="currentColor" stroke-width="96" stroke-linecap="round" fill="none">
+    <line x1="319.5" y1="295.5" x2="319.5" y2="751"/>
+    <line x1="703.5" y1="272" x2="703.5" y2="727.5"/>
+    <line x1="319.5" y1="511.5" x2="703.5" y2="511.5"/>
+  </g>
+  <circle cx="319.5" cy="295.5" r="88.5" fill="currentColor"/>
+  <circle cx="703.5" cy="727.5" r="89" fill="var(--logo-knob, #8c3345)"/>
+</svg>

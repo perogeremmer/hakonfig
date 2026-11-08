@@ -91,7 +91,8 @@
   /* teks */
   --color-ink: #221f1b;
   --color-ink-secondary: #6b6459;
-  --color-ink-muted: #9c9488;
+  /* #9c9488 hanya 2,81:1 di kanvas; dinaikkan sesuai panduan brand */
+  --color-ink-muted: #756d62;
   --color-on-brand: #ffffff;
 
   /* brand - maroon */
@@ -100,6 +101,9 @@
   --color-brand-text: #7a2a3b;
   --color-brand-soft: #f7e5e8;
   --color-brand-strong: #4a1824;
+
+  /* kenop pada mark logo */
+  --logo-knob: #8c3345;
 
   /* status */
   --color-ok-bg: #e7f6ee;
@@ -156,6 +160,7 @@
   --color-brand-text: #dca3ac;
   --color-brand-soft: #2e1b20;
   --color-brand-strong: #f0c8ce;
+  --logo-knob: #dca3ac;
 
   --color-ok-bg: #16352a;
   --color-ok-text: #8ae8b8;

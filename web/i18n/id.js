@@ -4,10 +4,10 @@
 // =============================================================================
 
 export default {
-  "app.tagline": "Atur provider AI coding kamu",
+  "app.tagline": "Cara simpel ngatur provider",
 
   "home.title": "Pilih tool kamu",
-  "home.subtitle": "Pilih yang kamu pakai. Hakonfig menyiapkan provider-nya.",
+  "home.subtitle": "Pilih yang kamu pakai. Sisanya kami urus.",
   "home.installed": "Terpasang",
   "home.installedHint": "Siap dipakai.",
   "home.notInstalled": "Belum terpasang",

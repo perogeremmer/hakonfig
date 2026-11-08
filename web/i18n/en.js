@@ -5,11 +5,11 @@
 
 export default {
   // ---- app shell ----
-  "app.tagline": "Set up your AI coding tools",
+  "app.tagline": "Your simple way to manage providers",
 
   // ---- home ----
   "home.title": "Choose your tool",
-  "home.subtitle": "Pick the one you use. Hakonfig sets up its providers.",
+  "home.subtitle": "Pick the one you use. We handle the rest.",
   "home.installed": "Installed",
   "home.installedHint": "Ready to go.",
   "home.notInstalled": "Not installed",
