@@ -67,11 +67,10 @@ Issues and pull requests are welcome. See [Contributing](#contributing).
 - **Three-step provider setup:** pick a provider card with its real logo, paste the API
   key, hit **Test & find models**, tick the models you want. Base URL, API type, and the
   model list are filled in for you; unticked models are never written.
-- **24 built-in provider presets** (Groq, Gemini, Cerebras, DeepSeek, OpenRouter,
-  Mistral, Together, NVIDIA NIM, OpenCode Go, Ollama, OpenAI, xAI, Moonshot, Z.ai,
-  MiniMax, DashScope, Cline, Command Code, DeepInfra, SambaNova, Fireworks, Nebius,
-  Vercel AI Gateway, Hugging Face Router) plus **Custom** for any OpenAI-compatible
-  endpoint.
+- **61 built-in provider presets**, from Groq and OpenRouter to Anthropic, Cohere,
+  Chutes, Venice, SiliconFlow, BytePlus, Tencent Hunyuan, Volcengine Ark and more,
+  plus **Custom** for any OpenAI-compatible endpoint. Each preset ships with a local
+  logo, and the search box filters by name as well as id.
 - **Environment mode names the variable after the provider.** Choosing "use an
   environment variable" shows exactly the name that gets written and read, e.g.
   `COMMANDCODE_API_KEY` for `commandcode` or `OPENCODE_GO_API_KEY` for `opencode-go`.
@@ -371,6 +370,7 @@ hakonfig/
 │   ├── icons/
 │   └── tauri.conf.json
 ├── docs/UI-CONTRACT.md           # command and type contract between UI and Rust
+├── scripts/sync-logos.mjs       # regenerates web/assets/providers/logo-index.js
 ├── scripts/version.mjs           # single source of truth for the version number
 ├── scripts/make-demo-sandbox.sh  # demo sandbox for UI work
 ├── CHANGELOG.md
@@ -382,6 +382,31 @@ hakonfig/
 The engine (`src-tauri/src/engine/`) **does not import Tauri at all**: it is a plain
 library. The UI has no framework either. Both can be reused if the shell is ever
 replaced.
+
+---
+
+## Provider presets and logos
+
+`src-tauri/presets/providers.json` holds the catalog. Each entry needs an `id`, `name`,
+`baseUrl`, `api` type, `envVar` and a `models` list; `models` may be empty, in which case
+the user fills it with **Sync models** once a key is set.
+
+- The list is curated from the Hakonfig provider registry, filtered to providers that are
+  usable with a plain API key over an OpenAI-compatible (or Anthropic/Google) endpoint.
+  OAuth and cookie-based entries, and non-chat services (TTS, search, image generation),
+  are intentionally left out because this app cannot manage their credentials.
+- Model ids in a preset are a snapshot taken from the provider's own `/models` endpoint;
+  providers that need a key to list models start empty.
+- Logos live in `web/assets/providers/<id>.<svg|png>`. The UI reads the id list from
+  `web/assets/providers/logo-index.js`, which is generated:
+
+```bash
+bun run logos   # node scripts/sync-logos.mjs
+```
+
+`bun run logos` also runs as part of the Tauri `beforeBuildCommand`, and a test fails if
+the generated file is stale. Providers without a logo file fall back to
+`custom.svg` (the OpenAI-compatible mark), never to a two-letter monogram.
 
 ---
 

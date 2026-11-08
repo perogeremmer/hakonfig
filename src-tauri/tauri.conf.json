@@ -4,7 +4,7 @@
   "identifier": "dev.perogeremmer.hakonfig",
   "build": {
     "frontendDist": "../web",
-    "beforeBuildCommand": "bun run css"
+    "beforeBuildCommand": "bun run css && bun run logos"
   },
   "app": {
     "withGlobalTauri": true,

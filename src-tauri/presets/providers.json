@@ -665,5 +665,560 @@
         "contextWindow": 1000000
       }
     ]
+  },
+  {
+    "id": "agnes",
+    "name": "Agnes AI",
+    "baseUrl": "https://apihub.agnes-ai.com/v1",
+    "api": "openai-completions",
+    "envVar": "AGNES_API_KEY",
+    "docsUrl": "https://agnes-ai.com",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "alicode",
+    "name": "Alibaba",
+    "baseUrl": "https://coding.dashscope.aliyuncs.com/v1",
+    "api": "openai-completions",
+    "envVar": "ALICODE_API_KEY",
+    "docsUrl": "https://bailian.console.aliyun.com",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "glm-5"
+      },
+      {
+        "id": "kimi-k2.5"
+      },
+      {
+        "id": "qwen3.5-plus"
+      }
+    ]
+  },
+  {
+    "id": "alicode-intl",
+    "name": "Alibaba Coding",
+    "baseUrl": "https://coding-intl.dashscope.aliyuncs.com/v1",
+    "api": "openai-completions",
+    "envVar": "ALICODE_INTL_API_KEY",
+    "docsUrl": "https://www.alibabacloud.com/product/coding",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "glm-5"
+      },
+      {
+        "id": "kimi-k2.5"
+      },
+      {
+        "id": "qwen3.5-plus"
+      }
+    ]
+  },
+  {
+    "id": "alitp-intl",
+    "name": "Alibaba Token Plan",
+    "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    "api": "openai-completions",
+    "envVar": "ALITP_INTL_API_KEY",
+    "docsUrl": "https://www.alibabacloud.com/campaign/ai-landing-page-token",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "anthropic",
+    "name": "Anthropic",
+    "baseUrl": "https://api.anthropic.com/v1",
+    "api": "anthropic-messages",
+    "envVar": "ANTHROPIC_API_KEY",
+    "docsUrl": "https://console.anthropic.com",
+    "keyRequired": true,
+    "notes": "Memakai format Anthropic Messages. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "api-airforce",
+    "name": "API.airforce",
+    "baseUrl": "https://api.airforce/v1",
+    "api": "openai-completions",
+    "envVar": "API_AIRFORCE_API_KEY",
+    "docsUrl": "https://api.airforce",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "glm-4"
+      },
+      {
+        "id": "glm-5"
+      },
+      {
+        "id": "gpt-4",
+        "contextWindow": 8191
+      }
+    ]
+  },
+  {
+    "id": "atria",
+    "name": "Atria Dawn",
+    "baseUrl": "https://api.atria-asi.ai/v1",
+    "api": "openai-completions",
+    "envVar": "ATRIA_API_KEY",
+    "docsUrl": "https://atria-asi.ai",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "bai",
+    "name": "B.AI",
+    "baseUrl": "https://api.b.ai/v1",
+    "api": "openai-completions",
+    "envVar": "BAI_API_KEY",
+    "docsUrl": "https://b.ai",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "baidu",
+    "name": "Baidu Qianfan",
+    "baseUrl": "https://qianfan.baidubce.com/v2",
+    "api": "openai-completions",
+    "envVar": "BAIDU_API_KEY",
+    "docsUrl": "https://cloud.baidu.com/product/qianfan.html",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "bazaarlink",
+    "name": "Bazaarlink",
+    "baseUrl": "https://bazaarlink.ai/api/v1",
+    "api": "openai-completions",
+    "envVar": "BAZAARLINK_API_KEY",
+    "docsUrl": "https://bazaarlink.ai",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "qwen/qwen3.7-flash:free",
+        "contextWindow": 1000000
+      },
+      {
+        "id": "deepseek-v4-flash-0731free",
+        "contextWindow": 1048576
+      },
+      {
+        "id": "deepseek/deepseek-v4-flash-0731free:free",
+        "contextWindow": 1048576
+      }
+    ]
+  },
+  {
+    "id": "blackbox",
+    "name": "Blackbox AI",
+    "baseUrl": "https://api.blackbox.ai/v1",
+    "api": "openai-completions",
+    "envVar": "BLACKBOX_API_KEY",
+    "docsUrl": "https://blackbox.ai",
+    "keyRequired": true,
+    "notes": "Endpoint chat saja; daftar model tidak tersedia lewat /models. Isi model manual atau lewat Sync.",
+    "models": []
+  },
+  {
+    "id": "bluesminds",
+    "name": "BluesMinds",
+    "baseUrl": "https://api.bluesminds.com/v1",
+    "api": "openai-completions",
+    "envVar": "BLUESMINDS_API_KEY",
+    "docsUrl": "https://bluesminds.com",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "byteplus",
+    "name": "BytePlus ModelArk",
+    "baseUrl": "https://ark.ap-southeast.bytepluses.com/api/coding/v3",
+    "api": "openai-completions",
+    "envVar": "BYTEPLUS_API_KEY",
+    "docsUrl": "https://console.byteplus.com/ark",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "chutes",
+    "name": "Chutes AI",
+    "baseUrl": "https://llm.chutes.ai/v1",
+    "api": "openai-completions",
+    "envVar": "CHUTES_API_KEY",
+    "docsUrl": "https://chutes.ai",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "zai-org/GLM-5.3"
+      },
+      {
+        "id": "zai-org/GLM-5.1-TEE",
+        "contextWindow": 202752
+      },
+      {
+        "id": "zai-org/GLM-5.2-TEE",
+        "contextWindow": 1048576
+      }
+    ]
+  },
+  {
+    "id": "cohere",
+    "name": "Cohere",
+    "baseUrl": "https://api.cohere.ai/v1",
+    "api": "openai-completions",
+    "envVar": "COHERE_API_KEY",
+    "docsUrl": "https://cohere.com",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "dahl",
+    "name": "Dahl Inference",
+    "baseUrl": "https://inference.dahl.global/v1",
+    "api": "openai-completions",
+    "envVar": "DAHL_API_KEY",
+    "docsUrl": "https://dahl.global",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "zai-org/GLM-5.3-Flash"
+      },
+      {
+        "id": "deepseek-ai/DeepSeek-V4-Flash-0731"
+      },
+      {
+        "id": "MiniMaxAI/MiniMax-M2.7"
+      }
+    ]
+  },
+  {
+    "id": "featherless",
+    "name": "Featherless",
+    "baseUrl": "https://api.featherless.ai/v1",
+    "api": "openai-completions",
+    "envVar": "FEATHERLESS_API_KEY",
+    "docsUrl": "https://featherless.ai",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "FreelancerFel/TestLLAMA",
+        "contextWindow": 4096
+      },
+      {
+        "id": "FreedomIntelligence/AceGPT-v2-8B",
+        "contextWindow": 8192
+      },
+      {
+        "id": "freewheelin/free-llama3-dpo-v0.2",
+        "contextWindow": 8192
+      }
+    ]
+  },
+  {
+    "id": "glm-cn",
+    "name": "GLM (China)",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "api": "openai-completions",
+    "envVar": "GLM_CN_API_KEY",
+    "docsUrl": "https://open.bigmodel.cn",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "hyperbolic",
+    "name": "Hyperbolic",
+    "baseUrl": "https://api.hyperbolic.xyz/v1",
+    "api": "openai-completions",
+    "envVar": "HYPERBOLIC_API_KEY",
+    "docsUrl": "https://hyperbolic.xyz",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "kilo-gateway",
+    "name": "Kilo Gateway",
+    "baseUrl": "https://api.kilo.ai/api/gateway",
+    "api": "openai-completions",
+    "envVar": "KILO_GATEWAY_API_KEY",
+    "docsUrl": "https://kilo.ai",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "cohere/north-mini-code:free",
+        "contextWindow": 256000
+      },
+      {
+        "id": "z-ai/glm-5",
+        "contextWindow": 204800
+      },
+      {
+        "id": "openai/gpt-4",
+        "contextWindow": 8191
+      }
+    ]
+  },
+  {
+    "id": "kimchi",
+    "name": "Kimchi",
+    "baseUrl": "https://llm.kimchi.dev/openai/v1",
+    "api": "openai-completions",
+    "envVar": "KIMCHI_API_KEY",
+    "docsUrl": "https://kimchi.dev",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "llm7",
+    "name": "LLM7",
+    "baseUrl": "https://api.llm7.io/v1",
+    "api": "openai-completions",
+    "envVar": "LLM7_API_KEY",
+    "docsUrl": "https://llm7.io",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "glm-5.2",
+        "contextWindow": 976000
+      },
+      {
+        "id": "glm-5.3",
+        "contextWindow": 1000000
+      },
+      {
+        "id": "kimi-k3",
+        "contextWindow": 1000000
+      }
+    ]
+  },
+  {
+    "id": "mimo-free",
+    "name": "MiMo Code Free",
+    "baseUrl": "https://api.xiaomimimo.com/api/free-ai/openai/chat",
+    "api": "openai-completions",
+    "envVar": "MIMO_FREE_API_KEY",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint chat saja; daftar model tidak tersedia lewat /models. Isi model manual atau lewat Sync.",
+    "models": []
+  },
+  {
+    "id": "minimax-cn",
+    "name": "Minimax (China)",
+    "baseUrl": "https://api.minimaxi.com/anthropic/v1",
+    "api": "anthropic-messages",
+    "envVar": "MINIMAX_CN_API_KEY",
+    "docsUrl": "https://www.minimaxi.com",
+    "keyRequired": true,
+    "notes": "Memakai format Anthropic Messages. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "morph",
+    "name": "Morph",
+    "baseUrl": "https://api.morphllm.com/v1",
+    "api": "openai-completions",
+    "envVar": "MORPH_API_KEY",
+    "docsUrl": "https://morphllm.com",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "opencode-zen",
+    "name": "OpenCode Zen",
+    "baseUrl": "https://opencode.ai/zen/v1",
+    "api": "openai-completions",
+    "envVar": "OPENCODE_ZEN_API_KEY",
+    "docsUrl": "https://opencode.ai/auth",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "glm-5.3-flash-free"
+      },
+      {
+        "id": "deepseek-v4.1-flash-free"
+      },
+      {
+        "id": "glm-5"
+      }
+    ]
+  },
+  {
+    "id": "perplexity",
+    "name": "Perplexity",
+    "baseUrl": "https://api.perplexity.ai",
+    "api": "openai-completions",
+    "envVar": "PERPLEXITY_API_KEY",
+    "docsUrl": "https://www.perplexity.ai",
+    "keyRequired": true,
+    "notes": "Endpoint chat saja; daftar model tidak tersedia lewat /models. Isi model manual atau lewat Sync.",
+    "models": []
+  },
+  {
+    "id": "perplexity-agent",
+    "name": "Perplexity Agent",
+    "baseUrl": "https://api.perplexity.ai/v1",
+    "api": "openai-responses",
+    "envVar": "PERPLEXITY_AGENT_API_KEY",
+    "docsUrl": "https://www.perplexity.ai",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "poolside",
+    "name": "Poolside",
+    "baseUrl": "https://inference.poolside.ai/v1",
+    "api": "openai-completions",
+    "envVar": "POOLSIDE_API_KEY",
+    "docsUrl": "https://poolside.ai",
+    "keyRequired": true,
+    "badge": "free",
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "runcrate",
+    "name": "Runcrate",
+    "baseUrl": "https://api.runcrate.ai/v1",
+    "api": "openai-completions",
+    "envVar": "RUNCRATE_API_KEY",
+    "docsUrl": "https://www.runcrate.ai/inference/free?utm_source=9router&utm_medium=directory&utm_campaign=gpu_pricing",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "Qwen/Qwen3.5-9B",
+        "contextWindow": 262144
+      },
+      {
+        "id": "zai-org/GLM-4.7",
+        "contextWindow": 202752
+      },
+      {
+        "id": "zai-org/GLM-5.2",
+        "contextWindow": 1048576
+      }
+    ]
+  },
+  {
+    "id": "sensenova",
+    "name": "SenseNova",
+    "baseUrl": "https://token.sensenova.cn/v1",
+    "api": "openai-completions",
+    "envVar": "SENSENOVA_API_KEY",
+    "docsUrl": "https://token.sensenova.cn",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "siliconflow",
+    "name": "SiliconFlow",
+    "baseUrl": "https://api.siliconflow.com/v1",
+    "api": "openai-completions",
+    "envVar": "SILICONFLOW_API_KEY",
+    "docsUrl": "https://cloud.siliconflow.com",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "tencent",
+    "name": "Tencent Hunyuan",
+    "baseUrl": "https://api.hunyuan.cloud.tencent.com/v1",
+    "api": "openai-completions",
+    "envVar": "TENCENT_API_KEY",
+    "docsUrl": "https://cloud.tencent.com/product/hunyuan",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "tokenharbor",
+    "name": "Token Harbor",
+    "baseUrl": "https://tokenharbor.ai/v1",
+    "api": "openai-completions",
+    "envVar": "TOKENHARBOR_API_KEY",
+    "docsUrl": "https://tokenharbor.ai",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "tokenrouter",
+    "name": "TokenRouter",
+    "baseUrl": "https://api.tokenrouter.com/v1",
+    "api": "openai-completions",
+    "envVar": "TOKENROUTER_API_KEY",
+    "docsUrl": "https://www.tokenrouter.com",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
+  },
+  {
+    "id": "venice",
+    "name": "Venice AI",
+    "baseUrl": "https://api.venice.ai/api/v1",
+    "api": "openai-completions",
+    "envVar": "VENICE_API_KEY",
+    "docsUrl": "https://venice.ai",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Daftar model bisa diambil lewat Sync.",
+    "models": [
+      {
+        "id": "kimi-k3",
+        "contextWindow": 1000000
+      },
+      {
+        "id": "grok-4-3",
+        "contextWindow": 1000000
+      },
+      {
+        "id": "grok-4-5",
+        "contextWindow": 500000
+      }
+    ]
+  },
+  {
+    "id": "volcengine-ark",
+    "name": "Volcengine Ark",
+    "baseUrl": "https://ark.cn-beijing.volces.com/api/coding/v3",
+    "api": "openai-completions",
+    "envVar": "VOLCENGINE_ARK_API_KEY",
+    "docsUrl": "https://ark.cn-beijing.volces.com",
+    "keyRequired": true,
+    "notes": "Endpoint OpenAI-compatible. Butuh API key.",
+    "models": []
   }
 ]

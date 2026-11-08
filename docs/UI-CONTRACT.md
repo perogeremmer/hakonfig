@@ -228,6 +228,10 @@ type InstallResult = {
   nilai `baseUrl`/`api`/`name` masih sama dengan katalog, form hanya menampilkan API key +
   model. Endpoint ditampilkan sebagai kartu info (read-only) dan payload `upsert` tetap
   mengirim nilai katalog. Provider custom (id tidak dikenal) tetap memakai form lengkap.
+- Logo provider dibaca dari `web/assets/providers/logo-index.js` (hasil `bun run logos`),
+  bukan daftar manual. Menambah logo = taruh file, jalankan skrip, selesai.
+- `ProviderPreset.models` boleh kosong; UI wajib membiarkan pengguna mengisi lewat
+  **Sync model** (atau menambah model manual) sebelum menyimpan.
 - Logo: id yang tidak terdaftar di `LOGO_IDS` memakai mark `custom.svg` (OpenAI-compatible),
   bukan monogram. Menambah logo = taruh file + daftarkan id-nya.
 - Mode env memakai nama variabel `<PROVIDER_ID>_API_KEY` (aturan `env_name_from` di

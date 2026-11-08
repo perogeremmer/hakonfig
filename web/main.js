@@ -8,6 +8,11 @@ import { icon } from "./icons.js";
 import { t, setLang, getLang, fmtDate } from "./i18n/index.js";
 import { APP_VERSION } from "./version.js";
 import { envVarFor, isRegisteredProvider, registeredApi } from "./provider-form.js";
+import {
+  LOGO_DARK_VARIANT,
+  LOGO_EXT_PNG,
+  LOGO_IDS,
+} from "../assets/providers/logo-index.js";
 
 const invoke = window.__TAURI__?.core?.invoke;
 const listen = window.__TAURI__?.event?.listen;
@@ -81,55 +86,12 @@ function initials(id) {
 
 /**
  * Logo provider/harness. File ada di web/assets/providers/<id>.<ext>.
- * Selama file belum ada, monogram di bawahnya yang terlihat - jadi UI tetap
- * rapi sebelum logo asli dikumpulkan.
  *
- * `LOGO_EXT` hanya mencatat file yang berekstensi PNG; sisanya SVG.
- * `LOGO_DARK_VARIANT` menandai mark yang glyph-nya gelap di atas transparan:
- * file `<id>-dark.<ext>` (glyph terang) dipakai saat tema gelap.
+ * Daftar id, ekstensi PNG, dan varian gelap dibaca dari `logo-index.js` yang
+ * dibuat `scripts/sync-logos.mjs`, jadi menambah logo tidak perlu menyunting
+ * main.js. Provider yang id-nya tidak ada di daftar memakai mark
+ * OpenAI-compatible (`custom.svg`), bukan monogram.
  */
-const LOGO_EXT = {
-  aider: "png",
-  cerebras: "png",
-  "claude-code": "png",
-  codex: "png",
-  commandcode: "png",
-  crush: "png",
-  deepinfra: "png",
-  fireworks: "png",
-  gemini: "png",
-  "gemini-cli": "png",
-  groq: "png",
-  hermes: "png",
-  nebius: "png",
-  nvidia: "png",
-  ollama: "png",
-  openai: "png",
-  "opencode-go": "png",
-  opencode: "png",
-  "qwen-code": "png",
-  sambanova: "png",
-  together: "png",
-};
-const LOGO_DARK_VARIANT = new Set(["hermes", "ollama", "pi"]);
-
-/**
- * Id yang punya file logo di `web/assets/providers/`. Dipakai supaya provider
- * buatan sendiri (id apa pun yang tidak ada di sini) langsung memakai mark
- * "OpenAI-compatible" tanpa sempat menampilkan monogram.
- *
- * Menambah logo baru: taruh filenya, daftarkan id-nya di sini (dan di
- * `LOGO_EXT` kalau bukan SVG).
- */
-const LOGO_IDS = new Set([
-  "aider", "cerebras", "claude-code", "cline", "codex", "commandcode", "crush",
-  "dashscope", "deepinfra", "deepseek", "fireworks", "gemini", "gemini-cli",
-  "groq", "hermes", "huggingface", "minimax", "mistral", "moonshot", "nebius",
-  "nvidia", "ollama", "omp", "openai", "opencode", "opencode-go", "openrouter",
-  "pi", "qwen-code", "sambanova", "together", "vercel-gateway", "xai", "zhipu",
-]);
-
-/** Mark netral untuk provider custom (OpenAI-compatible). */
 const FALLBACK_LOGO = "custom";
 
 function logo(id, size = 40, extraClass = "") {
@@ -138,7 +100,7 @@ function logo(id, size = 40, extraClass = "") {
   const known = LOGO_IDS.has(id);
   const assetId = known ? id : FALLBACK_LOGO;
   const base = `./assets/providers/${esc(assetId)}`;
-  const ext = LOGO_EXT[assetId] ?? "svg";
+  const ext = LOGO_EXT_PNG.has(assetId) ? "png" : "svg";
   const dual = LOGO_DARK_VARIANT.has(assetId);
   const dark = dual
     ? `<img class="hk-logo-img hk-logo-img-dark" src="${base}-dark.${ext}" alt="" loading="lazy"
@@ -1474,16 +1436,16 @@ function openAddFlow(preset) {
 // ============================================================================
 
 /** Penanda kemampuan model - simbol saja, sengaja TIDAK terlihat bisa diklik. */
-function capMark(iconClass, on, title) {
-  return `<i class="bx ${iconClass} text-[17px] leading-none ${on ? "text-brand-strong" : "text-ink-muted opacity-45"}"
-    title="${esc(title)}" aria-label="${esc(title)}" role="img"></i>`;
+function capMark(iconName, on, title) {
+  return `<span class="inline-flex ${on ? "text-brand-strong" : "text-ink-muted opacity-45"}"
+    title="${esc(title)}" aria-label="${esc(title)}" role="img">${icon(iconName, "h-4 w-4")}</span>`;
 }
 
 function capMarks(model) {
   return `<span class="flex shrink-0 items-center gap-2 px-1">
-    ${capMark("bx-file", true, t("cap.textTitle"))}
-    ${capMark(model.vision ? "bx-show" : "bx-low-vision", Boolean(model.vision), t("cap.visionTitle"))}
-    ${capMark("bx-brain", Boolean(model.reasoning), t("cap.reasoningTitle"))}
+    ${capMark("file", true, t("cap.textTitle"))}
+    ${capMark(model.vision ? "eye" : "eyeLow", Boolean(model.vision), t("cap.visionTitle"))}
+    ${capMark("brain", Boolean(model.reasoning), t("cap.reasoningTitle"))}
   </span>`;
 }
 
@@ -1525,11 +1487,11 @@ function modelRow(index, model) {
         <div class="col-span-2 flex flex-wrap items-center gap-3 border-t border-line pt-2">
           <label class="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink">
             <input data-field="vision" type="checkbox" class="hk-check" ${model.vision ? "checked" : ""} />
-            <i class="bx bx-show text-[14px]"></i>${esc(t("cap.vision"))}
+            ${icon("eye", "h-4 w-4 text-ink-secondary")}${esc(t("cap.vision"))}
           </label>
           <label class="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink">
             <input data-field="reasoning" type="checkbox" class="hk-check" ${model.reasoning ? "checked" : ""} />
-            <i class="bx bx-brain text-[14px]"></i>${esc(t("cap.reasoning"))}
+            ${icon("brain", "h-4 w-4 text-ink-secondary")}${esc(t("cap.reasoning"))}
           </label>
         </div>
       </div>
