@@ -2,7 +2,6 @@
 //!
 //! `HAKONFIG_ROOT` bersifat process-global, jadi semua test yang memakainya
 //! wajib memegang mutex ini agar tidak saling menimpa.
-#![cfg(test)]
 
 use std::path::PathBuf;
 

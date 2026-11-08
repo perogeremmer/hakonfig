@@ -16,7 +16,7 @@ import {
 
 const groq = { id: "groq", name: "Groq", baseUrl: "https://api.groq.com/openai/v1", api: "openai-completions" };
 
-test("provider dari katalog dikenali walau namanya diganti", () => {
+test("catalog provider is recognized even when renamed", () => {
   // Bug yang dijaga: dulu `name` ikut dibandingkan, sehingga mengganti nama
   // tampilan memunculkan kembali field URL/ID/Jenis API.
   assert.equal(
@@ -26,39 +26,39 @@ test("provider dari katalog dikenali walau namanya diganti", () => {
   );
 });
 
-test("endpoint yang diubah manual dianggap provider custom", () => {
+test("manually changed endpoint is treated as a custom provider", () => {
   assert.equal(
     isRegisteredProvider(groq, { ...groq, baseUrl: "https://proxy.example.com/v1" }),
     false,
   );
 });
 
-test("api kosong tetap dianggap cocok", () => {
+test("empty api still counts as a match", () => {
   assert.equal(isRegisteredProvider(groq, { ...groq, api: "" }), true);
   assert.equal(isRegisteredProvider(groq, { ...groq, api: undefined }), true);
 });
 
-test("api yang berbeda dianggap provider custom", () => {
+test("different api is treated as a custom provider", () => {
   assert.equal(isRegisteredProvider(groq, { ...groq, api: "anthropic-messages" }), false);
 });
 
-test("id yang tidak ada di katalog bukan provider terdaftar", () => {
+test("id missing from the catalog is not a registered provider", () => {
   assert.equal(isRegisteredProvider(null, groq), false);
   assert.equal(isRegisteredProvider({ ...groq, id: "lain" }, groq), false);
 });
 
-test("perbedaan bentuk URL kecil tidak membatalkan deteksi", () => {
+test("small URL shape differences do not break detection", () => {
   assert.equal(isRegisteredProvider(groq, { ...groq, baseUrl: "https://api.groq.com/openai/v1/" }), true);
   assert.equal(isRegisteredProvider(groq, { ...groq, baseUrl: "  https://API.groq.com/openai/v1  " }), true);
   assert.equal(normalizeValue("HTTPS://A.test/v1//"), "https://a.test/v1");
 });
 
-test("provider tanpa baseUrl bukan provider terdaftar", () => {
+test("provider without a baseUrl is not a registered provider", () => {
   assert.equal(isRegisteredProvider(groq, { ...groq, baseUrl: "" }), false);
   assert.equal(isRegisteredProvider(groq, { ...groq, baseUrl: undefined }), false);
 });
 
-test("tipe API saat menyimpan memakai nilai katalog bila kosong", () => {
+test("API type on save uses the catalog value when empty", () => {
   assert.equal(registeredApi(groq, { ...groq, api: "" }), "openai-completions");
   assert.equal(registeredApi(groq, { ...groq, api: "google-generative-ai" }), "google-generative-ai");
   assert.equal(registeredApi(null, {}), "openai-completions");
@@ -66,14 +66,14 @@ test("tipe API saat menyimpan memakai nilai katalog bila kosong", () => {
 
 // ---------------------------------------------------------------- env var
 
-test("nama variabel mengikuti id provider", () => {
+test("variable name follows the provider id", () => {
   assert.equal(envVarName("opencode-go"), "OPENCODE_GO_API_KEY");
   assert.equal(envVarName("commandcode"), "COMMANDCODE_API_KEY");
   assert.equal(envVarName("my.endpoint"), "MY_ENDPOINT_API_KEY");
   assert.equal(envVarName("  spaced id  "), "SPACED_ID_API_KEY");
 });
 
-test("variabel mengikuti id provider, bukan envVar di presets", () => {
+test("variable follows the provider id, not the presets envVar", () => {
   // Backend memakai `env_name_from(id)`; kalau UI memakai nama lain (mis.
   // OPENCODE_API_KEY untuk id opencode-go), variabel yang disuruh export
   // bukan yang benar-benar dibaca harness.
@@ -85,7 +85,7 @@ test("variabel mengikuti id provider, bukan envVar di presets", () => {
   assert.equal(envVarFor({ provider: { id: "huggingface" }, managed: true }), "HUGGINGFACE_API_KEY");
 });
 
-test("env var tidak pernah diambil dari id model", () => {
+test("env var is never taken from a model id", () => {
   // Bug yang dijaga: form provider terdaftar tidak punya input id provider,
   // sehingga query pertama `[data-field="id"]` adalah baris model pertama
   // (mis. claude-sonnet-5-5) dan variabelnya jadi CLAUDE_SONNET_5_5_API_KEY.
@@ -98,7 +98,7 @@ test("env var tidak pernah diambil dari id model", () => {
   );
 });
 
-test("provider custom memakai id yang sedang diketik", () => {
+test("custom provider uses the id being typed", () => {
   assert.equal(envVarFor({ provider: null, typedId: "endpointku", managed: false }), "ENDPOINTKU_API_KEY");
   // id masih kosong: tampilkan pola, bukan "_API_KEY"
   assert.equal(envVarFor({ provider: null, typedId: "", managed: false }), "\u2039provider-id\u203a_API_KEY");

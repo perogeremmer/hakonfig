@@ -109,5 +109,5 @@ pub fn get(id: &str) -> Result<Box<dyn Adapter>> {
     all()
         .into_iter()
         .find(|adapter| adapter.id() == id)
-        .ok_or_else(|| anyhow::anyhow!("harness '{}' tidak dikenal", id))
+        .ok_or_else(|| anyhow::anyhow!("unknown harness '{}'", id))
 }

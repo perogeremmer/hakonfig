@@ -1,0 +1,20 @@
+[package]
+name = "hakonfig-core"
+version = "0.3.2"
+description = "Inti Hakonfig: engine baca/ubah/tulis config harness, tanpa Tauri"
+edition = "2021"
+license = "MIT"
+rust-version = "1.82"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+jsonc-parser = { version = "0.26", features = ["serde"] }
+anyhow = "1"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "rustls-tls",
+] }
+dirs = "6"

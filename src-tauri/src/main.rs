@@ -2,7 +2,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
-mod engine;
 
 fn main() {
     tauri::Builder::default()
@@ -24,5 +23,5 @@ fn main() {
             commands::open_external,
         ])
         .run(tauri::generate_context!())
-        .expect("gagal menjalankan Hakonfig");
+        .expect("failed to start Hakonfig");
 }

@@ -118,6 +118,7 @@ jobs:
             | macOS (universal: Apple Silicon + Intel) | `.dmg` |
             | Windows 10/11 | `.exe` (NSIS installer) |
             | Linux (Debian/Ubuntu) | `.deb` |
+            | CLI, semua platform | `hakonfig-cli-<target>` |
 
             These builds are **unsigned**. On macOS, right click the app and choose
             **Open** the first time. On Windows, SmartScreen may warn you.
@@ -126,3 +127,42 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      # Binary CLI dirilis bersama aplikasi desktop: dibangun dari matrix yang
+      # sama supaya tidak ada build terpisah, lalu diunggah ke draft release
+      # yang sama yang sudah dibuat tauri-action.
+      - name: Build & upload hakonfig-cli
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ needs.guard.outputs.version }}"
+          cd src-tauri
+
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            # Universal binary: gabungkan kedua arsitektur dengan lipo,
+            # mengikuti cara aplikasi desktop dibangun.
+            rustup target add aarch64-apple-darwin x86_64-apple-darwin
+            cargo build --locked --release -p hakonfig-cli --target aarch64-apple-darwin
+            cargo build --locked --release -p hakonfig-cli --target x86_64-apple-darwin
+            lipo -create \
+              target/aarch64-apple-darwin/release/hakonfig-cli \
+              target/x86_64-apple-darwin/release/hakonfig-cli \
+              -output hakonfig-cli-universal-apple-darwin
+            ASSET="hakonfig-cli-universal-apple-darwin"
+          else
+            cargo build --locked --release -p hakonfig-cli
+            TARGET="$(rustc -vV | sed -n 's/^host: //p')"
+            SRC="target/release/hakonfig-cli"
+            EXT=""
+            if [ "$RUNNER_OS" = "Windows" ]; then
+              SRC="target/release/hakonfig-cli.exe"
+              EXT=".exe"
+            fi
+            ASSET="hakonfig-cli-${TARGET}${EXT}"
+            cp "$SRC" "$ASSET"
+          fi
+
+          gh release upload "$TAG" "$ASSET" --clobber --repo "$GITHUB_REPOSITORY"
+          echo "terunggah: $ASSET"

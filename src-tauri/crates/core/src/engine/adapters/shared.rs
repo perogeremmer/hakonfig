@@ -8,29 +8,29 @@ use super::super::model::{KeyMode, ModelDraft, ModelSummary, ProviderDraft};
 pub fn validate_draft(draft: &ProviderDraft) -> Result<()> {
     if !is_slug(draft.id.trim()) {
         bail!(
-            "ID provider '{}' tidak valid. Gunakan huruf kecil, angka, titik, minus, atau garis bawah.",
+            "Provider id '{}' is not valid. Use lowercase letters, digits, dot, minus, or underscore.",
             draft.id
         );
     }
     if draft.name.trim().is_empty() {
-        bail!("Nama provider wajib diisi.");
+        bail!("Provider name is required.");
     }
     let base = draft.base_url.trim();
     if base.is_empty() {
-        bail!("Base URL wajib diisi.");
+        bail!("Base URL is required.");
     }
     if !(base.starts_with("http://") || base.starts_with("https://")) {
-        bail!("Base URL harus diawali http:// atau https://");
+        bail!("Base URL must start with http:// or https://");
     }
     if draft.api.trim().is_empty() {
-        bail!("Jenis API wajib dipilih.");
+        bail!("API type is required.");
     }
     if draft.models.is_empty() {
         bail!("Tambahkan minimal satu model.");
     }
     for model in &draft.models {
         if model.id.trim().is_empty() {
-            bail!("Ada baris model yang ID-nya masih kosong.");
+            bail!("A model row still has an empty id.");
         }
     }
     Ok(())

@@ -321,7 +321,7 @@ impl Adapter for OpenCodeAdapter {
                                     Value::Array(vec![Value::String(env_var.clone())]),
                                 );
                                 warnings.push(format!(
-                                    "Mode environment: set variabel {} di shell kamu.",
+                                    "Environment mode: set {} in your shell.",
                                     env_var
                                 ));
                             }
@@ -363,7 +363,8 @@ impl Adapter for OpenCodeAdapter {
                     }
                 } else if is_new {
                     warnings.push(
-                        "Provider dibuat tanpa API key. Isi key lewat tombol Ubah.".to_string(),
+                        "Provider created without an API key. Fill the key in via Change."
+                            .to_string(),
                     );
                 }
 
@@ -388,7 +389,7 @@ impl Adapter for OpenCodeAdapter {
                         .and_then(|m| m.get(&target))
                         .is_some();
                 if !known {
-                    anyhow::bail!("Provider '{}' tidak ditemukan di opencode.json.", target);
+                    anyhow::bail!("Provider '{}' not found in opencode.json.", target);
                 }
 
                 let config = docs.require_mut("config")?;
@@ -399,10 +400,10 @@ impl Adapter for OpenCodeAdapter {
                 }
 
                 Ok(vec![if *enabled {
-                    format!("Provider '{}' diaktifkan kembali.", target)
+                    format!("Provider '{}' re-enabled.", target)
                 } else {
                     format!(
-                        "Provider '{}' dinonaktifkan (entry tetap ada di opencode.json).",
+                        "Provider '{}' disabled (the entry stays in opencode.json).",
                         target
                     )
                 }])
@@ -414,7 +415,7 @@ impl Adapter for OpenCodeAdapter {
                 let provider = provider_id.trim().to_string();
                 let model = model_id.trim().to_string();
                 if provider.is_empty() || model.is_empty() {
-                    anyhow::bail!("Provider dan model wajib diisi.");
+                    anyhow::bail!("Provider and model are required.");
                 }
                 let config = docs.require_mut("config")?;
                 config.root_object().insert(
@@ -422,7 +423,7 @@ impl Adapter for OpenCodeAdapter {
                     Value::String(format!("{}/{}", provider, model)),
                 );
                 Ok(vec![format!(
-                    "Default OpenCode: {}/{} (ditulis ke opencode.json).",
+                    "OpenCode default: {}/{} (written to opencode.json).",
                     provider, model
                 )])
             }
@@ -447,10 +448,7 @@ impl Adapter for OpenCodeAdapter {
                 }
                 let mut warnings = Vec::new();
                 if !removed {
-                    warnings.push(format!(
-                        "Provider '{}' tidak ditemukan di opencode.json.",
-                        target
-                    ));
+                    warnings.push(format!("Provider '{}' not found in opencode.json.", target));
                 }
                 Ok(warnings)
             }
@@ -482,7 +480,10 @@ impl Adapter for OpenCodeAdapter {
             }
         }
         let entry = found?;
-        if let Some(key) = entry.get("options").and_then(|options| get_str(options, "apiKey")) {
+        if let Some(key) = entry
+            .get("options")
+            .and_then(|options| get_str(options, "apiKey"))
+        {
             return Some(key);
         }
         entry

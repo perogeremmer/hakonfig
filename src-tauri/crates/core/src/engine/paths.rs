@@ -3,7 +3,7 @@
 //! Semua path OS-specific terkurung di modul ini - adapter tidak pernah
 //! menyusun path sendiri.
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Override root untuk pengujian/portable mode.
 ///
@@ -97,7 +97,7 @@ pub fn opencode_data_dir() -> PathBuf {
 }
 
 /// Nama file config OpenCode yang benar-benar dipakai (`.json` atau `.jsonc`).
-pub fn opencode_config_file(dir: &PathBuf) -> PathBuf {
+pub fn opencode_config_file(dir: &Path) -> PathBuf {
     let jsonc = dir.join("opencode.jsonc");
     if jsonc.exists() {
         return jsonc;
@@ -111,7 +111,7 @@ mod unit_tests {
     use crate::engine::testutil::sandbox;
 
     #[test]
-    fn override_root_mengalihkan_semua_direktori_harness() {
+    fn override_root_redirects_all_harness_directories() {
         let (_lock, root) = sandbox("paths-override");
         assert_eq!(override_root().as_deref(), Some(root.as_path()));
         assert_eq!(pi_dir(), root.join("pi"));
@@ -122,12 +122,15 @@ mod unit_tests {
     }
 
     #[test]
-    fn opencode_memilih_ekstensi_yang_benar_benar_ada() {
+    fn opencode_picks_the_extension_that_exists() {
         let (_lock, root) = sandbox("paths-opencode-ext");
         let dir = root.join("opencode/config");
 
         // belum ada file → default .json
-        assert_eq!(opencode_config_file(&dir).file_name().unwrap(), "opencode.json");
+        assert_eq!(
+            opencode_config_file(&dir).file_name().unwrap(),
+            "opencode.json"
+        );
 
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("opencode.jsonc"), "{}").unwrap();

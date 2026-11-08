@@ -10,7 +10,7 @@
     "dev": "bun run css && tauri dev",
     "build": "bun run css && tauri build",
     "test": "bun run test:rust && bun run test:js",
-    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml --workspace",
     "test:js": "node --test web/diff.test.js web/i18n.test.js web/form.test.js web/provider-form.test.js web/logo-index.test.js web/offline.test.js",
     "version": "node scripts/version.mjs show",
     "version:check": "node scripts/version.mjs check",

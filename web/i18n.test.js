@@ -15,17 +15,17 @@ globalThis.document = globalThis.document ?? {
 const en = (await import("./i18n/en.js")).default;
 const id = (await import("./i18n/id.js")).default;
 
-test("id.js punya semua key yang ada di en.js", () => {
+test("id.js has every key that en.js has", () => {
   const missing = Object.keys(en).filter((key) => !(key in id));
   assert.deepEqual(missing, [], `key belum diterjemahkan: ${missing.join(", ")}`);
 });
 
-test("id.js tidak punya key asing", () => {
+test("id.js has no foreign keys", () => {
   const extra = Object.keys(id).filter((key) => !(key in en));
   assert.deepEqual(extra, [], `key tidak dipakai di en.js: ${extra.join(", ")}`);
 });
 
-test("setiap terjemahan tidak kosong", () => {
+test("every translation is non-empty", () => {
   const empty = Object.entries({ en, id })
     .flatMap(([lang, dict]) =>
       Object.entries(dict)
@@ -35,7 +35,7 @@ test("setiap terjemahan tidak kosong", () => {
   assert.deepEqual(empty, [], `nilai kosong: ${empty.join(", ")}`);
 });
 
-test("placeholder {var} sama di kedua bahasa", () => {
+test("placeholders {var} match in both languages", () => {
   const vars = (text) => [...String(text).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
   const mismatched = Object.keys(en).filter(
     (key) => JSON.stringify(vars(en[key])) !== JSON.stringify(vars(id[key])),
@@ -43,7 +43,7 @@ test("placeholder {var} sama di kedua bahasa", () => {
   assert.deepEqual(mismatched, [], `placeholder berbeda: ${mismatched.join(", ")}`);
 });
 
-test("copy UI tidak memakai em dash", () => {
+test("UI copy does not use an em dash", () => {
   // Aturan copy: pakai titik, koma, atau titik dua. Em dash (U+2014) dilarang
   // karena bikin kalimat terasa seperti teks tempelan.
   const offenders = Object.entries({ en, id })
@@ -55,7 +55,7 @@ test("copy UI tidak memakai em dash", () => {
   assert.deepEqual(offenders, [], `masih memakai em dash: ${offenders.join(", ")}`);
 });
 
-test("tidak ada terjemahan yang identik karena lupa diterjemahkan", () => {
+test("no translation is identical because it was left untranslated", () => {
   // Kata serapan yang memang sama di kedua bahasa: sengaja tidak diterjemahkan.
   const intentionallySame = new Set([
     "harness.uninstall",

@@ -5,6 +5,7 @@
 // Skrip ini menyebarkan nomor versi ke seluruh tempat yang membacanya:
 //   * package.json            (sumber)
 //   * src-tauri/Cargo.toml    ([package] version -> dipakai binary & bundle)
+//   * src-tauri/crates/*/Cargo.toml (crate core + cli ikut versi app)
 //   * src-tauri/tauri.conf.json (version -> nama installer)
 //   * web/version.js          (APP_VERSION -> ditampilkan di Settings)
 //
@@ -25,10 +26,27 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FILES = {
   package: join(root, "package.json"),
   cargo: join(root, "src-tauri/Cargo.toml"),
+  core: join(root, "src-tauri/crates/core/Cargo.toml"),
+  cli: join(root, "src-tauri/crates/cli/Cargo.toml"),
   tauri: join(root, "src-tauri/tauri.conf.json"),
   web: join(root, "web/version.js"),
   lock: join(root, "src-tauri/Cargo.lock"),
 };
+
+/** Versi pertama (`[package]`) dari sebuah Cargo.toml. */
+function cargoVersion(file) {
+  try {
+    return /^version = "([^"]+)"/m.exec(readFileSync(file, "utf8"))?.[1] ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Versi sebuah package di dalam Cargo.lock ("" bila tidak ada). */
+function lockVersion(text, name) {
+  const pattern = new RegExp(`\\[\\[package\\]\\]\\nname = "${name}"\\nversion = "([^"]+)"`);
+  return pattern.exec(text)?.[1] ?? "";
+}
 
 const SEMVER = /^\d+\.\d+\.\d+$/;
 
@@ -39,17 +57,25 @@ function readPackageVersion() {
 /** Versi yang tertulis di tiap file, dalam bentuk yang mudah dibandingkan. */
 function collect() {
   const pkg = readPackageVersion();
-  const cargo = /^version = "([^"]+)"/m.exec(readFileSync(FILES.cargo, "utf8"))?.[1];
   const tauri = JSON.parse(readFileSync(FILES.tauri, "utf8")).version;
   const web = /APP_VERSION = "([^"]+)"/.exec(readFileSync(FILES.web, "utf8"))?.[1];
-  let lock = "";
+  let lockText = "";
   try {
-    const text = readFileSync(FILES.lock, "utf8");
-    lock = /\[\[package\]\]\nname = "hakonfig"\nversion = "([^"]+)"/.exec(text)?.[1] ?? "";
+    lockText = readFileSync(FILES.lock, "utf8");
   } catch {
     // tanpa Cargo.lock, lewati pemeriksaan ini
   }
-  return { package: pkg, cargo, tauri, web, lock };
+  return {
+    package: pkg,
+    cargo: cargoVersion(FILES.cargo),
+    core: cargoVersion(FILES.core),
+    cli: cargoVersion(FILES.cli),
+    tauri,
+    web,
+    lock: lockVersion(lockText, "hakonfig"),
+    lockCore: lockVersion(lockText, "hakonfig-core"),
+    lockCli: lockVersion(lockText, "hakonfig-cli"),
+  };
 }
 
 function bump(current, kind) {
@@ -72,8 +98,15 @@ function write(next) {
   );
 
   // Cargo.toml: hanya `version` pertama (milik [package], bukan dependency).
-  const cargoText = readFileSync(FILES.cargo, "utf8");
-  writeFileSync(FILES.cargo, cargoText.replace(/^version = "[^"]+"/m, `version = "${next}"`));
+  for (const manifest of [FILES.cargo, FILES.core, FILES.cli]) {
+    let text;
+    try {
+      text = readFileSync(manifest, "utf8");
+    } catch {
+      continue;
+    }
+    writeFileSync(manifest, text.replace(/^version = "[^"]+"/m, `version = "${next}"`));
+  }
 
   // tauri.conf.json
   const tauriText = readFileSync(FILES.tauri, "utf8");
@@ -83,10 +116,13 @@ function write(next) {
   try {
     const lockPath = join(root, "src-tauri/Cargo.lock");
     const lock = readFileSync(lockPath, "utf8");
-    const patched = lock.replace(
-      /(\[\[package\]\]\nname = "hakonfig"\nversion = ")[^"]+(")/,
-      `$1${next}$2`,
-    );
+    let patched = lock;
+    for (const name of ["hakonfig", "hakonfig-core", "hakonfig-cli"]) {
+      patched = patched.replace(
+        new RegExp(`(\\[\\[package\\]\\]\\nname = "${name}"\\nversion = ")[^"]+(")`),
+        `$1${next}$2`,
+      );
+    }
     if (patched !== lock) writeFileSync(lockPath, patched);
   } catch {
     // Cargo.lock belum ada (checkout bersih): tidak masalah.
@@ -105,7 +141,8 @@ if (command === "show") {
   console.log(readPackageVersion());
 } else if (command === "check") {
   const versions = collect();
-  const values = Object.values(versions);
+  // Entri kosong = file belum ada (mis. Cargo.lock di checkout bersih).
+  const values = Object.values(versions).filter(Boolean);
   const ok = values.every((value) => value === versions.package);
   if (!ok) {
     console.error("Versi tidak konsisten:");

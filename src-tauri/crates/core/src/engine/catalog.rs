@@ -38,9 +38,17 @@ pub struct HarnessCatalogEntry {
 
 impl HarnessCatalogEntry {
     fn pick(unix: &Option<String>, windows: &Option<String>) -> Option<String> {
-        let raw = if cfg!(windows) { windows.clone().or_else(|| unix.clone()) } else { unix.clone() }?;
+        let raw = if cfg!(windows) {
+            windows.clone().or_else(|| unix.clone())
+        } else {
+            unix.clone()
+        }?;
         let trimmed = raw.trim();
-        if trimmed.is_empty() { None } else { Some(trimmed.to_string()) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
     }
 
     pub fn uninstall_command(&self) -> Option<String> {
@@ -56,7 +64,7 @@ impl HarnessCatalogEntry {
 
 pub fn all() -> Vec<HarnessCatalogEntry> {
     serde_json::from_str(CATALOG).unwrap_or_else(|error| {
-        eprintln!("[hakonfig] presets/harnesses.json tidak valid: {}", error);
+        eprintln!("[hakonfig] presets/harnesses.json is not valid: {}", error);
         Vec::new()
     })
 }

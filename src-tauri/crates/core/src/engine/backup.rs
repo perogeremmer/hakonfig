@@ -48,7 +48,7 @@ pub fn create(harness: &str, base: &Path, docs: &[&Doc]) -> Result<Option<PathBu
     let id = now.format("%Y%m%d-%H%M%S-%3f").to_string();
     let dir = backups_root(base).join(&id);
     std::fs::create_dir_all(&dir)
-        .with_context(|| format!("gagal membuat direktori backup {}", dir.display()))?;
+        .with_context(|| format!("failed to create backup directory {}", dir.display()))?;
 
     let mut entries = Vec::new();
     for doc in pending {
@@ -166,10 +166,10 @@ pub fn list(base: &Path) -> Vec<BackupInfo> {
 pub fn restore(base: &Path, backup_id: &str) -> Result<Vec<(PathBuf, String, bool)>> {
     let dir = backups_root(base).join(backup_id);
     if !dir.is_dir() {
-        anyhow::bail!("backup '{}' tidak ditemukan", backup_id);
+        anyhow::bail!("backup '{}' not found", backup_id);
     }
     let manifest = read_manifest(&dir)
-        .ok_or_else(|| anyhow::anyhow!("manifest backup '{}' tidak bisa dibaca", backup_id))?;
+        .ok_or_else(|| anyhow::anyhow!("backup manifest '{}' cannot be read", backup_id))?;
 
     let mut out = Vec::new();
     for entry in manifest.entries {
@@ -205,7 +205,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn tanpa_file_tidak_membuat_backup() {
+    fn missing_file_creates_no_backup() {
         let base = temp_dir("backup-none");
         let missing = base.join("tidak-ada.json");
         let doc = Doc::load(&FileSpec {
@@ -220,12 +220,14 @@ mod unit_tests {
     }
 
     #[test]
-    fn create_lalu_list_lalu_restore() {
+    fn create_then_list_then_restore() {
         let base = temp_dir("backup-roundtrip");
         let original = r#"{"a":1}"#;
         let doc = doc_for(&base, "models", "models.json", original);
 
-        let dir = create("pi", &base, &[&doc]).unwrap().expect("harus ada backup");
+        let dir = create("pi", &base, &[&doc])
+            .unwrap()
+            .expect("harus ada backup");
         assert!(dir.join(MANIFEST).exists());
         assert!(dir.join("models-models.json").exists());
 
@@ -249,7 +251,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn manifest_rusak_diabaikan_dan_id_asing_ditolak() {
+    fn broken_manifest_is_ignored_and_foreign_id_rejected() {
         let base = temp_dir("backup-corrupt");
         let doc = doc_for(&base, "models", "models.json", "{}");
         create("pi", &base, &[&doc]).unwrap();
@@ -268,7 +270,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn backup_dibatasi_dan_yang_paling_lama_dihapus() {
+    fn backup_is_capped_and_oldest_is_removed() {
         let base = temp_dir("backup-retensi");
         let doc = doc_for(&base, "models", "models.json", "{}");
 
@@ -298,7 +300,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn direktori_tanpa_manifest_ikut_dibersihkan() {
+    fn directories_without_manifest_are_cleaned_too() {
         let base = temp_dir("backup-orphan");
         let doc = doc_for(&base, "models", "models.json", "{}");
         create("pi", &base, &[&doc]).unwrap();
@@ -317,7 +319,7 @@ mod unit_tests {
     }
 
     #[test]
-    fn beberapa_backup_diurutkan_terbaru_dulu() {
+    fn multiple_backups_are_sorted_newest_first() {
         let base = temp_dir("backup-order");
         let doc = doc_for(&base, "models", "models.json", "{}");
         create("pi", &base, &[&doc]).unwrap();
