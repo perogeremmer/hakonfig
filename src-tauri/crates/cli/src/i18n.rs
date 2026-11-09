@@ -231,6 +231,14 @@ messages! {
         "provider ini belum punya daftar model. Tambahkan --models id1,id2 \
          (atau jalankan sekali di terminal untuk sync dari endpoint)."
     ),
+    SyncPromptStored => (
+        "Fetch the model list from the endpoint now?",
+        "Ambil daftar model dari endpoint sekarang?"
+    ),
+    SyncHintStored => (
+        "needs network; uses the API key already saved for this provider",
+        "butuh jaringan; memakai API key yang sudah tersimpan untuk provider ini"
+    ),
     SyncPrompt => (
         "Fetch the model list from the endpoint now?",
         "Ambil daftar model dari endpoint sekarang?"

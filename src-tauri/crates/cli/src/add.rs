@@ -471,12 +471,24 @@ fn run_existing_action(
             }
         }
         ExistingAction::Models => {
-            let models = pick_models(
+            // Key yang sudah tersimpan dipakai untuk sync: mengganti daftar
+            // model tidak boleh memaksa mengetik ulang API key.
+            let (key, stored) = match options.key.as_deref().map(str::trim) {
+                Some(value) if !value.is_empty() => (Some(value.to_string()), false),
+                _ => (
+                    api::stored_key(harness.to_string(), provider_id.clone())
+                        .ok()
+                        .filter(|value| !value.is_empty()),
+                    true,
+                ),
+            };
+            let models = pick_models_with_key_source(
                 options,
                 target,
                 harness,
-                options.key.as_deref(),
+                key.as_deref(),
                 interactive,
+                stored,
             )?;
             EditOp::SetModels {
                 provider_id: provider_id.clone(),
@@ -803,6 +815,19 @@ fn pick_models(
     key: Option<&str>,
     interactive: bool,
 ) -> Result<Vec<ModelDraft>> {
+    pick_models_with_key_source(options, target, harness, key, interactive, false)
+}
+
+/// `stored_key` = key datang dari config provider ini, bukan yang baru diketik,
+/// supaya petunjuk prompt-nya jujur.
+fn pick_models_with_key_source(
+    options: &AddOptions,
+    target: &Target,
+    harness: &str,
+    key: Option<&str>,
+    interactive: bool,
+    stored_key: bool,
+) -> Result<Vec<ModelDraft>> {
     let preset = match target {
         Target::Preset(preset) => Some(preset.as_ref()),
         Target::Custom { .. } => None,
@@ -817,7 +842,7 @@ fn pick_models(
         return Ok(models);
     }
 
-    if wants_sync(options, preset, key, interactive)? {
+    if wants_sync(options, preset, key, interactive, stored_key)? {
         match sync_models(target, options, harness, key) {
             Ok(live) if !live.is_empty() => {
                 let models = draft::models_from_sync(live, preset);
@@ -893,6 +918,7 @@ fn wants_sync(
     preset: Option<&ProviderPreset>,
     key: Option<&str>,
     interactive: bool,
+    stored_key: bool,
 ) -> Result<bool> {
     if options.sync {
         return Ok(true);
@@ -906,9 +932,14 @@ fn wants_sync(
     if key.is_none() && needs_key {
         return Ok(false);
     }
-    ask(inquire::Confirm::new(i18n::t(Msg::SyncPrompt))
+    let (prompt, hint) = if stored_key {
+        (Msg::SyncPromptStored, Msg::SyncHintStored)
+    } else {
+        (Msg::SyncPrompt, Msg::SyncHint)
+    };
+    ask(inquire::Confirm::new(i18n::t(prompt))
         .with_default(true)
-        .with_help_message(i18n::t(Msg::SyncHint))
+        .with_help_message(i18n::t(hint))
         .prompt())
 }
 

@@ -508,6 +508,19 @@ pub fn request_key(
     Ok(resolve_env_key(&stored))
 }
 
+/// API key yang **sudah tersimpan** untuk sebuah provider, tanpa perlu
+/// mengetiknya ulang. Kosong berarti tidak ada key tersimpan (misalnya
+/// provider yang memakai environment variable).
+pub fn stored_key(harness_id: String, provider_id: String) -> Result<String, String> {
+    let adapter = harness(&harness_id).map_err(err)?;
+    let docs = Docs::load(&adapter.specs()).map_err(err)?;
+    Ok(adapter
+        .stored_key(&docs, &provider_id)
+        .unwrap_or_default()
+        .trim()
+        .to_string())
+}
+
 pub async fn test_connection(
     base_url: String,
     api: String,

@@ -834,6 +834,65 @@ fn changing_the_endpoint_still_does_a_full_write() {
     );
 }
 
+#[test]
+fn sync_models_only_reuses_the_stored_key() {
+    // Mengganti daftar model tidak boleh memaksa mengetik ulang API key: kalau
+    // key sudah tersimpan, `--models-only --sync` memakainya untuk memanggil
+    // endpoint.
+    let root = sandbox("sync-stored-key");
+    let port = mock_models_server(r#"{"data":[{"id":"live-a"},{"id":"live-b"}]}"#);
+    let base_url = format!("http://127.0.0.1:{port}/v1");
+
+    write_file(
+        &root,
+        "pi/agent/models.json",
+        &format!(
+            r#"{{"providers":{{"gateway":{{"name":"Gateway","baseUrl":"{base_url}","api":"openai-completions","models":[{{"id":"lama-a"}}]}}}}}}"#
+        ),
+    );
+    write_file(
+        &root,
+        "pi/agent/auth.json",
+        r#"{"gateway":{"type":"api_key","key":"sk-tersimpan"}}"#,
+    );
+
+    let output = run(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "gateway",
+            "--name",
+            "Gateway",
+            "--base-url",
+            &base_url,
+            "--models-only",
+            "--sync",
+            "--no-test",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    assert_eq!(parsed["action"], "set_models");
+
+    let models = read_json(&models_path(&root));
+    let ids: Vec<&str> = models["providers"]["gateway"]["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|model| model["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, vec!["live-a", "live-b"], "harus dari endpoint");
+    assert_eq!(
+        read_json(&auth_path(&root))["gateway"]["key"],
+        "sk-tersimpan",
+        "key tersimpan tidak boleh berubah"
+    );
+}
+
 // ------------------------------------------------------------------ doctor
 
 fn write_file(root: &Path, relative: &str, contents: &str) {

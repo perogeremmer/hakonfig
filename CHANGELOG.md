@@ -4,6 +4,17 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [Unreleased]
+
+### Added
+
+- CLI: *Choose models (key stays)* sekarang bisa **sync daftar model dari
+  endpoint** memakai API key yang sudah tersimpan, jadi daftar model bisa
+  di-refresh tanpa mengetik ulang key. Berlaku juga untuk skrip:
+  `add --models-only --sync`.
+- core: `api::stored_key(harness, provider)` — membaca key tersimpan tanpa
+  membuka config manual; dipakai CLI untuk sync.
+
 ## [0.4.7]
 
 Satu menu saja untuk provider yang sudah terpasang, dan *Cancel* benar-benar

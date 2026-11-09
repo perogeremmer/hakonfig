@@ -145,6 +145,14 @@ lain sebelumnya):
 `Cancel` benar-benar berhenti — tidak lanjut ke alur `add` dan tidak meminta
 API key.
 
+*Choose models (key stays)* menawarkan **sync dari endpoint** dan memakai **API
+key yang sudah tersimpan** untuk provider itu, jadi daftar model bisa
+di-refresh tanpa mengetik key lagi. Untuk skrip:
+
+```bash
+hakonfig-cli add --harness pi --provider deepseek --models-only --sync
+```
+
 Di mode non-interaktif aturannya eksplisit:
 
 | Yang diberikan | Yang dilakukan |
