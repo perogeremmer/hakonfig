@@ -605,6 +605,130 @@ fn add_without_a_test_flag_skips_the_test_and_still_writes() {
     );
 }
 
+// ------------------------------------------------------------------ doctor
+
+fn write_file(root: &Path, relative: &str, contents: &str) {
+    let path = root.join(relative);
+    std::fs::create_dir_all(path.parent().expect("tanpa parent")).expect("gagal membuat folder");
+    std::fs::write(&path, contents).expect("gagal menulis file");
+}
+
+#[test]
+fn doctor_reports_scope_that_hides_written_models() {
+    let root = sandbox("doctor-scope");
+    write_file(
+        &root,
+        "pi/agent/models.json",
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"},{"id":"deepseek/b"}]}}}"#,
+    );
+    write_file(
+        &root,
+        "pi/agent/settings.json",
+        r#"{"enabledModels":["gateway/*"]}"#,
+    );
+
+    let output = run(&root, &["doctor"]);
+    let text = stdout(&output);
+
+    assert!(
+        !output.status.success(),
+        "config yang tersembunyi harus menghasilkan exit non-zero: {text}"
+    );
+    assert!(text.contains("enabledModels"), "{text}");
+    assert!(
+        text.contains("gateway/**"),
+        "harus menyebut polanya: {text}"
+    );
+    assert!(
+        stderr(&output).contains("doctor --fix"),
+        "harus menunjukkan jalan keluar: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn doctor_fix_widens_the_scope_and_clears_the_report() {
+    let root = sandbox("doctor-fix");
+    write_file(
+        &root,
+        "pi/agent/models.json",
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"deepseek/b"}]}}}"#,
+    );
+    write_file(
+        &root,
+        "pi/agent/settings.json",
+        r#"{"enabledModels":["gateway/*"]}"#,
+    );
+
+    let output = run(&root, &["doctor", "--fix"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let settings = read_json(&root.join("pi/agent/settings.json"));
+    let patterns: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .expect("enabledModels harus array")
+        .iter()
+        .map(|item| item.as_str().unwrap_or_default())
+        .collect();
+    assert!(patterns.contains(&"gateway/**"), "{patterns:?}");
+    assert!(!patterns.contains(&"gateway/*"), "{patterns:?}");
+
+    let check = run(&root, &["doctor"]);
+    assert!(check.status.success(), "{}", stderr(&check));
+    assert!(
+        stdout(&check).contains("no hidden config"),
+        "{}",
+        stdout(&check)
+    );
+}
+
+#[test]
+fn doctor_json_lists_notices_with_their_fix() {
+    let root = sandbox("doctor-json");
+    write_file(
+        &root,
+        "pi/agent/models.json",
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"}]}}}"#,
+    );
+    write_file(
+        &root,
+        "pi/agent/settings.json",
+        r#"{"enabledModels":["lain/**"]}"#,
+    );
+
+    let output = run(&root, &["doctor", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON valid");
+    let items = parsed.as_array().expect("array notice");
+    assert_eq!(items.len(), 1, "{parsed:#}");
+    assert_eq!(items[0]["code"], "pi.scope");
+    assert_eq!(items[0]["harness"], "pi");
+    assert_eq!(items[0]["provider"], "gateway");
+    assert!(items[0]["fix"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("gateway/**"));
+}
+
+#[test]
+fn doctor_does_not_touch_files_without_fix() {
+    let root = sandbox("doctor-readonly");
+    write_file(
+        &root,
+        "pi/agent/models.json",
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"}]}}}"#,
+    );
+    let before = r#"{"enabledModels":["lain/**"]}"#;
+    write_file(&root, "pi/agent/settings.json", before);
+
+    let _ = run(&root, &["doctor"]);
+
+    assert_eq!(
+        std::fs::read_to_string(root.join("pi/agent/settings.json")).unwrap(),
+        before,
+        "doctor tanpa --fix tidak boleh menulis apa pun"
+    );
+}
+
 // ------------------------------------------------------------------ sync
 
 /// Server HTTP tiruan satu tembakan: cukup untuk `GET {base}/models`.

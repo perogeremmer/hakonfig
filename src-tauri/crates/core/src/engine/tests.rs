@@ -1304,3 +1304,203 @@ fn default_omp_without_scope_does_not_invent_enabled_models() {
         "jangan mengarang scope bila user belum punya"
     );
 }
+
+// ------------------------------------------------------------------ notices
+
+#[test]
+fn pi_scope_notice_reports_models_hidden_by_enabled_models() {
+    let (_lock, root) = sandbox("notices_pi_scope");
+    let dir = root.join("pi/agent");
+    // `provider/*` tidak melewati garis miring, jadi model bersarang hilang.
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"},{"id":"deepseek/b"}]}}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"enabledModels":["gateway/*"]}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    let scope = notices
+        .iter()
+        .find(|notice| notice.code == "pi.scope")
+        .expect("harus ada notice scope");
+    assert_eq!(scope.provider, "gateway");
+    assert!(
+        scope.message.contains("gateway/deepseek/b"),
+        "pesan harus menyebut contoh model yang tersembunyi: {}",
+        scope.message
+    );
+    assert!(
+        scope.message.contains("gateway/**"),
+        "pesan harus menyebut pola yang benar: {}",
+        scope.message
+    );
+    assert!(scope.fix.is_some(), "harus ada perbaikan otomatis");
+}
+
+#[test]
+fn pi_scope_fix_widens_the_pattern_and_writes_a_backup() {
+    let (_lock, root) = sandbox("notices_pi_fix");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"deepseek/b"}]}}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"enabledModels":["gateway/*","other/**"],"theme":"dark"}"#,
+    );
+
+    let result = api::fix_notice("pi".into(), "pi.scope".into(), "gateway".into()).unwrap();
+    assert!(
+        result.backup_dir.is_some(),
+        "perbaikan harus membuat backup"
+    );
+    assert!(
+        result.notices.is_empty(),
+        "setelah diperbaiki tidak boleh ada notice lagi: {:?}",
+        result.notices
+    );
+
+    let settings: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("settings.json")).unwrap()).unwrap();
+    let patterns: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect();
+    assert!(patterns.contains(&"gateway/**"), "{patterns:?}");
+    assert!(
+        !patterns.contains(&"gateway/*"),
+        "pola sempit harus diganti: {patterns:?}"
+    );
+    assert!(
+        patterns.contains(&"other/**"),
+        "pola lain tidak boleh hilang: {patterns:?}"
+    );
+    assert_eq!(settings["theme"], "dark");
+}
+
+#[test]
+fn pi_without_enabled_models_has_no_scope_notice() {
+    let (_lock, root) = sandbox("notices_pi_no_scope");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"}]}}}"#,
+    );
+    write(&dir.join("settings.json"), "{}");
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    assert!(
+        notices.is_empty(),
+        "tanpa enabledModels semua model terlihat: {notices:?}"
+    );
+}
+
+#[test]
+fn disabled_provider_is_reported_and_re_enabled_by_fix() {
+    let (_lock, root) = sandbox("notices_omp_disabled");
+    let dir = root.join("omp/agent");
+    write(
+        &dir.join("models.yml"),
+        "providers:\n  gateway:\n    baseUrl: https://gw.test/v1\n    api: openai-completions\n    apiKey: k\n    models:\n      - id: m1\n",
+    );
+    write(
+        &dir.join("config.yml"),
+        "disabledProviders:\n  - gateway\ntheme: dark\n",
+    );
+
+    let notices = api::list_notices(Some("omp".to_string())).unwrap();
+    let disabled = notices
+        .iter()
+        .find(|notice| notice.code == "omp.disabled")
+        .expect("harus ada notice provider dinonaktifkan");
+    assert_eq!(disabled.provider, "gateway");
+
+    let result = api::fix_notice("omp".into(), "omp.disabled".into(), "gateway".into()).unwrap();
+    assert!(result.backup_dir.is_some());
+    assert!(result.notices.is_empty(), "{:?}", result.notices);
+
+    let settings = yaml(&dir.join("config.yml"));
+    assert!(
+        settings["disabledProviders"]
+            .as_array()
+            .map(|items| items.is_empty())
+            .unwrap_or(true),
+        "{settings:?}"
+    );
+    assert_eq!(settings["theme"], "dark");
+}
+
+#[test]
+fn builtin_id_collision_is_reported_without_a_fix() {
+    let (_lock, root) = sandbox("notices_builtin_id");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"openrouter":{"baseUrl":"https://my-gw.test/v1","api":"openai-completions","models":[{"id":"a"}]}}}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    let collision = notices
+        .iter()
+        .find(|notice| notice.code == "harness.builtin-id")
+        .expect("harness harus melaporkan bentrok id");
+    assert_eq!(collision.provider, "openrouter");
+    assert!(
+        collision.fix.is_none(),
+        "bentrok id tidak bisa diperbaiki otomatis"
+    );
+    assert!(collision.message.contains("openrouter-gw"));
+}
+
+#[test]
+fn apply_reports_notices_for_the_written_provider() {
+    let (_lock, root) = sandbox("notices_apply");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("settings.json"),
+        r#"{"enabledModels":["lain/**"]}"#,
+    );
+
+    let result =
+        api::apply_edit("pi".into(), upsert("gateway", Some("k"), KeyMode::Inline)).unwrap();
+
+    assert!(
+        result
+            .notices
+            .iter()
+            .any(|notice| notice.code == "pi.scope"),
+        "apply harus melaporkan model yang tersembunyi: {:?}",
+        result.notices
+    );
+    assert!(
+        result
+            .warnings
+            .iter()
+            .any(|warning| warning.contains("enabledModels")),
+        "notice juga masuk warnings supaya UI lama ikut menampilkannya: {:?}",
+        result.warnings
+    );
+}
+
+#[test]
+fn genuine_builtin_provider_is_not_flagged_as_a_collision() {
+    let (_lock, root) = sandbox("notices_builtin_real");
+    let dir = root.join("pi/agent");
+    // Endpoint resmi DeepSeek: bukan gateway yang menumpang id bawaan.
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"deepseek":{"baseUrl":"https://api.deepseek.com","api":"openai-completions","models":[{"id":"deepseek-chat"}]}}}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    assert!(
+        notices.is_empty(),
+        "provider asli tidak boleh diperingatkan: {notices:?}"
+    );
+}

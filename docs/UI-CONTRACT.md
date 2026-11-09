@@ -117,6 +117,17 @@ type ApplyResult = {
   filesWritten: string[];
   backupDir: string | null;
   warnings: string[];
+  // Config tertulis tetapi harness masih bisa menyembunyikannya; lihat Notice.
+  notices: Notice[];
+};
+
+// Sesuatu yang membuat provider/model yang sudah ditulis tidak terlihat harness.
+type Notice = {
+  code: string; // "pi.scope" | "omp.disabled" | "opencode.disabled" | "harness.builtin-id"
+  harness: string;
+  provider: string;
+  message: string;
+  fix: string | null; // null = hanya bisa dibereskan manual
 };
 
 type BackupInfo = {
@@ -146,6 +157,7 @@ type TestResult = {
 | `list_presets` | – | `ProviderPreset[]` |
 | `preview_edit` | `{ harnessId: string, op: EditOp }` | `PreviewResult` |
 | `apply_edit` | `{ harnessId: string, op: EditOp }` | `ApplyResult` |
+| `fix_notice` | `{ harnessId: string, code: string, provider: string }` | `ApplyResult` |
 | `list_backups` | `{ harnessId: string }` | `BackupInfo[]` |
 | `restore_backup` | `{ harnessId: string, backupId: string }` | `ApplyResult` |
 | `test_connection` | `{ baseUrl: string, api: string, key: string, harnessId?: string, providerId?: string }` | `TestResult` |
@@ -224,6 +236,8 @@ type InstallResult = {
   pernah dikirim ke UI, jadi UI cukup mengosongkan `key` bila
   `ProviderSummary.hasKey` bernilai true.
 - `apply_edit` boleh dipanggil walau tidak ada perubahan; ia mengembalikan `filesWritten: []` tanpa membuat backup.
+- `apply_edit` mengembalikan `notices` untuk provider yang ditulis. Notice dengan `fix` bukan null wajib ditawarkan sebagai aksi (tombol "Perbaiki" memanggil `fix_notice`), bukan hanya dicetak sebagai teks.
+- `fix_notice` hanya menerima notice yang masih ada; notice yang sudah beres ditolak dengan error, jadi tombolnya aman ditekan dua kali.
 - Form provider: untuk provider yang id-nya ada di `ProviderPreset` (katalog Hakonfig) **dan**
   nilai `baseUrl`/`api`/`name` masih sama dengan katalog, form hanya menampilkan API key +
   model. Endpoint ditampilkan sebagai kartu info (read-only) dan payload `upsert` tetap

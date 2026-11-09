@@ -171,6 +171,42 @@ messages! {
     ),
     StdinFailed => ("failed to read stdin: {error}", "gagal membaca stdin: {error}"),
 
+    // ---- doctor
+    DoctorHarness => ("harness", "harness"),
+    DoctorProvider => ("provider", "provider"),
+    DoctorIssue => ("issue", "masalah"),
+    DoctorFix => ("fix", "perbaikan"),
+    DoctorManual => ("manual", "manual"),
+    DoctorClean => (
+        "no hidden config: every written provider is reachable in its harness.",
+        "tidak ada config tersembunyi: semua provider yang tertulis bisa dilihat harness-nya."
+    ),
+    DoctorFixed => ("fixed: {detail}", "diperbaiki: {detail}"),
+    DoctorNothingToFix => (
+        "nothing needed fixing.",
+        "tidak ada yang perlu diperbaiki."
+    ),
+    DoctorFixFailed => (
+        "! could not fix {harness}/{provider}: {error}",
+        "! gagal memperbaiki {harness}/{provider}: {error}"
+    ),
+    DoctorRemaining => (
+        "some issues are left; fix them manually.",
+        "masih ada masalah yang tersisa; perbaiki manual."
+    ),
+    DoctorHintFix => (
+        "{count} issue(s) hide config from its harness: run 'hakonfig-cli doctor --fix'.",
+        "{count} masalah membuat config tidak terlihat harness-nya: jalankan 'hakonfig-cli doctor --fix'."
+    ),
+    UnknownHarness => (
+        "unknown harness '{raw}'. Run 'hakonfig-cli list' to see the ids.",
+        "harness '{raw}' tidak dikenal. Jalankan 'hakonfig-cli list' untuk melihat id-nya."
+    ),
+    NoticeHint => (
+        "run 'hakonfig-cli doctor' to see why, and 'doctor --fix' to fix it.",
+        "jalankan 'hakonfig-cli doctor' untuk melihat sebabnya, dan 'doctor --fix' untuk memperbaikinya."
+    ),
+
     // ---- add: model
     PickModels => ("Which models?", "Model mana yang dipakai?"),
     PickModelsHintAll => (

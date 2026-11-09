@@ -13,7 +13,9 @@ use std::path::PathBuf;
 use super::shared;
 use super::Adapter;
 use crate::engine::doc::{get_str, mask_key, Docs, FileSpec, Format};
-use crate::engine::model::{ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, ProviderSummary};
+use crate::engine::model::{
+    ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, Notice, ProviderSummary,
+};
 use crate::engine::paths;
 
 pub struct OmpAdapter;
@@ -21,6 +23,40 @@ pub struct OmpAdapter;
 impl OmpAdapter {
     fn agent_dir() -> PathBuf {
         paths::omp_dir().join("agent")
+    }
+
+    /// Provider yang tercantum di `disabledProviders` milik omp: modelnya ada di
+    /// `models.yml` tetapi tidak pernah muncul di pemilih model.
+    fn disabled_providers(docs: &Docs) -> Vec<String> {
+        docs.get("settings")
+            .and_then(|doc| doc.data().get("disabledProviders"))
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn disabled_notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        let disabled = Self::disabled_providers(docs);
+        providers
+            .iter()
+            .filter(|provider| disabled.iter().any(|entry| entry == provider.id))
+            .map(|provider| Notice {
+                provider: provider.id.to_string(),
+                code: "omp.disabled".to_string(),
+                harness: "omp".to_string(),
+                message: format!(
+                    "provider '{}' is listed in disabledProviders in config.yml, so omp hides its models even though they are in models.yml.",
+                    provider.id
+                ),
+                fix: Some(format!("Remove '{}' from disabledProviders", provider.id)),
+            })
+            .collect()
     }
 }
 
@@ -288,6 +324,36 @@ impl Adapter for OmpAdapter {
 
     /// oh-my-pi menyimpan key langsung di `models.yml` (`apiKey`), dan entry
     /// provider yang dinonaktifkan tetap ada di file - jadi cukup satu lookup.
+    fn builtin_providers(&self) -> &'static [(&'static str, &'static str)] {
+        shared::BUILTIN_PROVIDERS
+    }
+
+    fn notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        let mut notices =
+            shared::builtin_id_notices(self.id(), self.builtin_providers(), providers);
+        notices.extend(self.disabled_notices(docs, providers));
+        notices
+    }
+
+    fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
+        match notice.code.as_str() {
+            "omp.disabled" => {
+                let settings = docs.require_mut("settings")?;
+                let list = settings.array_at("disabledProviders");
+                let before = list.len();
+                list.retain(|item| item.as_str() != Some(notice.provider.as_str()));
+                if list.len() == before {
+                    return Ok(None);
+                }
+                Ok(Some(format!(
+                    "'{}' re-enabled in config.yml (its models were never removed).",
+                    notice.provider
+                )))
+            }
+            other => anyhow::bail!("omp has no automatic fix for '{other}'"),
+        }
+    }
+
     fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
         let target = provider_id.trim();
         if target.is_empty() {

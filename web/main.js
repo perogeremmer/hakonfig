@@ -150,6 +150,7 @@ const api = {
   uninstall: (harnessId) => invoke("uninstall_harness", { harnessId }),
   models: (baseUrl, apiName, key, harnessId = null, providerId = null) =>
     invoke("fetch_models", { baseUrl, api: apiName, key, harnessId, providerId }),
+  fixNotice: (harnessId, code, provider) => invoke("fix_notice", { harnessId, code, provider }),
 };
 
 // ------------------------------------------------------------------ preferensi
@@ -1116,11 +1117,42 @@ async function commit(op) {
       close();
       toast(t("toast.saved"), { detail: result.filesWritten.join("\n") });
       if (result.backupDir) toast(t("toast.backupSaved"), { variant: "info", detail: result.backupDir });
+      offerNoticeFix(harnessId, result.notices ?? []);
       await refreshAll();
     } catch (error) {
       button.disabled = false;
       toast(t("toast.applyFailed"), { variant: "err", detail: String(error) });
     }
+  });
+}
+
+/**
+ * Config sudah tertulis, tapi harness bisa saja belum menampilkannya: pi
+ * menyaring model lewat `enabledModels`, omp/OpenCode punya daftar disable.
+ * Notice yang punya perbaikan otomatis ditawarkan sekali klik.
+ */
+function offerNoticeFix(harnessId, notices) {
+  const fixable = notices.filter((notice) => notice.fix);
+  if (fixable.length === 0) return;
+  const notice = fixable[0];
+  const more = fixable.length > 1 ? ` (+${fixable.length - 1})` : "";
+
+  toast(t("toast.noticeHidden", { harness: notice.harness, provider: notice.provider }) + more, {
+    variant: "info",
+    detail: notice.fix,
+    action: {
+      label: t("toast.noticeFix"),
+      onClick: async () => {
+        try {
+          const result = await api.fixNotice(harnessId, notice.code, notice.provider);
+          toast(t("toast.noticeFixed"), { detail: result.filesWritten.join("\n") });
+          offerNoticeFix(harnessId, result.notices ?? []);
+          await refreshAll();
+        } catch (error) {
+          toast(t("toast.noticeFixFailed"), { variant: "err", detail: String(error) });
+        }
+      },
+    },
   });
 }
 

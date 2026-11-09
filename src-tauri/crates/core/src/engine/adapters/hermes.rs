@@ -12,7 +12,9 @@ use std::path::PathBuf;
 use super::shared;
 use super::Adapter;
 use crate::engine::doc::{env_name_from, get_str, mask_key, Docs, FileSpec, Format};
-use crate::engine::model::{ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, ProviderSummary};
+use crate::engine::model::{
+    ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, Notice, ProviderSummary,
+};
 use crate::engine::paths;
 
 pub struct HermesAdapter;
@@ -364,6 +366,17 @@ impl Adapter for HermesAdapter {
     /// Hermes hanya menyimpan **nama** variabel (`key_env`); nilainya ada di
     /// `.env`. Bila `.env` belum diisi, kembalikan `$VAR` supaya pemanggil
     /// masih bisa mendapatkannya dari environment proses.
+    fn builtin_providers(&self) -> &'static [(&'static str, &'static str)] {
+        shared::BUILTIN_PROVIDERS
+    }
+
+    fn notices(&self, _docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        // Hermes mengambil daftar model langsung dari endpoint dan menyimpannya
+        // di cache per provider (`provider_models_cache.json`, TTL 1 jam), jadi
+        // model yang ditulis tidak bisa "hilang". Yang tersisa hanya bentrok id.
+        shared::builtin_id_notices(self.id(), self.builtin_providers(), providers)
+    }
+
     fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
         let target = provider_id.trim();
         if target.is_empty() {

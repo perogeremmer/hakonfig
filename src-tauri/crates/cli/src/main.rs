@@ -71,6 +71,15 @@ enum Command {
         /// harness id. Optional when only one exists.
         harness: Option<String>,
     },
+    /// Find config the harness will not show, and optionally fix it.
+    Doctor {
+        /// Limit the check to one harness.
+        #[arg(long)]
+        harness: Option<String>,
+        /// Apply the automatic fixes.
+        #[arg(long)]
+        fix: bool,
+    },
     /// Add or change a provider. Runs as a wizard when called without flags.
     Add {
         /// harness id (e.g. pi, opencode).
@@ -163,6 +172,7 @@ fn run(cli: &Cli) -> Result<()> {
         Some(Command::Show { harness }) => show(harness.as_deref(), cli.json),
         Some(Command::Providers { search, free }) => providers(search.as_deref(), *free, cli.json),
         Some(Command::Paths { harness }) => paths(harness.as_deref(), cli.json),
+        Some(Command::Doctor { harness, fix }) => doctor(harness.as_deref(), *fix, cli.json),
         Some(Command::Add {
             harness,
             provider,
@@ -413,6 +423,153 @@ fn providers(search: Option<&str>, free_only: bool, json: bool) -> Result<()> {
         )
     );
     Ok(())
+}
+
+/// Periksa hal-hal yang membuat config yang sudah ditulis tetap tidak terlihat
+/// harness: scope model di pi (`enabledModels`), daftar disable di omp dan
+/// OpenCode, serta id provider yang bentrok dengan provider bawaan.
+fn doctor(harness: Option<&str>, fix: bool, json: bool) -> Result<()> {
+    let requested = match harness {
+        Some(id) => Some(pick_harness_id(id)?),
+        None => None,
+    };
+
+    let mut notices = api::list_notices(requested.clone()).map_err(|error| anyhow!(error))?;
+
+    if fix {
+        let mut fixed = Vec::new();
+        for notice in notices.iter().filter(|notice| notice.fix.is_some()) {
+            match api::fix_notice(
+                notice.harness.clone(),
+                notice.code.clone(),
+                notice.provider.clone(),
+            ) {
+                Ok(result) => {
+                    let detail = result
+                        .warnings
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| notice.fix.clone().unwrap_or_default());
+                    fixed.push((notice.clone(), detail));
+                }
+                Err(error) => {
+                    eprintln!(
+                        "{}",
+                        i18n::fill(
+                            t(Msg::DoctorFixFailed),
+                            &[
+                                ("harness", notice.harness.clone()),
+                                ("provider", notice.provider.clone()),
+                                ("error", error),
+                            ],
+                        )
+                    );
+                }
+            }
+        }
+        // Sesudah diperbaiki, tampilkan kondisi terbaru (sisa notice).
+        notices = api::list_notices(requested).map_err(|error| anyhow!(error))?;
+
+        if json {
+            output::print_json(&serde_json::json!({
+                "fixed": fixed
+                    .iter()
+                    .map(|(notice, detail)| serde_json::json!({
+                        "code": notice.code,
+                        "harness": notice.harness,
+                        "provider": notice.provider,
+                        "detail": detail,
+                    }))
+                    .collect::<Vec<_>>(),
+                "remaining": notices,
+            }))?;
+            return if notices.iter().any(|notice| notice.fix.is_some()) {
+                Err(anyhow!(t(Msg::DoctorRemaining)))
+            } else {
+                Ok(())
+            };
+        }
+
+        for (_, detail) in &fixed {
+            println!(
+                "{}",
+                i18n::fill(t(Msg::DoctorFixed), &[("detail", detail.clone())])
+            );
+        }
+        if fixed.is_empty() {
+            println!("{}", t(Msg::DoctorNothingToFix));
+        }
+    } else if json {
+        output::print_json(&notices)?;
+        return if notices.iter().any(|notice| notice.fix.is_some()) {
+            Err(anyhow!(t(Msg::DoctorRemaining)))
+        } else {
+            Ok(())
+        };
+    }
+
+    if notices.is_empty() {
+        println!("{}", t(Msg::DoctorClean));
+        return Ok(());
+    }
+
+    let rows: Vec<Vec<String>> = notices
+        .iter()
+        .map(|notice| {
+            vec![
+                notice.harness.clone(),
+                if notice.provider.is_empty() {
+                    "-".to_string()
+                } else {
+                    notice.provider.clone()
+                },
+                notice.message.clone(),
+                notice
+                    .fix
+                    .clone()
+                    .unwrap_or_else(|| t(Msg::DoctorManual).to_string()),
+            ]
+        })
+        .collect();
+    output::print_table(
+        &[
+            t(Msg::DoctorHarness),
+            t(Msg::DoctorProvider),
+            t(Msg::DoctorIssue),
+            t(Msg::DoctorFix),
+        ],
+        rows,
+    );
+
+    let fixable = notices.iter().filter(|notice| notice.fix.is_some()).count();
+    if fixable == 0 {
+        return Ok(());
+    }
+
+    // Config yang tertulis tetapi tidak terlihat harness = kegagalan nyata, jadi
+    // exit code non-zero supaya bisa dipakai di skrip. Notice yang hanya bisa
+    // dibereskan manual (mis. id bentrok) tidak menggagalkan apa pun.
+    if fix {
+        Err(anyhow!(t(Msg::DoctorRemaining)))
+    } else {
+        Err(anyhow!(i18n::fill(
+            t(Msg::DoctorHintFix),
+            &[("count", fixable.to_string())]
+        )))
+    }
+}
+
+/// Validasi id harness yang diminta pengguna.
+fn pick_harness_id(raw: &str) -> Result<String> {
+    let id = raw.trim().to_lowercase();
+    if api::list_harnesses().iter().any(|harness| harness.id == id) {
+        Ok(id)
+    } else {
+        bail!(
+            "{}",
+            i18n::fill(t(Msg::UnknownHarness), &[("raw", raw.to_string())])
+        )
+    }
 }
 
 fn paths(harness: Option<&str>, json: bool) -> Result<()> {

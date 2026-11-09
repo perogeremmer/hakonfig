@@ -10,12 +10,13 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Result};
 use serde_json::Value;
 
+use crate::engine::adapters::shared::ProviderRef;
 use crate::engine::adapters::{self, Adapter};
 use crate::engine::backup;
 use crate::engine::catalog;
 use crate::engine::doc::{Doc, Docs};
 use crate::engine::model::{
-    ApplyResult, BackupInfo, EditOp, FileDiff, HarnessInfo, HarnessSnapshot, PreviewResult,
+    ApplyResult, BackupInfo, EditOp, FileDiff, HarnessInfo, HarnessSnapshot, Notice, PreviewResult,
     ProviderPreset, TestResult,
 };
 use crate::engine::{preset, version, write};
@@ -136,39 +137,198 @@ pub fn preview_edit(harness_id: String, op: EditOp) -> Result<PreviewResult, Str
 
 pub fn apply_edit(harness_id: String, op: EditOp) -> Result<ApplyResult, String> {
     (|| -> Result<ApplyResult> {
-        let (adapter, docs, mut warnings) = simulate(&harness_id, &op)?;
-        let changed: Vec<&Doc> = docs.changed();
+        let (adapter, docs, warnings) = simulate(&harness_id, &op)?;
+        let touched = op_provider(&op).into_iter().collect::<Vec<_>>();
+        commit(&*adapter, &docs, warnings, &touched)
+    })()
+    .map_err(err)
+}
 
-        if changed.is_empty() {
-            return Ok(ApplyResult {
-                files_written: Vec::new(),
-                backup_dir: None,
-                warnings,
-            });
+/// Provider yang disentuh satu `EditOp`, untuk memilih notice yang relevan.
+fn op_provider(op: &EditOp) -> Option<ProviderRef<'_>> {
+    match op {
+        EditOp::Upsert(draft) => Some(ProviderRef::new(
+            draft.id.trim(),
+            Some(draft.base_url.trim()),
+        )),
+        EditOp::Remove { provider_id }
+        | EditOp::SetEnabled { provider_id, .. }
+        | EditOp::SetDefault { provider_id, .. } => {
+            Some(ProviderRef::new(provider_id.trim(), None))
         }
+    }
+}
 
-        let backup_dir = backup::create(adapter.id(), &adapter.backup_base(), &changed)?;
-        let mut files_written = Vec::new();
-        for doc in &changed {
-            write::atomic_write(&doc.path, &doc.render(), doc.sensitive)?;
-            files_written.push(doc.path.display().to_string());
+/// Tulis dokumen yang berubah, lalu kumpulkan notice untuk provider yang
+/// disentuh. Dipakai `apply_edit` dan `fix_notice` supaya jalur tulis, backup,
+/// dan peringatannya tidak bisa berbeda.
+fn commit(
+    adapter: &dyn Adapter,
+    docs: &Docs,
+    mut warnings: Vec<String>,
+    touched: &[ProviderRef<'_>],
+) -> Result<ApplyResult> {
+    let notices = adapter.notices(docs, touched);
+    for notice in &notices {
+        if !warnings.contains(&notice.message) {
+            warnings.push(notice.message.clone());
         }
+    }
 
-        // Backup lama dipangkas otomatis; beri tahu kalau ada yang dibuang.
-        let pruned = backup::prune(&adapter.backup_base(), backup::MAX_BACKUPS);
-        if pruned > 0 {
-            warnings.push(format!(
-                "{} old backups removed. At most {} backups are kept per harness.",
-                pruned,
-                backup::MAX_BACKUPS
-            ));
-        }
-
-        Ok(ApplyResult {
-            files_written,
-            backup_dir: backup_dir.map(|path| path.display().to_string()),
+    let changed: Vec<&Doc> = docs.changed();
+    if changed.is_empty() {
+        return Ok(ApplyResult {
+            files_written: Vec::new(),
+            backup_dir: None,
             warnings,
-        })
+            notices,
+        });
+    }
+
+    let backup_dir = backup::create(adapter.id(), &adapter.backup_base(), &changed)?;
+    let mut files_written = Vec::new();
+    for doc in &changed {
+        write::atomic_write(&doc.path, &doc.render(), doc.sensitive)?;
+        files_written.push(doc.path.display().to_string());
+    }
+
+    // Backup lama dipangkas otomatis; beri tahu kalau ada yang dibuang.
+    let pruned = backup::prune(&adapter.backup_base(), backup::MAX_BACKUPS);
+    if pruned > 0 {
+        warnings.push(format!(
+            "{} old backups removed. At most {} backups are kept per harness.",
+            pruned,
+            backup::MAX_BACKUPS
+        ));
+    }
+
+    Ok(ApplyResult {
+        files_written,
+        backup_dir: backup_dir.map(|path| path.display().to_string()),
+        warnings,
+        notices,
+    })
+}
+
+// ---------------------------------------------------------------- notices
+
+/// Temuan yang membuat config yang sudah ditulis tetap tidak terlihat harness.
+///
+/// `harness_id = None` memeriksa semua harness; harness yang config-nya tidak
+/// bisa dibaca tidak menggagalkan pemeriksaan harness lain.
+pub fn list_notices(harness_id: Option<String>) -> Result<Vec<Notice>, String> {
+    let collect = || -> Result<Vec<Notice>> {
+        let ids: Vec<String> = match harness_id {
+            Some(id) => vec![id],
+            None => adapters::all()
+                .iter()
+                .map(|adapter| adapter.id().to_string())
+                .collect(),
+        };
+
+        let mut notices = Vec::new();
+        for id in ids {
+            let adapter = match harness(&id) {
+                Ok(adapter) => adapter,
+                Err(error) => {
+                    notices.push(Notice {
+                        code: "harness.unknown".to_string(),
+                        harness: id,
+                        provider: String::new(),
+                        message: format!("{:#}", error),
+                        fix: None,
+                    });
+                    continue;
+                }
+            };
+
+            let docs = match Docs::load(&adapter.specs()) {
+                Ok(docs) => docs,
+                Err(error) => {
+                    notices.push(Notice {
+                        code: "harness.unreadable".to_string(),
+                        harness: adapter.id().to_string(),
+                        provider: String::new(),
+                        message: format!("config could not be read: {:#}", error),
+                        fix: None,
+                    });
+                    continue;
+                }
+            };
+
+            let snapshot = match adapter.snapshot(&docs) {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    notices.push(Notice {
+                        code: "harness.unreadable".to_string(),
+                        harness: adapter.id().to_string(),
+                        provider: String::new(),
+                        message: format!("config could not be read: {:#}", error),
+                        fix: None,
+                    });
+                    continue;
+                }
+            };
+
+            let providers: Vec<ProviderRef<'_>> = snapshot
+                .providers
+                .iter()
+                .map(|entry| ProviderRef::new(&entry.id, entry.base_url.as_deref()))
+                .collect();
+            notices.extend(adapter.notices(&docs, &providers));
+        }
+        Ok(notices)
+    };
+    collect().map_err(err)
+}
+
+/// Terapkan perbaikan otomatis untuk satu notice, dengan backup seperti edit
+/// biasa. Notice yang tidak punya `fix` akan ditolak adapter.
+pub fn fix_notice(
+    harness_id: String,
+    code: String,
+    provider: String,
+) -> Result<ApplyResult, String> {
+    (|| -> Result<ApplyResult> {
+        let adapter = harness(&harness_id)?;
+        let mut docs = Docs::load(&adapter.specs())?;
+
+        let base_url = adapter.snapshot(&docs).ok().and_then(|snapshot| {
+            snapshot
+                .providers
+                .into_iter()
+                .find(|entry| entry.id == provider)
+                .and_then(|entry| entry.base_url)
+        });
+        let reference = ProviderRef::new(&provider, base_url.as_deref());
+        let notice = adapter
+            .notices(&docs, std::slice::from_ref(&reference))
+            .into_iter()
+            .find(|notice| notice.code == code && notice.provider == provider)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "no '{}' notice for provider '{}' on {} (already fixed?)",
+                    code,
+                    provider,
+                    adapter.id()
+                )
+            })?;
+
+        if notice.fix.is_none() {
+            bail!("'{}' has no automatic fix", code);
+        }
+
+        let summary = adapter
+            .fix_notice(&mut docs, &notice)?
+            .ok_or_else(|| anyhow::anyhow!("nothing to change for '{}' on '{}'", code, provider))?;
+
+        let result = commit(
+            &*adapter,
+            &docs,
+            vec![summary],
+            std::slice::from_ref(&reference),
+        )?;
+        Ok(result)
     })()
     .map_err(err)
 }
@@ -207,6 +367,7 @@ pub fn restore_backup(harness_id: String, backup_id: String) -> Result<ApplyResu
             files_written,
             backup_dir: safety.map(|path| path.display().to_string()),
             warnings: vec![format!("Restored from backup {}.", backup_id)],
+            notices: Vec::new(),
         })
     })()
     .map_err(err)

@@ -173,6 +173,25 @@ pub struct ApplyResult {
     pub files_written: Vec<String>,
     pub backup_dir: Option<String>,
     pub warnings: Vec<String>,
+    /// Temuan yang membuat model yang baru ditulis tidak terlihat harness.
+    pub notices: Vec<Notice>,
+}
+
+/// Sesuatu yang membuat provider/model yang sudah ditulis tetap tidak terlihat
+/// oleh harness-nya: scope model di pi, daftar disable di omp, atau id yang
+/// bentrok dengan provider bawaan harness.
+///
+/// `code` dipakai `fix_notice` untuk mencocokkan temuan, jadi jangan diubah
+/// tanpa memperbarui adapter dan test-nya.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Notice {
+    pub code: String,
+    pub harness: String,
+    pub provider: String,
+    pub message: String,
+    /// Label aksi perbaikan otomatis; `None` = hanya bisa dibereskan manual.
+    pub fix: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

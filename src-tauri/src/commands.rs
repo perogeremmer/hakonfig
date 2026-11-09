@@ -51,6 +51,17 @@ pub fn apply_edit(harness_id: String, op: EditOp) -> Result<ApplyResult, String>
     core_api::apply_edit(harness_id, op)
 }
 
+/// Terapkan perbaikan otomatis untuk notice yang membuat config tertulis tidak
+/// terlihat harness (mis. scope `enabledModels` di pi).
+#[tauri::command]
+pub fn fix_notice(
+    harness_id: String,
+    code: String,
+    provider: String,
+) -> Result<ApplyResult, String> {
+    core_api::fix_notice(harness_id, code, provider)
+}
+
 // ---------------------------------------------------------------- backup
 
 #[tauri::command]

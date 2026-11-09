@@ -8,13 +8,16 @@
 //! Pi mendahulukan kredensial tersimpan di atas referensi environment, jadi
 //! Hakonfig tidak pernah menulis keduanya sekaligus.
 use anyhow::Result;
-use serde_json::Value;
+use serde_json::{Map, Value};
 use std::path::PathBuf;
 
 use super::shared;
 use super::Adapter;
 use crate::engine::doc::{get_str, mask_key, Docs, FileSpec, Format};
-use crate::engine::model::{ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, ProviderSummary};
+use crate::engine::glob;
+use crate::engine::model::{
+    ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, Notice, ProviderSummary,
+};
 use crate::engine::paths;
 
 pub struct PiAdapter;
@@ -22,6 +25,169 @@ pub struct PiAdapter;
 impl PiAdapter {
     fn agent_dir() -> PathBuf {
         paths::pi_dir().join("agent")
+    }
+
+    /// Pola `enabledModels` yang dipakai pi, kalau pengguna memakai scope.
+    ///
+    /// pi menyimpan daftar ini di `settings.json` saat pengguna menekan Ctrl+S
+    /// di pemilih model. Key yang tidak ada berarti "semua model", bukan "tidak
+    /// ada model", jadi bedanya penting.
+    fn enabled_models(settings: &Map<String, Value>) -> Option<Vec<String>> {
+        let list = settings.get("enabledModels")?.as_array()?;
+        let patterns: Vec<String> = list
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|pattern| !pattern.is_empty())
+            .map(str::to_string)
+            .collect();
+        if patterns.is_empty() {
+            None
+        } else {
+            Some(patterns)
+        }
+    }
+
+    /// Referensi model yang ditulis untuk satu provider: `id/model`.
+    fn model_references(models: &crate::engine::doc::Doc, provider: &str) -> Vec<String> {
+        let parked = models.parked_value(provider);
+        let Some(entry) = models
+            .data()
+            .get("providers")
+            .and_then(|map| map.get(provider))
+            .or(parked.as_ref())
+        else {
+            return Vec::new();
+        };
+        entry
+            .get("models")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(|model| get_str(model, "id"))
+                    .map(|id| format!("{}/{}", provider, id.trim()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn scope_notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        let Some(settings) = docs.get("settings") else {
+            return Vec::new();
+        };
+        let Some(object) = settings.data().as_object() else {
+            return Vec::new();
+        };
+        // Tanpa `enabledModels` pi menampilkan semua model yang punya kredensial,
+        // jadi tidak ada yang perlu diperingatkan.
+        let Some(patterns) = Self::enabled_models(object) else {
+            return Vec::new();
+        };
+        let Some(models) = docs.get("models") else {
+            return Vec::new();
+        };
+
+        let mut notices = Vec::new();
+        for provider in providers {
+            let provider = provider.id;
+            let references = Self::model_references(models, provider);
+            if references.is_empty() {
+                continue;
+            }
+            let outside: Vec<&String> = references
+                .iter()
+                .filter(|reference| !glob::covers(&patterns, reference))
+                .collect();
+            if outside.is_empty() {
+                continue;
+            }
+            let sample = outside
+                .iter()
+                .take(3)
+                .map(|reference| reference.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let narrow = patterns.iter().any(|pattern| {
+                pattern.eq_ignore_ascii_case(&glob::provider_narrow_pattern(provider))
+            });
+            let hint = if narrow {
+                format!(
+                    " The pattern '{}' only matches model ids without a slash; use '{}' instead.",
+                    glob::provider_narrow_pattern(provider),
+                    glob::provider_wide_pattern(provider)
+                )
+            } else {
+                String::new()
+            };
+            notices.push(Notice {
+                code: "pi.scope".to_string(),
+                harness: "pi".to_string(),
+                provider: provider.to_string(),
+                message: format!(
+                    "{} of {} models of '{provider}' are outside pi's enabledModels scope, so the model picker hides them ({sample}).{hint}",
+                    outside.len(),
+                    references.len()
+                ),
+                fix: Some(format!(
+                    "Add '{}' to enabledModels",
+                    glob::provider_wide_pattern(provider)
+                )),
+            });
+        }
+        notices
+    }
+
+    fn fix_scope(docs: &mut Docs, provider: &str) -> Result<Option<String>> {
+        let settings = docs.require_mut("settings")?;
+        let object = settings.root_object();
+        let wide = glob::provider_wide_pattern(provider);
+        let narrow = glob::provider_narrow_pattern(provider);
+
+        let mut patterns: Vec<String> = object
+            .get("enabledModels")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let removed_narrow = patterns
+            .iter()
+            .filter(|pattern| pattern.eq_ignore_ascii_case(&narrow))
+            .count();
+        patterns.retain(|pattern| !pattern.eq_ignore_ascii_case(&narrow));
+
+        let reference = format!("{}/contoh", provider);
+        let already_covers = glob::covers(&patterns, &reference);
+        if !already_covers {
+            patterns.push(wide.clone());
+        }
+
+        if removed_narrow == 0 && already_covers {
+            return Ok(None);
+        }
+
+        object.insert(
+            "enabledModels".to_string(),
+            Value::Array(patterns.into_iter().map(Value::String).collect()),
+        );
+
+        let mut summary = String::new();
+        if removed_narrow > 0 {
+            summary.push_str(&format!("removed '{narrow}'; "));
+        }
+        if !already_covers {
+            summary.push_str(&format!("added '{wide}'"));
+        }
+        Ok(Some(format!(
+            "enabledModels in settings.json: {}",
+            summary.trim_end_matches("; ").trim()
+        )))
     }
 }
 
@@ -377,6 +543,24 @@ impl Adapter for PiAdapter {
 
     /// Pi mendahulukan kredensial di `auth.json` di atas `apiKey` di
     /// `models.json` - urutan yang sama dengan `snapshot`.
+    fn builtin_providers(&self) -> &'static [(&'static str, &'static str)] {
+        shared::BUILTIN_PROVIDERS
+    }
+
+    fn notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        let mut notices =
+            shared::builtin_id_notices(self.id(), self.builtin_providers(), providers);
+        notices.extend(self.scope_notices(docs, providers));
+        notices
+    }
+
+    fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
+        match notice.code.as_str() {
+            "pi.scope" => Self::fix_scope(docs, &notice.provider),
+            other => anyhow::bail!("pi has no automatic fix for '{other}'"),
+        }
+    }
+
     fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
         let target = provider_id.trim();
         if target.is_empty() {

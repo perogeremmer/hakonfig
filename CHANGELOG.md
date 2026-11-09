@@ -19,12 +19,33 @@ file oleh `scripts/version.mjs`.
   terpilih secara default, sama seperti aplikasi desktop setelah Test
   Connection. Kalau sync gagal, perintah lanjut dengan daftar preset dan
   menampilkan alasannya.
+- CLI: perintah `hakonfig-cli doctor [--harness <id>] [--fix] [--json]`.
+  Memeriksa config yang sudah ditulis tetapi tidak akan terlihat harness-nya
+  dan (dengan `--fix`) memperbaikinya dengan backup. Read-only tanpa `--fix`;
+  exit code non-zero selama masih ada masalah yang bisa diperbaiki otomatis.
+- Core: `Notice` — temuan pasca-tulis per provider (`pi.scope`,
+  `omp.disabled`, `opencode.disabled`, `harness.builtin-id`) beserta aksi
+  perbaikannya, dikembalikan `apply_edit` dan bisa diterapkan lewat
+  `fix_notice`. Aplikasi desktop menampilkan tombol "Perbaiki" untuk notice
+  yang punya `fix`.
+- Core: `engine::glob` — pencocokan pola `enabledModels` gaya minimatch
+  (`*` tidak melewati `/`, `**` melewati), dipakai untuk mendeteksi scope pi
+  yang terlalu sempit.
 
 ### Fixed
 
 - CLI: provider custom tidak pernah mencoba sync daftar model sama sekali
   (permintaan sebelumnya selalu memakai base URL preset, yang tidak ada untuk
   provider custom).
+- Visibilitas: model yang sudah ditulis sekarang dilaporkan bila pi
+  menyaringnya lewat `enabledModels` di `settings.json`. Kasus yang paling
+  sering: pola `provider/*` tidak cocok untuk id model bersarang
+  (`commandcode/deepseek/deepseek-v4-pro`), jadi 71 dari 94 model commandcode
+  tidak pernah muncul tanpa pesan apa pun. Cache katalog (`models-store.json`
+  di pi, `models.db` di omp, kv `models-dev` di OpenCode,
+  `provider_models_cache.json` di Hermes) tidak ikut diutak-atik: semuanya
+  di-merge **di bawah** config pengguna, jadi tidak bisa menyembunyikan model
+  yang ditulis.
 
 ## [0.4.2]
 

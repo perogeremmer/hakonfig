@@ -3,7 +3,8 @@ use anyhow::Result;
 use std::path::PathBuf;
 
 use super::doc::{Docs, FileSpec};
-use super::model::{ConfigFileInfo, EditOp, HarnessInfo, HarnessSnapshot};
+use super::model::{ConfigFileInfo, EditOp, HarnessInfo, HarnessSnapshot, Notice};
+use shared::ProviderRef;
 
 pub mod hermes;
 pub mod omp;
@@ -49,6 +50,37 @@ pub trait Adapter {
     fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
         let _ = (docs, provider_id);
         None
+    }
+
+    /// Provider bawaan harness yang katalognya diambil dari jarak jauh.
+    ///
+    /// Dipakai untuk mengingatkan pengguna yang memberi gateway custom id yang
+    /// sama: pi/omp akan menggabungkan katalog bawaan id itu dengan entry-nya,
+    /// jadi daftar modelnya tercampur. Default kosong = harness tidak punya
+    /// katalog bawaan.
+    fn builtin_providers(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
+
+    /// Temuan yang membuat provider/model yang sudah ditulis tetap tidak terlihat
+    /// oleh harness ini. Dipanggil setelah config ditulis (dan oleh `doctor`).
+    ///
+    /// Default: hanya bentrok id dengan provider bawaan.
+    fn notices(&self, _docs: &Docs, providers: &[ProviderRef<'_>]) -> Vec<Notice> {
+        shared::builtin_id_notices(self.id(), self.builtin_providers(), providers)
+    }
+
+    /// Terapkan perbaikan otomatis untuk satu notice.
+    ///
+    /// `Ok(None)` = tidak ada yang perlu diubah (mis. sudah beres),
+    /// `Err` = harness ini tidak bisa memperbaikinya sendiri.
+    fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
+        let _ = (docs, notice);
+        Err(anyhow::anyhow!(
+            "harness '{}' has no automatic fix for '{}'",
+            self.id(),
+            notice.code
+        ))
     }
 
     /// Ringkasan harness: file yang relevan + jumlah provider.

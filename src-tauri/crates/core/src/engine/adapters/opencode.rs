@@ -14,7 +14,7 @@ use super::shared;
 use super::Adapter;
 use crate::engine::doc::{get_str, mask_key, Docs, FileSpec, Format};
 use crate::engine::model::{
-    ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, ModelSummary, ProviderSummary,
+    ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, ModelSummary, Notice, ProviderSummary,
 };
 use crate::engine::paths;
 
@@ -110,6 +110,40 @@ fn opencode_model_value(
     }
 
     value
+}
+
+impl OpenCodeAdapter {
+    /// Provider di `disabled_providers` tidak muncul di pemilih model OpenCode,
+    /// walaupun entri dan modelnya tetap ada di `opencode.json`.
+    fn disabled_notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        let disabled: Vec<String> = docs
+            .get("config")
+            .and_then(|doc| doc.data().get("disabled_providers"))
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        providers
+            .iter()
+            .filter(|provider| disabled.iter().any(|entry| entry == provider.id))
+            .map(|provider| Notice {
+                provider: provider.id.to_string(),
+                code: "opencode.disabled".to_string(),
+                harness: "opencode".to_string(),
+                message: format!(
+                    "provider '{}' is in disabled_providers in opencode.json, so OpenCode hides its models.",
+                    provider.id
+                ),
+                fix: Some(format!("Remove '{}' from disabled_providers", provider.id)),
+            })
+            .collect()
+    }
 }
 
 impl Adapter for OpenCodeAdapter {
@@ -457,6 +491,36 @@ impl Adapter for OpenCodeAdapter {
 
     /// Urutan sama dengan `snapshot`: `auth.json` → `options.apiKey` → `env[0]`
     /// (dikembalikan sebagai `$VAR` agar pemanggil bisa me-resolve environment).
+    fn builtin_providers(&self) -> &'static [(&'static str, &'static str)] {
+        shared::BUILTIN_PROVIDERS
+    }
+
+    fn notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        let mut notices =
+            shared::builtin_id_notices(self.id(), self.builtin_providers(), providers);
+        notices.extend(self.disabled_notices(docs, providers));
+        notices
+    }
+
+    fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
+        match notice.code.as_str() {
+            "opencode.disabled" => {
+                let config = docs.require_mut("config")?;
+                let list = config.array_at("disabled_providers");
+                let before = list.len();
+                list.retain(|item| item.as_str() != Some(notice.provider.as_str()));
+                if list.len() == before {
+                    return Ok(None);
+                }
+                Ok(Some(format!(
+                    "'{}' removed from disabled_providers in opencode.json.",
+                    notice.provider
+                )))
+            }
+            other => anyhow::bail!("opencode has no automatic fix for '{other}'"),
+        }
+    }
+
     fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {
         let target = provider_id.trim();
         if target.is_empty() {

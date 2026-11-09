@@ -11,6 +11,7 @@ fn main() {
             commands::read_harness,
             commands::preview_edit,
             commands::apply_edit,
+            commands::fix_notice,
             commands::list_backups,
             commands::restore_backup,
             commands::test_connection,

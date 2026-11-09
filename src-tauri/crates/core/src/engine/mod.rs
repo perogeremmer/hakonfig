@@ -4,6 +4,7 @@ pub mod adapters;
 pub mod backup;
 pub mod catalog;
 pub mod doc;
+pub mod glob;
 pub mod model;
 pub mod paths;
 pub mod preset;

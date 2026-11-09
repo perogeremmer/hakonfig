@@ -44,7 +44,7 @@ Rules that hold everywhere:
 - With any flag or `--json`, the command never prompts (scripts and servers are safe).
 - In a terminal without flags, `add` runs as a wizard.
 - An explicit `--test` that fails aborts with a non-zero exit code and writes nothing.
-- Read-only commands (`list`, `show`, `providers`, `paths`) never touch files.
+- Read-only commands (`list`, `show`, `providers`, `paths`, `doctor`) never touch files unless `doctor --fix` is passed.
 - Cancelling a prompt (Esc / Ctrl-C) exits with code 0, not an error.
 
 ## Commands
@@ -128,6 +128,34 @@ With `--json` it prints an array of presets:
 Preset model lists are static snapshots. In a terminal, `add` offers to sync
 the live list from the endpoint (default yes); with `--sync` it always does,
 and with `--models` it never does.
+
+### `doctor [--harness <id>] [--fix]`
+
+Writes can succeed while the harness still refuses to show the result. `doctor`
+checks for exactly that and, with `--fix`, repairs what it can:
+
+| Notice | Meaning | Fix |
+|---|---|---|
+| `pi.scope` | pi limits the model picker to `enabledModels` in `settings.json`; some of the models just written are outside it (a saved scope from `Ctrl+S`, or a pattern like `provider/*` that does not match ids containing `/`). | Adds `<provider>/**` and drops the narrower `<provider>/*`. |
+| `omp.disabled` / `opencode.disabled` | The provider is listed in `disabledProviders` / `disabled_providers`, so its models stay hidden even though they are in `models.yml` / `opencode.json`. | Removes the provider from the list (the entry and its models are kept). |
+| `harness.builtin-id` | The provider id is also a built-in harness provider (`openrouter`, `deepseek`, `opencode-go`, …), so the remote catalog for that id is merged with your models and refresh warnings may mention it. | Manual: rename the gateway (for example `openrouter-gw`). |
+
+```
+$ hakonfig-cli doctor
+harness  provider  issue                                                     fix
+pi       gateway   1 of 2 models of 'gateway' are outside pi's enabledModels…  Add 'gateway/**' to enabledModels
+
+$ hakonfig-cli doctor --fix
+fixed: enabledModels in settings.json: removed 'gateway/*'; added 'gateway/**'
+```
+
+Read-only without `--fix`. Exit code is non-zero while an issue that `--fix`
+could repair remains, so it can gate a setup script; notices that are
+manual-only never fail the run. `--json` prints the notices as they are
+returned by the API (`code`, `harness`, `provider`, `message`, `fix`).
+
+The same notices are included in `add`'s `ApplyResult`, so a write that pi will
+hide is reported immediately instead of after a confused model-picker refresh.
 
 ### `paths [HARNESS]`
 

@@ -65,6 +65,7 @@ struct AddReport {
     files_written: Vec<String>,
     backup_dir: Option<String>,
     warnings: Vec<String>,
+    notices: Vec<hakonfig_core::engine::model::Notice>,
 }
 
 pub fn run(options: AddOptions) -> Result<()> {
@@ -159,6 +160,7 @@ pub fn run(options: AddOptions) -> Result<()> {
                 files_written: Vec::new(),
                 backup_dir: None,
                 warnings: preview.warnings.clone(),
+                notices: Vec::new(),
             })?;
         } else {
             println!("\n{}", i18n::t(Msg::DryRun));
@@ -187,6 +189,7 @@ pub fn run(options: AddOptions) -> Result<()> {
             files_written: applied.files_written.clone(),
             backup_dir: applied.backup_dir.clone(),
             warnings: applied.warnings.clone(),
+            notices: applied.notices.clone(),
         })?;
     } else {
         // Warning yang sudah tampil di pratinjau tidak diulang di bawah.
@@ -217,6 +220,12 @@ fn report(applied: &ApplyResult, already_shown: &[String]) {
             continue;
         }
         println!("! {warning}");
+    }
+
+    // Notice berarti config sudah ditulis tetapi harness-nya belum tentu
+    // menampilkannya (scope/enabledModels, daftar disable, id bentrok).
+    if applied.notices.iter().any(|notice| notice.fix.is_some()) {
+        println!("{}", i18n::t(Msg::NoticeHint));
     }
 }
 
