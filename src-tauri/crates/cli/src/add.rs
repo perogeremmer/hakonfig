@@ -28,6 +28,8 @@ pub struct AddOptions {
     pub key: Option<String>,
     pub key_mode: KeyMode,
     pub models: Option<String>,
+    /// Ambil daftar model dari endpoint, bukan dari preset.
+    pub sync: bool,
     pub dry_run: bool,
     pub yes: bool,
     /// None = ikut mode (uji koneksi hanya saat interaktif).
@@ -539,6 +541,7 @@ fn pick_models(
         Target::Custom { .. } => None,
     };
 
+    // `--models` selalu menang: id yang disebut eksplisit tidak butuh jaringan.
     if let Some(raw) = &options.models {
         let models = draft::models_from_list(raw, preset);
         if models.is_empty() {
@@ -547,85 +550,59 @@ fn pick_models(
         return Ok(models);
     }
 
+    if wants_sync(options, preset, key, interactive)? {
+        match sync_models(target, options, harness, key) {
+            Ok(live) if !live.is_empty() => {
+                let models = draft::models_from_sync(live, preset);
+                return if interactive {
+                    ask_models(&models)
+                } else {
+                    Ok(models)
+                };
+            }
+            Ok(_) => {
+                // Endpoint hidup tapi tidak mengembalikan model. Interaktif
+                // masih bisa lanjut dengan daftar preset/manual; `--sync`
+                // berarti pengguna memang meminta daftar live, jadi gagal.
+                if !interactive {
+                    bail!("{}", i18n::t(Msg::SyncHardEmpty));
+                }
+                eprintln!("{}", i18n::t(Msg::SyncEmpty));
+            }
+            Err(error) => {
+                if !interactive {
+                    bail!(
+                        "{}",
+                        i18n::fill(
+                            i18n::t(Msg::SyncHardFailed),
+                            &[("error", error.to_string())]
+                        )
+                    );
+                }
+                eprintln!(
+                    "{}",
+                    i18n::fill(i18n::t(Msg::SyncFailed), &[("error", error.to_string())])
+                );
+            }
+        }
+    }
+
+    // Tidak sync (ditolak, gagal, atau non-interaktif tanpa `--sync`): pakai
+    // daftar model preset kalau ada.
     if let Some(preset) = preset {
         if !preset.models.is_empty() {
-            if !interactive {
-                // Default non-interaktif: semua model preset — perilaku yang
-                // sama dengan mencentang semua di GUI.
-                return Ok(draft::models_from_preset(preset));
-            }
-            let choices: Vec<Choice> = preset
-                .models
-                .iter()
-                .map(|model| Choice {
-                    id: model.id.clone(),
-                    label: match model.context_window {
-                        Some(window) => format!("{}  ·  {} ctx", model.id, window),
-                        None => model.id.clone(),
-                    },
-                })
-                .collect();
-            let picked = ask(inquire::MultiSelect::new(i18n::t(Msg::PickModels), choices)
-                .with_all_selected_by_default()
-                .with_help_message(i18n::t(Msg::PickModelsHintAll))
-                .prompt())?;
-            return Ok(picked
-                .into_iter()
-                .map(|choice| ModelDraft {
-                    id: choice.id,
-                    ..Default::default()
-                })
-                .collect());
+            let models = draft::models_from_preset(preset);
+            return if interactive {
+                ask_models(&models)
+            } else {
+                Ok(models)
+            };
         }
     }
 
-    // Preset tanpa daftar model (27 dari 61 entri katalog).
+    // Preset tanpa daftar model dan tidak ada yang bisa di-sync.
     if !interactive {
         bail!("{}", i18n::t(Msg::NeedModelsFlag));
-    }
-
-    if let (Some(preset), Some(key)) = (preset, key) {
-        let sync = ask(inquire::Confirm::new(i18n::t(Msg::SyncPrompt))
-            .with_default(true)
-            .with_help_message(i18n::t(Msg::SyncHint))
-            .prompt())?;
-        if sync {
-            match block_on(api::fetch_models(
-                preset.base_url.clone(),
-                preset.api.clone(),
-                key.to_string(),
-                Some(harness.to_string()),
-                Some(preset.id.clone()),
-            )) {
-                Ok(models) if !models.is_empty() => {
-                    let choices: Vec<Choice> = models
-                        .into_iter()
-                        .map(|model| Choice {
-                            id: model.id.clone(),
-                            label: model.id,
-                        })
-                        .collect();
-                    let picked = ask(inquire::MultiSelect::new(i18n::t(Msg::PickModels), choices)
-                        .with_help_message(i18n::t(Msg::PickModelsHintNone))
-                        .prompt())?;
-                    if picked.is_empty() {
-                        bail!("{}", i18n::t(Msg::ModelsEmpty));
-                    }
-                    return Ok(picked
-                        .into_iter()
-                        .map(|choice| ModelDraft {
-                            id: choice.id,
-                            ..Default::default()
-                        })
-                        .collect());
-                }
-                Ok(_) => eprintln!("{}", i18n::t(Msg::SyncEmpty)),
-                Err(error) => eprintln!(
-                    "{}",
-                    i18n::fill(i18n::t(Msg::SyncFailed), &[("error", error)])
-                ),
-            }
-        }
     }
 
     let raw = ask(inquire::Text::new(i18n::t(Msg::ModelsTextPrompt))
@@ -636,6 +613,80 @@ fn pick_models(
         bail!("{}", i18n::t(Msg::ModelsEmpty));
     }
     Ok(models)
+}
+
+/// Perlu ambil daftar model dari endpoint?
+///
+/// `--sync` memintanya tanpa bertanya. Tanpa flag, keputusan diambil di
+/// terminal: key yang baru ditempel dan endpoint yang bisa dihubungi sudah
+/// cukup alasan untuk menawarkan daftar terbaru, karena daftar preset gampang
+/// tertinggal dari katalog provider.
+fn wants_sync(
+    options: &AddOptions,
+    preset: Option<&ProviderPreset>,
+    key: Option<&str>,
+    interactive: bool,
+) -> Result<bool> {
+    if options.sync {
+        return Ok(true);
+    }
+    if !interactive {
+        return Ok(false);
+    }
+    // Provider ber-key butuh key untuk sync; tanpa key permintaannya pasti 401,
+    // jadi lebih baik langsung ke daftar preset.
+    let needs_key = preset.map(|preset| preset.key_required).unwrap_or(false);
+    if key.is_none() && needs_key {
+        return Ok(false);
+    }
+    ask(inquire::Confirm::new(i18n::t(Msg::SyncPrompt))
+        .with_default(true)
+        .with_help_message(i18n::t(Msg::SyncHint))
+        .prompt())
+}
+
+fn sync_models(
+    target: &Target,
+    options: &AddOptions,
+    harness: &str,
+    key: Option<&str>,
+) -> Result<Vec<hakonfig_core::api::ModelOption>> {
+    let (base_url, api_name) = endpoint(target, options);
+    block_on(api::fetch_models(
+        base_url,
+        api_name,
+        key.unwrap_or_default().to_string(),
+        Some(harness.to_string()),
+        Some(target_id(target).to_string()),
+    ))
+    .map_err(|error| anyhow!(error))
+}
+
+/// MultiSelect dengan semua model terpilih — perilaku yang sama dengan GUI,
+/// yang mencentang setiap model hasil sync.
+fn ask_models(models: &[ModelDraft]) -> Result<Vec<ModelDraft>> {
+    let choices: Vec<Choice> = models
+        .iter()
+        .map(|model| Choice {
+            id: model.id.clone(),
+            label: match model.context_window {
+                Some(window) => format!("{}  ·  {} ctx", model.id, window),
+                None => model.id.clone(),
+            },
+        })
+        .collect();
+    let picked = ask(inquire::MultiSelect::new(i18n::t(Msg::PickModels), choices)
+        .with_all_selected_by_default()
+        .with_help_message(i18n::t(Msg::PickModelsHintAll))
+        .prompt())?;
+    if picked.is_empty() {
+        bail!("{}", i18n::t(Msg::ModelsEmpty));
+    }
+    // Metadata dari daftar asal dibawa, bukan dibuat ulang dari id.
+    Ok(picked
+        .into_iter()
+        .filter_map(|choice| models.iter().find(|model| model.id == choice.id).cloned())
+        .collect())
 }
 
 fn build_draft(

@@ -177,10 +177,6 @@ messages! {
         "space to toggle · enter to accept · type to search",
         "spasi untuk memilih · enter untuk lanjut · ketik untuk mencari"
     ),
-    PickModelsHintNone => (
-        "nothing selected yet · space to toggle · type to search",
-        "belum ada yang terpilih · spasi untuk memilih · ketik untuk mencari"
-    ),
     NeedModelsFlag => (
         "this provider has no model list yet. Add --models id1,id2 \
          (or run once in a terminal to sync from the endpoint).",
@@ -197,6 +193,13 @@ messages! {
     ),
     SyncEmpty => ("! endpoint returned no models", "! endpoint tidak mengembalikan model"),
     SyncFailed => ("! model sync failed: {error}", "! gagal sync model: {error}"),
+    // Dipakai `--sync`: pengguna memang meminta daftar live, jadi kegagalan
+    // menghentikan perintah alih-alih diam-diam memakai daftar preset.
+    SyncHardEmpty => (
+        "--sync asked the endpoint for models but it returned none",
+        "--sync meminta daftar model ke endpoint, tetapi tidak ada yang dikembalikan"
+    ),
+    SyncHardFailed => ("model sync failed: {error}", "gagal sync model: {error}"),
     ModelsTextPrompt => ("model ids (comma separated)", "id model (pisah koma)"),
     ModelsTextHint => (
         "example: llama-3.3-70b-versatile,llama-3.1-8b-instant",

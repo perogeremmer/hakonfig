@@ -125,8 +125,9 @@ With `--json` it prints an array of presets:
 }
 ```
 
-Preset model lists are static snapshots; `add` can sync the live list from
-the endpoint when a key is available.
+Preset model lists are static snapshots. In a terminal, `add` offers to sync
+the live list from the endpoint (default yes); with `--sync` it always does,
+and with `--models` it never does.
 
 ### `paths [HARNESS]`
 
@@ -147,6 +148,7 @@ Add or change a provider. Non-interactive contract:
 | `--key-stdin` | Read the API key from piped stdin, e.g. `printf '%s' "$KEY" \| hakonfig-cli add ...`. |
 | `--key-env` | Store an environment reference (`$PROVIDER_API_KEY`) instead of the inline key. |
 | `--models <ID1,ID2>` | Comma separated model ids. Default: every preset model. |
+| `--sync` | Ask the endpoint which models it has and use that list instead of the preset list. Needs the key itself (`--key-stdin`) unless the endpoint is keyless; a failure aborts. |
 | `--test` | Test the endpoint even when non-interactive; a failure aborts. |
 | `--no-test` | Skip the connection test. |
 | `--dry-run` | Show the preview only, write nothing. |
@@ -154,6 +156,19 @@ Add or change a provider. Non-interactive contract:
 
 Idempotent: running the same `add` twice writes nothing the second time.
 A backup is created automatically before any overwrite.
+
+Where the model list comes from, in order:
+
+1. `--models a,b,c` — explicit ids, no network call at all.
+2. `--sync` (or, in a terminal, the "fetch the model list" question that
+   defaults to yes once a key is entered) — `GET {base}/models`, then the ids
+   are merged with preset metadata: context window from the endpoint wins,
+   name/max tokens/reasoning come from the preset when the id is known, and
+   ids the preset does not know are added. The desktop app does the same after
+   a connection test.
+3. The preset list (every model selected, `space` to deselect).
+4. Nothing available — interactive asks for a comma separated list, and
+   non-interactive exits with "this provider has no model list yet".
 
 With `--json`, `add` prints an `AddReport`:
 

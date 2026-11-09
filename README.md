@@ -69,7 +69,7 @@ It only writes to the files your tools already read.
 - **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS, no frontend framework
 - **UI:** Plus Jakarta Sans bundled locally, light and dark themes, English + Bahasa Indonesia
 - **CLI:** `hakonfig-cli`, the same engine without a GUI, for servers and scripts
-- **Tests:** 155 offline tests (107 Rust + 48 JS), no network required
+- **Tests:** 161 offline tests (113 Rust + 48 JS), no network required
 - **License:** [MIT](LICENSE), free to use, modify, and redistribute
 
 ### Open source
@@ -185,6 +185,7 @@ hakonfig-cli list                           # what is installed, with versions
 hakonfig-cli show pi                        # current providers of one tool
 hakonfig-cli providers --search groq        # browse the preset catalog
 hakonfig-cli add --harness pi --provider groq --key-stdin
+hakonfig-cli add --harness pi --provider groq --key-stdin --sync   # model list from the endpoint
 ```
 
 Rules it holds since day one:
@@ -414,7 +415,7 @@ as repository secrets and pass them to `tauri-action`.
 ### Tests
 
 ```bash
-bun run test        # 107 Rust tests + 48 JS tests
+bun run test        # 113 Rust tests + 48 JS tests
 bun run test:rust   # cargo test --workspace
 bun run test:js     # node --test web/*.test.js
 ```
@@ -429,12 +430,12 @@ sandbox).
 | Unit (`engine/write.rs`) | 4 | parent dirs, overwrite, no leftover temp file, `0644` vs `0600` |
 | Unit (`engine/paths.rs`) | 2 | `HAKONFIG_ROOT` override, `opencode.jsonc` vs `.json` pick |
 | Unit (`engine/version.rs`) | 1 | `<bin> --version` output parsing |
-| Unit (`cli/src/draft.rs`) | 14 | preset-to-draft mapping, `--models` parsing, custom provider validation, typo suggestions (Levenshtein) |
+| Unit (`cli/src/draft.rs`) | 17 | preset-to-draft mapping, `--models` parsing, endpoint-to-draft merge for `--sync`, custom provider validation, typo suggestions (Levenshtein) |
 | Unit (`cli/src/output.rs`) | 8 | line diff trimming, removed/added budget split, preview rendering |
 | Unit (`cli/src/i18n.rs`) | 5 | language parsing, EN/ID message parity |
 | Unit (`src/commands.rs`) | 4 | streamed install command execution, failure detection |
 | Integration (`engine/tests.rs`) | 20 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key` |
-| Integration (`cli/tests/cli.rs`) | 24 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, language switch, JSON output |
+| Integration (`cli/tests/cli.rs`) | 27 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, `--sync` against a loopback stub, language switch, JSON output |
 | Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks, XSS escaping, output trimming |
 | Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholders, untranslated strings, no em dash |
 | Unit (`web/provider-form.test.js`) | 12 | registered-provider detection, env variable naming |
@@ -598,7 +599,7 @@ Pull requests, issues, and new tool adapters are very welcome. To add a tool, se
 Before sending a PR:
 
 ```bash
-bun run test            # 107 Rust + 48 JS tests must pass
+bun run test            # 113 Rust + 48 JS tests must pass
 bun run version:check   # version consistent across files
 bun run css && bun run logos
 ```

@@ -97,6 +97,10 @@ enum Command {
         /// Comma separated model ids. Default: every preset model.
         #[arg(long, value_name = "ID1,ID2")]
         models: Option<String>,
+        /// Ask the endpoint which models exist and use that list instead of the
+        /// preset list. Needs network access and, usually, the key.
+        #[arg(long)]
+        sync: bool,
         /// Test the endpoint even when non-interactive; a failure aborts.
         #[arg(long, conflicts_with = "no_test")]
         test: bool,
@@ -168,6 +172,7 @@ fn run(cli: &Cli) -> Result<()> {
             key_stdin,
             key_env,
             models,
+            sync,
             test,
             no_test,
             dry_run,
@@ -189,6 +194,7 @@ fn run(cli: &Cli) -> Result<()> {
                 KeyMode::Inline
             },
             models: models.clone(),
+            sync: *sync,
             dry_run: *dry_run,
             yes: *yes,
             test: if *test {

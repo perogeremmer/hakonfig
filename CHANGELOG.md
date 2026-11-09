@@ -4,6 +4,28 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [Unreleased]
+
+### Added
+
+- CLI: `hakonfig-cli add --sync` mengambil daftar model langsung dari endpoint
+  (`GET {base}/models`) alih-alih memakai daftar preset, untuk skrip dan
+  server tanpa TTY.
+- CLI: di terminal, setelah key dimasukkan, `add` sekarang menawarkan sync
+  daftar model (default ya) untuk **semua** provider — termasuk 34 preset yang
+  sudah punya daftar model dan provider custom. Id hasil sync digabung dengan
+  metadata preset (context window dari endpoint diutamakan, nama/max
+  token/reasoning dari preset, id baru tetap ditambahkan) dan semua model
+  terpilih secara default, sama seperti aplikasi desktop setelah Test
+  Connection. Kalau sync gagal, perintah lanjut dengan daftar preset dan
+  menampilkan alasannya.
+
+### Fixed
+
+- CLI: provider custom tidak pernah mencoba sync daftar model sama sekali
+  (permintaan sebelumnya selalu memakai base URL preset, yang tidak ada untuk
+  provider custom).
+
 ## [0.4.2]
 
 ### Fixed

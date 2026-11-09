@@ -27,6 +27,38 @@ pub fn models_from_preset(preset: &ProviderPreset) -> Vec<ModelDraft> {
         .collect()
 }
 
+/// Gabungkan daftar model hasil sync endpoint dengan metadata preset.
+///
+/// Endpoint hanya tahu id (dan kadang context window). Preset tahu nama,
+/// context window, max token, dan flag reasoning untuk id yang sama, jadi
+/// metadata itu dipertahankan. Id yang tidak ada di preset tetap masuk
+/// sebagai model baru — justru itu gunanya sync.
+pub fn models_from_sync(
+    live: Vec<hakonfig_core::api::ModelOption>,
+    preset: Option<&ProviderPreset>,
+) -> Vec<ModelDraft> {
+    let mut models: Vec<ModelDraft> = Vec::new();
+    for option in live {
+        let id = option.id.trim().to_string();
+        if id.is_empty() || models.iter().any(|model| model.id == id) {
+            continue;
+        }
+        let known =
+            preset.and_then(|preset| preset.models.iter().find(|model| model.id.trim() == id));
+        models.push(ModelDraft {
+            id,
+            name: known.and_then(|model| model.name.clone()),
+            // Endpoint lebih baru daripada preset, jadi angkanya diutamakan.
+            context_window: option
+                .context_window
+                .or_else(|| known.and_then(|model| model.context_window)),
+            max_tokens: known.and_then(|model| model.max_tokens),
+            reasoning: known.map(|model| model.reasoning).unwrap_or(false),
+        });
+    }
+    models
+}
+
 /// Parse `--models a,b,c`.
 ///
 /// Aturan: id dipakai apa adanya (endpoint custom boleh punya id bebas),
@@ -190,6 +222,7 @@ fn levenshtein(left: &str, right: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hakonfig_core::api::ModelOption;
     use hakonfig_core::engine::model::ModelSummary;
 
     fn preset(id: &str, models: &[(&str, Option<u64>)]) -> ProviderPreset {
@@ -229,6 +262,82 @@ mod tests {
         assert_eq!(models[0].context_window, Some(128_000));
         assert_eq!(models[1].id, "llama-3.1-8b");
         assert_eq!(models[1].context_window, None);
+    }
+
+    #[test]
+    fn models_from_sync_keeps_preset_metadata_and_adds_new_ids() {
+        let groq = preset("groq", &[("llama-3.3-70b", Some(128_000))]);
+        let live = vec![
+            ModelOption {
+                id: "llama-3.3-70b".to_string(),
+                context_window: None,
+            },
+            ModelOption {
+                id: "model-baru".to_string(),
+                context_window: Some(200_000),
+            },
+        ];
+
+        let models = models_from_sync(live, Some(&groq));
+
+        assert_eq!(
+            models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            vec!["llama-3.3-70b", "model-baru"],
+            "urutan endpoint dipertahankan"
+        );
+        assert_eq!(
+            models[0].context_window,
+            Some(128_000),
+            "metadata preset dipakai ketika endpoint tidak menyebutkan angkanya"
+        );
+        assert_eq!(models[1].context_window, Some(200_000));
+    }
+
+    #[test]
+    fn models_from_sync_prefers_the_endpoint_context_window() {
+        let groq = preset("groq", &[("llama-3.3-70b", Some(128_000))]);
+        let live = vec![ModelOption {
+            id: "llama-3.3-70b".to_string(),
+            context_window: Some(256_000),
+        }];
+
+        let models = models_from_sync(live, Some(&groq));
+
+        assert_eq!(
+            models[0].context_window,
+            Some(256_000),
+            "endpoint lebih baru daripada preset"
+        );
+    }
+
+    #[test]
+    fn models_from_sync_trims_dedupes_and_works_without_a_preset() {
+        let live = vec![
+            ModelOption {
+                id: "  a  ".to_string(),
+                context_window: None,
+            },
+            ModelOption {
+                id: "a".to_string(),
+                context_window: None,
+            },
+            ModelOption {
+                id: "  ".to_string(),
+                context_window: None,
+            },
+            ModelOption {
+                id: "b".to_string(),
+                context_window: None,
+            },
+        ];
+
+        let models = models_from_sync(live, None);
+
+        assert_eq!(
+            models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            vec!["a", "b"]
+        );
+        assert_eq!(models[0].name, None, "tanpa preset tidak ada metadata");
     }
 
     #[test]

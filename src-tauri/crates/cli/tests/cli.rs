@@ -605,6 +605,162 @@ fn add_without_a_test_flag_skips_the_test_and_still_writes() {
     );
 }
 
+// ------------------------------------------------------------------ sync
+
+/// Server HTTP tiruan satu tembakan: cukup untuk `GET {base}/models`.
+///
+/// Mengembalikan port-nya. Thread-nya berhenti sendiri setelah melayani satu
+/// permintaan, jadi test tetap offline dan deterministik.
+fn mock_models_server(body: &'static str) -> u16 {
+    use std::io::{BufRead, BufReader};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind("127.0.0.1:0").expect("gagal membuka port");
+    let port = listener.local_addr().expect("tanpa alamat").port();
+    std::thread::spawn(move || {
+        if let Ok((stream, _)) = listener.accept() {
+            let mut reader = BufReader::new(stream.try_clone().expect("gagal klon stream"));
+            // Baca header permintaan sampai baris kosong, lalu jawab.
+            let mut line = String::new();
+            while reader.read_line(&mut line).map(|n| n > 0).unwrap_or(false) {
+                if line == "\r\n" {
+                    break;
+                }
+                line.clear();
+            }
+            let mut stream = stream;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+        }
+    });
+    port
+}
+
+#[test]
+fn add_sync_uses_the_endpoint_model_list() {
+    // Preset "lokal" tidak punya daftar model, tapi yang diuji di sini adalah
+    // jalur sync: id yang ditulis harus datang dari endpoint, bukan dari flag.
+    let root = sandbox("sync-endpoint");
+    let port = mock_models_server(r#"{"data":[{"id":"live-a"},{"id":"live-b"}]}"#);
+    let base_url = format!("http://127.0.0.1:{}/v1", port);
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "lokal",
+            "--name",
+            "Lokal",
+            "--base-url",
+            &base_url,
+            "--key-stdin",
+            "--sync",
+            "--no-test",
+        ],
+        "sk-lokal\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    let ids: Vec<&str> = models["providers"]["lokal"]["models"]
+        .as_array()
+        .expect("models harus array")
+        .iter()
+        .map(|model| model["id"].as_str().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        ids,
+        vec!["live-a", "live-b"],
+        "--sync harus memakai daftar dari endpoint: {}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn add_sync_with_an_unreachable_endpoint_aborts_without_writing() {
+    let root = sandbox("sync-unreachable");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "lokal",
+            "--name",
+            "Lokal",
+            "--base-url",
+            "http://127.0.0.1:1/v1",
+            "--key-stdin",
+            "--sync",
+            "--no-test",
+        ],
+        "sk-lokal\n",
+    );
+
+    assert!(
+        !output.status.success(),
+        "--sync yang gagal harus menggagalkan perintah: {}",
+        stdout(&output)
+    );
+    assert!(
+        stderr(&output).contains("model sync failed"),
+        "error harus menjelaskan kegagalan sync: {}",
+        stderr(&output)
+    );
+    assert!(
+        !models_path(&root).exists(),
+        "tidak boleh ada yang ditulis ketika sync gagal"
+    );
+}
+
+#[test]
+fn add_models_flag_still_wins_over_sync() {
+    // --models eksplisit tidak boleh memicu permintaan jaringan sama sekali.
+    let root = sandbox("sync-models-flag");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "lokal",
+            "--name",
+            "Lokal",
+            "--base-url",
+            "http://127.0.0.1:1/v1",
+            "--key-stdin",
+            "--models",
+            "m1,m2",
+            "--sync",
+            "--no-test",
+        ],
+        "sk-lokal\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("sync"),
+        "--models eksplisit tidak boleh menyentuh jaringan: {}",
+        stderr(&output)
+    );
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["lokal"]["models"]
+            .as_array()
+            .expect("models harus array")
+            .len(),
+        2
+    );
+}
+
 // ------------------------------------------------------------------ bahasa
 
 #[test]
