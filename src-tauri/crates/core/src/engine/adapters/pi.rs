@@ -138,23 +138,26 @@ impl PiAdapter {
         notices
     }
 
-    fn fix_scope(docs: &mut Docs, provider: &str) -> Result<Option<String>> {
+    fn widen_scope(docs: &mut Docs, provider: &str) -> Result<Option<String>> {
         let settings = docs.require_mut("settings")?;
         let object = settings.root_object();
         let wide = glob::provider_wide_pattern(provider);
         let narrow = glob::provider_narrow_pattern(provider);
 
-        let mut patterns: Vec<String> = object
-            .get("enabledModels")
-            .and_then(Value::as_array)
-            .map(|items| {
-                items
-                    .iter()
-                    .filter_map(Value::as_str)
-                    .map(str::to_string)
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Scope hanya diurus kalau pengguna memang punya. Key yang tidak ada
+        // berarti "semua model terlihat"; menambahkannya justru mempersempit.
+        let Some(existing) = object.get("enabledModels").and_then(Value::as_array) else {
+            return Ok(None);
+        };
+        if existing.is_empty() {
+            return Ok(None);
+        }
+
+        let mut patterns: Vec<String> = existing
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::to_string)
+            .collect();
 
         let removed_narrow = patterns
             .iter()
@@ -185,7 +188,7 @@ impl PiAdapter {
             summary.push_str(&format!("added '{wide}'"));
         }
         Ok(Some(format!(
-            "enabledModels in settings.json: {}",
+            "settings.json enabledModels updated so pi shows the new models: {}",
             summary.trim_end_matches("; ").trim()
         )))
     }
@@ -400,6 +403,15 @@ impl Adapter for PiAdapter {
                     );
                 }
 
+                // --- settings.json
+                // Kalau pengguna pernah menyimpan scope model (Ctrl+S di pemilih
+                // model), scope itu yang menentukan apa yang terlihat — model
+                // yang baru ditulis bisa tidak muncul sama sekali. Karena kita
+                // yang baru menulis modelnya, kita juga yang melebarkan scope-nya.
+                if let Some(summary) = Self::widen_scope(docs, draft.id.trim())? {
+                    warnings.push(summary);
+                }
+
                 Ok(warnings)
             }
             EditOp::SetEnabled {
@@ -556,7 +568,7 @@ impl Adapter for PiAdapter {
 
     fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
         match notice.code.as_str() {
-            "pi.scope" => Self::fix_scope(docs, &notice.provider),
+            "pi.scope" => Self::widen_scope(docs, &notice.provider),
             other => anyhow::bail!("pi has no automatic fix for '{other}'"),
         }
     }

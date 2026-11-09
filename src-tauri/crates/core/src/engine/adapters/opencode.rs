@@ -144,6 +144,28 @@ impl OpenCodeAdapter {
             })
             .collect()
     }
+
+    /// Keluarkan provider dari `disabled_providers` di `opencode.json`.
+    fn re_enable(docs: &mut Docs, provider: &str) -> Result<Option<String>> {
+        // Jangan membuat file yang belum ada hanya untuk mengurus daftar disable.
+        let Some(doc) = docs.get_mut("config") else {
+            return Ok(None);
+        };
+        if !doc.exists {
+            return Ok(None);
+        }
+        let Some(Value::Array(list)) = doc.root_object().get_mut("disabled_providers") else {
+            return Ok(None);
+        };
+        let before = list.len();
+        list.retain(|item| item.as_str() != Some(provider));
+        if list.len() == before {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "opencode.json: '{provider}' removed from disabled_providers so its models show up."
+        )))
+    }
 }
 
 impl Adapter for OpenCodeAdapter {
@@ -402,6 +424,12 @@ impl Adapter for OpenCodeAdapter {
                     );
                 }
 
+                // Provider yang ada di disabled_providers tidak akan terlihat
+                // walau modelnya baru ditulis, jadi keluarkan dari daftar itu.
+                if let Some(summary) = Self::re_enable(docs, &id)? {
+                    warnings.push(summary);
+                }
+
                 Ok(warnings)
             }
             EditOp::SetEnabled {
@@ -504,19 +532,7 @@ impl Adapter for OpenCodeAdapter {
 
     fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
         match notice.code.as_str() {
-            "opencode.disabled" => {
-                let config = docs.require_mut("config")?;
-                let list = config.array_at("disabled_providers");
-                let before = list.len();
-                list.retain(|item| item.as_str() != Some(notice.provider.as_str()));
-                if list.len() == before {
-                    return Ok(None);
-                }
-                Ok(Some(format!(
-                    "'{}' removed from disabled_providers in opencode.json.",
-                    notice.provider
-                )))
-            }
+            "opencode.disabled" => Self::re_enable(docs, &notice.provider),
             other => anyhow::bail!("opencode has no automatic fix for '{other}'"),
         }
     }

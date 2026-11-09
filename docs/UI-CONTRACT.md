@@ -236,7 +236,7 @@ type InstallResult = {
   pernah dikirim ke UI, jadi UI cukup mengosongkan `key` bila
   `ProviderSummary.hasKey` bernilai true.
 - `apply_edit` boleh dipanggil walau tidak ada perubahan; ia mengembalikan `filesWritten: []` tanpa membuat backup.
-- `apply_edit` mengembalikan `notices` untuk provider yang ditulis. Notice dengan `fix` bukan null wajib ditawarkan sebagai aksi (tombol "Perbaiki" memanggil `fix_notice`), bukan hanya dicetak sebagai teks.
+- `apply_edit` sudah merapikan sendiri hal yang bisa dirapikan: scope `enabledModels` pi dilebarkan dan provider yang ditulis dikeluarkan dari daftar disable omp/OpenCode, tampil sebagai diff biasa pada file settings. `notices` yang tersisa (mis. id bentrok dengan provider bawaan) tetap dikembalikan; notice dengan `fix` bukan null wajib ditawarkan sebagai aksi (tombol "Perbaiki" memanggil `fix_notice`), bukan hanya dicetak sebagai teks.
 - `fix_notice` hanya menerima notice yang masih ada; notice yang sudah beres ditolak dengan error, jadi tombolnya aman ditekan dua kali.
 - Form provider: untuk provider yang id-nya ada di `ProviderPreset` (katalog Hakonfig) **dan**
   nilai `baseUrl`/`api`/`name` masih sama dengan katalog, form hanya menampilkan API key +

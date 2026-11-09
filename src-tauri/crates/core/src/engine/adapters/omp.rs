@@ -41,6 +41,29 @@ impl OmpAdapter {
             .unwrap_or_default()
     }
 
+    /// Keluarkan provider dari `disabledProviders`; dipakai saat provider
+    /// ditulis ulang supaya modelnya benar-benar muncul.
+    fn re_enable(docs: &mut Docs, provider: &str) -> Result<Option<String>> {
+        // Jangan membuat file yang belum ada hanya untuk mengurus daftar disable.
+        let Some(doc) = docs.get_mut("settings") else {
+            return Ok(None);
+        };
+        if !doc.exists {
+            return Ok(None);
+        }
+        let Some(Value::Array(list)) = doc.root_object().get_mut("disabledProviders") else {
+            return Ok(None);
+        };
+        let before = list.len();
+        list.retain(|item| item.as_str() != Some(provider));
+        if list.len() == before {
+            return Ok(None);
+        }
+        Ok(Some(format!(
+            "config.yml: '{provider}' removed from disabledProviders so its models show up."
+        )))
+    }
+
     fn disabled_notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
         let disabled = Self::disabled_providers(docs);
         providers
@@ -217,6 +240,14 @@ impl Adapter for OmpAdapter {
                     warnings.push("Provider created without an API key.".to_string());
                 }
 
+                // Provider yang sedang di-disable tidak akan terlihat walau
+                // modelnya baru saja ditulis, jadi hapus dari daftar itu. Kalau
+                // pengguna memang ingin menyembunyikannya, ia bisa mematikan
+                // provider ini lagi sesudahnya.
+                if let Some(summary) = Self::re_enable(docs, draft.id.trim())? {
+                    warnings.push(summary);
+                }
+
                 Ok(warnings)
             }
             EditOp::SetEnabled {
@@ -337,19 +368,7 @@ impl Adapter for OmpAdapter {
 
     fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
         match notice.code.as_str() {
-            "omp.disabled" => {
-                let settings = docs.require_mut("settings")?;
-                let list = settings.array_at("disabledProviders");
-                let before = list.len();
-                list.retain(|item| item.as_str() != Some(notice.provider.as_str()));
-                if list.len() == before {
-                    return Ok(None);
-                }
-                Ok(Some(format!(
-                    "'{}' re-enabled in config.yml (its models were never removed).",
-                    notice.provider
-                )))
-            }
+            "omp.disabled" => Self::re_enable(docs, &notice.provider),
             other => anyhow::bail!("omp has no automatic fix for '{other}'"),
         }
     }

@@ -131,12 +131,15 @@ and with `--models` it never does.
 
 ### `doctor [--harness <id>] [--fix]`
 
-Writes can succeed while the harness still refuses to show the result. `doctor`
-checks for exactly that and, with `--fix`, repairs what it can:
+`add` already reconciles the obvious cases while it writes — it widens a saved
+pi scope and lifts a disable flag for the provider it just wrote — so the new
+models show up without extra steps. `doctor` is the safety net for state that
+drifted afterwards (a scope saved later with `Ctrl+S`, a config written by an
+older Hakonfig, an id that has to be renamed):
 
 | Notice | Meaning | Fix |
 |---|---|---|
-| `pi.scope` | pi limits the model picker to `enabledModels` in `settings.json`; some of the models just written are outside it (a saved scope from `Ctrl+S`, or a pattern like `provider/*` that does not match ids containing `/`). | Adds `<provider>/**` and drops the narrower `<provider>/*`. |
+| `pi.scope` | pi limits the model picker to `enabledModels` in `settings.json`; models of a provider are outside it (a saved scope from `Ctrl+S`, or a pattern like `provider/*` that does not match ids containing `/`). | Adds `<provider>/**` and drops the narrower `<provider>/*`. |
 | `omp.disabled` / `opencode.disabled` | The provider is listed in `disabledProviders` / `disabled_providers`, so its models stay hidden even though they are in `models.yml` / `opencode.json`. | Removes the provider from the list (the entry and its models are kept). |
 | `harness.builtin-id` | The provider id is also a built-in harness provider (`openrouter`, `deepseek`, `opencode-go`, …), so the remote catalog for that id is merged with your models and refresh warnings may mention it. | Manual: rename the gateway (for example `openrouter-gw`). |
 
@@ -154,8 +157,11 @@ could repair remains, so it can gate a setup script; notices that are
 manual-only never fail the run. `--json` prints the notices as they are
 returned by the API (`code`, `harness`, `provider`, `message`, `fix`).
 
-The same notices are included in `add`'s `ApplyResult`, so a write that pi will
-hide is reported immediately instead of after a confused model-picker refresh.
+The same notices are included in `add`'s `ApplyResult`, so anything Hakonfig
+could not repair itself is reported immediately instead of after a confused
+model-picker refresh. Automatic repairs appear in the preview as an ordinary
+diff of `settings.json` / `config.yml` / `opencode.json` and are covered by the
+same backup.
 
 ### `paths [HARNESS]`
 

@@ -1459,23 +1459,22 @@ fn builtin_id_collision_is_reported_without_a_fix() {
 }
 
 #[test]
-fn apply_reports_notices_for_the_written_provider() {
+fn apply_widens_the_pi_scope_so_the_new_models_are_visible() {
     let (_lock, root) = sandbox("notices_apply");
     let dir = root.join("pi/agent");
     write(
         &dir.join("settings.json"),
-        r#"{"enabledModels":["lain/**"]}"#,
+        r#"{"enabledModels":["lain/**","gateway/*"]}"#,
     );
 
     let result =
         api::apply_edit("pi".into(), upsert("gateway", Some("k"), KeyMode::Inline)).unwrap();
 
+    // Perbaikan terjadi saat menulis, bukan sesudahnya: pengguna tidak perlu
+    // menjalankan apa pun.
     assert!(
-        result
-            .notices
-            .iter()
-            .any(|notice| notice.code == "pi.scope"),
-        "apply harus melaporkan model yang tersembunyi: {:?}",
+        result.notices.is_empty(),
+        "tidak boleh ada notice yang tersisa: {:?}",
         result.notices
     );
     assert!(
@@ -1483,9 +1482,64 @@ fn apply_reports_notices_for_the_written_provider() {
             .warnings
             .iter()
             .any(|warning| warning.contains("enabledModels")),
-        "notice juga masuk warnings supaya UI lama ikut menampilkannya: {:?}",
+        "perubahan settings harus dilaporkan: {:?}",
         result.warnings
     );
+
+    let settings: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("settings.json")).unwrap()).unwrap();
+    let patterns: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect();
+    assert!(patterns.contains(&"gateway/**"), "{patterns:?}");
+    assert!(!patterns.contains(&"gateway/*"), "{patterns:?}");
+    assert!(patterns.contains(&"lain/**"), "{patterns:?}");
+}
+
+#[test]
+fn apply_does_not_invent_a_scope_when_pi_has_none() {
+    let (_lock, root) = sandbox("notices_apply_no_scope");
+    let dir = root.join("pi/agent");
+    write(&dir.join("settings.json"), r#"{"theme":"dark"}"#);
+
+    api::apply_edit("pi".into(), upsert("gateway", Some("k"), KeyMode::Inline)).unwrap();
+
+    let settings: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("settings.json")).unwrap()).unwrap();
+    assert!(
+        settings.get("enabledModels").is_none(),
+        "jangan mengarang scope: {settings:?}"
+    );
+}
+
+#[test]
+fn apply_re_enables_a_disabled_provider() {
+    let (_lock, root) = sandbox("notices_apply_reenable");
+    let dir = root.join("omp/agent");
+    write(&dir.join("models.yml"), "providers: {}\n");
+    write(
+        &dir.join("config.yml"),
+        "disabledProviders:\n  - gateway\n  - lain\ntheme: dark\n",
+    );
+
+    api::apply_edit("omp".into(), upsert("gateway", Some("k"), KeyMode::Inline)).unwrap();
+
+    let settings = yaml(&dir.join("config.yml"));
+    let disabled: Vec<&str> = settings["disabledProviders"]
+        .as_array()
+        .expect("disabledProviders harus array")
+        .iter()
+        .map(|item| item.as_str().unwrap_or_default())
+        .collect();
+    assert_eq!(
+        disabled,
+        vec!["lain"],
+        "hanya provider ini yang diaktifkan lagi"
+    );
+    assert_eq!(settings["theme"], "dark");
 }
 
 #[test]

@@ -28,6 +28,13 @@ file oleh `scripts/version.mjs`.
   perbaikannya, dikembalikan `apply_edit` dan bisa diterapkan lewat
   `fix_notice`. Aplikasi desktop menampilkan tombol "Perbaiki" untuk notice
   yang punya `fix`.
+- Menulis provider sekarang sekalian merapikan hal yang membuatnya tidak
+  terlihat: scope `enabledModels` pi dilebarkan (`<id>/*` diganti `<id>/**`,
+  pola lain dipertahankan, tidak pernah mengarang scope baru) dan provider
+  yang ditulis dikeluarkan dari `disabledProviders` (omp) atau
+  `disabled_providers` (OpenCode). Semua perubahan itu masuk pratinjau dan
+  backup seperti edit biasa, dan dilaporkan sebagai warning — jadi pengguna
+  tidak perlu menjalankan perintah tambahan.
 - Core: `engine::glob` — pencocokan pola `enabledModels` gaya minimatch
   (`*` tidak melewati `/`, `**` melewati), dipakai untuk mendeteksi scope pi
   yang terlalu sempit.
