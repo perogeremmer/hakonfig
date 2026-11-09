@@ -4,6 +4,23 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [Unreleased]
+
+### Added
+
+- Aplikasi desktop: aksi per provider dipisah menjadi tiga, jadi tidak perlu
+  mengirim ulang draft (dan key) hanya untuk mengganti satu hal:
+  - **Change key** → `EditOp::SetKey` (hanya file kredensial, atau referensi
+    env; model/endpoint/nama tidak disentuh),
+  - **Choose models** → `EditOp::SetModels` (checkbox per model; key dan
+    endpoint tidak disentuh, daftar baru menggantikan yang lama dengan backup),
+  - **Set as default** → `EditOp::SetDefault` untuk model mana pun milik
+    provider itu.
+  "Edit" dan "Delete" tetap ada, dipisah garis.
+- pi: `SetModels` hanya menjamin model yang dipilih tercakup `enabledModels`
+  (menambah `<provider>/<model>` bila belum tercakup), bukan melebar ke
+  seluruh provider seperti saat menambah provider baru.
+
 ## [0.4.4]
 
 `doctor` kini juga melihat hal di luar file config (kredensial yang memicu

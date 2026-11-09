@@ -76,6 +76,21 @@ export default {
   "provider.edit": "Edit",
   "provider.delete": "Delete",
   "provider.active": "Active",
+  // ---- aksi per provider ----
+  "provider.changeKey": "Change key",
+  "provider.changeModels": "Choose models",
+  "provider.changeDefaultModel": "Set as default",
+  "provider.changeKeyTitle": "Change key for {name}",
+  "provider.changeKeySubtitle": "Models, endpoint, and name stay untouched.",
+  "provider.changeKeySave": "Save key",
+  "provider.changeModelsTitle": "Models of {name}",
+  "provider.changeModelsSubtitle": "Unticked models are removed from the config (a backup is kept).",
+  "provider.changeDefaultTitle": "Default model for {name}",
+  "provider.changeDefaultSubtitle": "Used when this tool starts without an explicit model.",
+  "provider.searchModels": "Search models…",
+  "provider.modelsSelected": "{active} of {total} models active",
+  "provider.noModelsToToggle": "This provider has no model list",
+  "toast.needOneModel": "Keep at least one model",
 
   // ---- add provider (simple flow) ----
   "add.title": "Add {name}",

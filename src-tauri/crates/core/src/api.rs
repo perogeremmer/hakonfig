@@ -153,9 +153,9 @@ fn op_provider(op: &EditOp) -> Option<ProviderRef<'_>> {
         )),
         EditOp::Remove { provider_id }
         | EditOp::SetEnabled { provider_id, .. }
-        | EditOp::SetDefault { provider_id, .. } => {
-            Some(ProviderRef::new(provider_id.trim(), None))
-        }
+        | EditOp::SetDefault { provider_id, .. }
+        | EditOp::SetKey { provider_id, .. }
+        | EditOp::SetModels { provider_id, .. } => Some(ProviderRef::new(provider_id.trim(), None)),
     }
 }
 

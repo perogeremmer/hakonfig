@@ -138,6 +138,23 @@ pub enum EditOp {
         provider_id: String,
         enabled: bool,
     },
+    /// Ganti kredensial saja: model, endpoint, dan nama tidak disentuh.
+    ///
+    /// Dipakai aksi "Change key" di UI, supaya mengganti key tidak perlu
+    /// mengirim ulang seluruh draft provider.
+    SetKey {
+        provider_id: String,
+        key: String,
+        key_mode: KeyMode,
+    },
+    /// Ganti daftar model saja: kredensial dan endpoint tidak disentuh.
+    ///
+    /// Daftar ini menjadi isi akhir `models` milik provider, jadi model yang
+    /// tidak dicantumkan berarti dihapus (backup tetap dibuat).
+    SetModels {
+        provider_id: String,
+        models: Vec<ModelDraft>,
+    },
     /// Ganti default provider/model yang dipakai harness.
     SetDefault {
         provider_id: String,

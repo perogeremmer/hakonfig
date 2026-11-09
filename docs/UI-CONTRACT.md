@@ -95,7 +95,11 @@ type EditOp =
   | ({ kind: "upsert" } & ProviderDraft)
   | { kind: "remove"; providerId: string }
   | { kind: "set_enabled"; providerId: string; enabled: boolean }
-  | { kind: "set_default"; providerId: string; modelId: string };
+  | { kind: "set_default"; providerId: string; modelId: string }
+  // Ganti kredensial saja: model, endpoint, dan nama tidak disentuh.
+  | { kind: "set_key"; providerId: string; key: string; keyMode: "inline" | "env" }
+  // Ganti daftar model saja: kredensial dan endpoint tidak disentuh.
+  | { kind: "set_models"; providerId: string; models: ModelDraft[] };
 
 type FileDiff = {
   path: string;
@@ -238,6 +242,9 @@ type InstallResult = {
 - `apply_edit` boleh dipanggil walau tidak ada perubahan; ia mengembalikan `filesWritten: []` tanpa membuat backup.
 - `apply_edit` sudah merapikan sendiri hal yang bisa dirapikan: scope `enabledModels` pi dilebarkan dan provider yang ditulis dikeluarkan dari daftar disable omp/OpenCode, tampil sebagai diff biasa pada file settings. `notices` yang tersisa (mis. id bentrok dengan provider bawaan) tetap dikembalikan; notice dengan `fix` bukan null wajib ditawarkan sebagai aksi (tombol "Perbaiki" memanggil `fix_notice`), bukan hanya dicetak sebagai teks.
 - `fix_notice` hanya menerima notice yang masih ada; notice yang sudah beres ditolak dengan error, jadi tombolnya aman ditekan dua kali.
+- Aksi per provider wajib terpisah: **change key** (`set_key`), **choose models** (`set_models`), dan **set as default** (`set_default`). Jangan memakai `upsert` untuk salah satunya, karena itu memaksa UI mengirim ulang seluruh draft (termasuk key) hanya untuk mengganti satu hal.
+- `set_models` mengirim daftar lengkap: model yang tidak disertakan berarti dihapus (backup tetap dibuat). `set_key` menolak provider yang belum ada, karena key tanpa entry model tidak ada artinya.
+- `set_models` tidak didukung Hermes (config-nya memang tidak menyimpan daftar model); backend mengembalikan error yang menjelaskan itu.
 - Form provider: untuk provider yang id-nya ada di `ProviderPreset` (katalog Hakonfig) **dan**
   nilai `baseUrl`/`api`/`name` masih sama dengan katalog, form hanya menampilkan API key +
   model. Endpoint ditampilkan sebagai kartu info (read-only) dan payload `upsert` tetap

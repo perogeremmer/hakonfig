@@ -432,6 +432,129 @@ impl Adapter for OpenCodeAdapter {
 
                 Ok(warnings)
             }
+            EditOp::SetKey {
+                provider_id,
+                key,
+                key_mode,
+            } => {
+                let target = provider_id.trim().to_string();
+                let key = key.trim().to_string();
+                if key.is_empty() {
+                    anyhow::bail!("API key is empty.");
+                }
+                let env_var = crate::engine::doc::env_name_from(&target);
+
+                let container = providers_key(docs.require("config")?.data());
+                if docs
+                    .require("config")?
+                    .data()
+                    .get(container)
+                    .and_then(|map| map.get(&target))
+                    .is_none()
+                {
+                    anyhow::bail!("Provider '{}' not found in opencode.json.", target);
+                }
+
+                match key_mode {
+                    KeyMode::Inline => {
+                        let auth = docs.require_mut("auth")?;
+                        auth.root_object()
+                            .insert(target.clone(), json!({ "type": "api", "key": key }));
+                        if let Some(config) = docs.get_mut("config") {
+                            if let Some(options) = config
+                                .object_at(container)
+                                .get_mut(&target)
+                                .and_then(|entry| entry.get_mut("options"))
+                                .and_then(Value::as_object_mut)
+                            {
+                                options.remove("apiKey");
+                            }
+                        }
+                        Ok(Vec::new())
+                    }
+                    KeyMode::Env => {
+                        if let Some(config) = docs.get_mut("config") {
+                            if let Some(entry) = config
+                                .object_at(container)
+                                .get_mut(&target)
+                                .and_then(Value::as_object_mut)
+                            {
+                                let options = entry
+                                    .entry("options".to_string())
+                                    .or_insert_with(|| json!({}));
+                                if let Some(options) = options.as_object_mut() {
+                                    options.insert(
+                                        "apiKey".to_string(),
+                                        Value::String(format!("{{env:{}}}", env_var)),
+                                    );
+                                }
+                            }
+                        }
+                        if let Some(auth) = docs.get_mut("auth") {
+                            if auth.data().get(&target).is_some() {
+                                auth.root_object().remove(&target);
+                            }
+                        }
+                        Ok(vec![format!(
+                            "Environment mode: set {} in your shell.",
+                            env_var
+                        )])
+                    }
+                }
+            }
+            EditOp::SetModels {
+                provider_id,
+                models,
+            } => {
+                let target = provider_id.trim().to_string();
+                if models.is_empty() {
+                    anyhow::bail!("Tambahkan minimal satu model.");
+                }
+                let container = providers_key(docs.require("config")?.data());
+                let document = docs.require_mut("config")?;
+                let Some(entry) = document
+                    .object_at(container)
+                    .get_mut(&target)
+                    .and_then(Value::as_object_mut)
+                else {
+                    anyhow::bail!("Provider '{}' not found in opencode.json.", target);
+                };
+
+                // Model OpenCode berupa map berkunci id; metadata yang sudah ada
+                // dipertahankan supaya limit/opsi tidak hilang saat menyalakan
+                // atau mematikan model lain.
+                let existing = entry
+                    .get("models")
+                    .and_then(Value::as_object)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut map = JsonMap::new();
+                for model in models {
+                    let id = model.id.trim().to_string();
+                    let mut value = existing.get(&id).cloned().unwrap_or_else(|| json!({}));
+                    if let Some(name) = model
+                        .name
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|n| !n.is_empty())
+                    {
+                        if let Some(object) = value.as_object_mut() {
+                            object.insert("name".to_string(), Value::String(name.to_string()));
+                        }
+                    }
+                    map.insert(id, value);
+                }
+                entry.insert("models".to_string(), Value::Object(map));
+                Ok(vec![format!(
+                    "{} model ditulis untuk '{}'.",
+                    entry
+                        .get("models")
+                        .and_then(Value::as_object)
+                        .map(|map| map.len())
+                        .unwrap_or(0),
+                    target
+                )])
+            }
             EditOp::SetEnabled {
                 provider_id,
                 enabled,

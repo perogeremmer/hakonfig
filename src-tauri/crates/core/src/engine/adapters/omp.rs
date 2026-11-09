@@ -250,6 +250,69 @@ impl Adapter for OmpAdapter {
 
                 Ok(warnings)
             }
+            EditOp::SetKey {
+                provider_id,
+                key,
+                key_mode,
+            } => {
+                let target = provider_id.trim().to_string();
+                let key = key.trim().to_string();
+                if key.is_empty() {
+                    anyhow::bail!("API key is empty.");
+                }
+                let env_var = crate::engine::doc::env_name_from(&target);
+                let document = docs.require_mut("models")?;
+                let Some(entry) = document
+                    .object_at("providers")
+                    .get_mut(&target)
+                    .and_then(Value::as_object_mut)
+                else {
+                    anyhow::bail!("Provider '{}' not found in models.yml.", target);
+                };
+
+                match key_mode {
+                    KeyMode::Inline => {
+                        entry.insert("apiKey".to_string(), Value::String(key));
+                        Ok(vec![
+                            "Oh My Pi: the API key is written in plaintext to models.yml (the file is given permission 0600)."
+                                .to_string(),
+                        ])
+                    }
+                    KeyMode::Env => {
+                        entry.insert("apiKey".to_string(), Value::String(format!("${}", env_var)));
+                        Ok(vec![format!(
+                            "Environment mode: set {} in your shell.",
+                            env_var
+                        )])
+                    }
+                }
+            }
+            EditOp::SetModels {
+                provider_id,
+                models,
+            } => {
+                let target = provider_id.trim().to_string();
+                if models.is_empty() {
+                    anyhow::bail!("Tambahkan minimal satu model.");
+                }
+                let document = docs.require_mut("models")?;
+                let Some(entry) = document
+                    .object_at("providers")
+                    .get_mut(&target)
+                    .and_then(Value::as_object_mut)
+                else {
+                    anyhow::bail!("Provider '{}' not found in models.yml.", target);
+                };
+                entry.insert(
+                    "models".to_string(),
+                    Value::Array(models.iter().map(model_to_value).collect()),
+                );
+                Ok(vec![format!(
+                    "{} model ditulis untuk '{}'.",
+                    models.len(),
+                    target
+                )])
+            }
             EditOp::SetEnabled {
                 provider_id,
                 enabled,
@@ -384,4 +447,28 @@ impl Adapter for OmpAdapter {
             .and_then(|map| map.get(target))
             .and_then(|entry| get_str(entry, "apiKey"))
     }
+}
+
+/// Satu entri model untuk `models.yml`.
+fn model_to_value(model: &crate::engine::model::ModelDraft) -> Value {
+    let mut object = serde_json::Map::new();
+    object.insert("id".to_string(), Value::String(model.id.trim().to_string()));
+    if let Some(name) = model
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+    {
+        object.insert("name".to_string(), Value::String(name.to_string()));
+    }
+    if let Some(window) = model.context_window.filter(|value| *value > 0) {
+        object.insert("contextWindow".to_string(), Value::from(window));
+    }
+    if let Some(max) = model.max_tokens.filter(|value| *value > 0) {
+        object.insert("maxTokens".to_string(), Value::from(max));
+    }
+    if model.reasoning {
+        object.insert("reasoning".to_string(), Value::Bool(true));
+    }
+    Value::Object(object)
 }

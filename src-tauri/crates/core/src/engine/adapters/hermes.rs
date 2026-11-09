@@ -243,6 +243,48 @@ impl Adapter for HermesAdapter {
 
                 Ok(warnings)
             }
+            EditOp::SetKey {
+                provider_id,
+                key,
+                key_mode,
+            } => {
+                let target = provider_id.trim().to_string();
+                let key = key.trim().to_string();
+                if key.is_empty() {
+                    anyhow::bail!("API key is empty.");
+                }
+                let existing = docs
+                    .require("config")?
+                    .data()
+                    .get("providers")
+                    .and_then(|map| map.get(&target))
+                    .cloned();
+                let Some(entry) = existing else {
+                    anyhow::bail!("Provider '{}' not found in config.yaml.", target);
+                };
+                let key_env = get_str(&entry, "key_env")
+                    .filter(|value| !value.trim().is_empty())
+                    .unwrap_or_else(|| env_name_from(&target));
+
+                match key_mode {
+                    KeyMode::Inline => {
+                        docs.require_mut("env")?.env_set(&key_env, &key);
+                        Ok(vec![format!(
+                            "API key written to ~/.hermes/.env as {} (permission 0600).",
+                            key_env
+                        )])
+                    }
+                    KeyMode::Env => Ok(vec![format!(
+                        "Environment mode: set {} in your shell; .env was not touched.",
+                        key_env
+                    )]),
+                }
+            }
+            EditOp::SetModels { .. } => {
+                anyhow::bail!(
+                    "Hermes has no model list in its config (it fetches models from the endpoint), so there is nothing to change here."
+                )
+            }
             EditOp::SetEnabled {
                 provider_id,
                 enabled,

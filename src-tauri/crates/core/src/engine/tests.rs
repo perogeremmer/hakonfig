@@ -1835,3 +1835,181 @@ fn dropping_a_model_from_a_provider_prunes_its_scope_entry() {
         "model yang dihapus tidak boleh tertinggal di scope: {patterns:?}"
     );
 }
+
+// ------------------------------------------------------------------ op terpisah
+
+#[test]
+fn set_key_changes_only_the_credential() {
+    let (_lock, root) = sandbox("op_set_key");
+    write(
+        &root.join("pi/agent/models.json"),
+        r#"{"providers":{"gateway":{"name":"GW","baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"}]}}}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetKey {
+            provider_id: "gateway".to_string(),
+            key: "sk-baru".to_string(),
+            key_mode: KeyMode::Inline,
+        },
+    )
+    .unwrap();
+
+    let auth = read_json_value(&root.join("pi/agent/auth.json"));
+    assert_eq!(auth["gateway"]["key"], "sk-baru");
+
+    // Model dan endpoint tidak boleh tersentuh.
+    let models = read_json_value(&root.join("pi/agent/models.json"));
+    assert_eq!(
+        models["providers"]["gateway"]["baseUrl"],
+        "https://gw.test/v1"
+    );
+    assert_eq!(models["providers"]["gateway"]["models"][0]["id"], "a");
+}
+
+#[test]
+fn set_key_env_mode_writes_a_reference_not_the_secret() {
+    let (_lock, root) = sandbox("op_set_key_env");
+    write(
+        &root.join("pi/agent/models.json"),
+        r#"{"providers":{"gateway":{"name":"GW","baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"}]}}}"#,
+    );
+    write(
+        &root.join("pi/agent/auth.json"),
+        r#"{"gateway":{"type":"api_key","key":"lama"}}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetKey {
+            provider_id: "gateway".to_string(),
+            key: "sk-baru".to_string(),
+            key_mode: KeyMode::Env,
+        },
+    )
+    .unwrap();
+
+    let models = read_json_value(&root.join("pi/agent/models.json"));
+    assert_eq!(models["providers"]["gateway"]["apiKey"], "$GATEWAY_API_KEY");
+    let auth = read_json_value(&root.join("pi/agent/auth.json"));
+    assert!(
+        auth.get("gateway").is_none(),
+        "kredensial inline lama harus dibuang: {auth:?}"
+    );
+}
+
+#[test]
+fn set_models_replaces_the_list_and_keeps_the_key() {
+    let (_lock, root) = sandbox("op_set_models");
+    write(
+        &root.join("pi/agent/models.json"),
+        r#"{"providers":{"gateway":{"name":"GW","baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"},{"id":"b"}]}}}"#,
+    );
+    write(
+        &root.join("pi/agent/auth.json"),
+        r#"{"gateway":{"type":"api_key","key":"sk-ada"}}"#,
+    );
+
+    let result = api::apply_edit(
+        "pi".into(),
+        EditOp::SetModels {
+            provider_id: "gateway".to_string(),
+            models: vec![ModelDraft {
+                id: "b".to_string(),
+                ..Default::default()
+            }],
+        },
+    )
+    .unwrap();
+    assert!(result.backup_dir.is_some());
+
+    let models = read_json_value(&root.join("pi/agent/models.json"));
+    let ids: Vec<&str> = models["providers"]["gateway"]["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|model| model["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, vec!["b"], "hanya model yang dicentang yang tersisa");
+    assert_eq!(
+        models["providers"]["gateway"]["baseUrl"], "https://gw.test/v1",
+        "endpoint tidak berubah"
+    );
+
+    let auth = read_json_value(&root.join("pi/agent/auth.json"));
+    assert_eq!(auth["gateway"]["key"], "sk-ada", "key tidak tersentuh");
+}
+
+#[test]
+fn set_models_prunes_the_scope_of_the_dropped_model() {
+    let (_lock, root) = sandbox("op_set_models_scope");
+    write(
+        &root.join("pi/agent/models.json"),
+        r#"{"providers":{"gateway":{"name":"GW","baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"},{"id":"b"}]}}}"#,
+    );
+    write(
+        &root.join("pi/agent/settings.json"),
+        r#"{"enabledModels":["gateway/a","gateway/b"]}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetModels {
+            provider_id: "gateway".to_string(),
+            models: vec![ModelDraft {
+                id: "b".to_string(),
+                ..Default::default()
+            }],
+        },
+    )
+    .unwrap();
+
+    let settings = read_json_value(&root.join("pi/agent/settings.json"));
+    let patterns: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect();
+    assert_eq!(patterns, vec!["gateway/b"], "entry model mati harus hilang");
+}
+
+#[test]
+fn set_key_on_a_missing_provider_is_rejected() {
+    let (_lock, root) = sandbox("op_set_key_missing");
+    write(&root.join("pi/agent/models.json"), r#"{"providers":{}}"#);
+
+    let error = api::apply_edit(
+        "pi".into(),
+        EditOp::SetKey {
+            provider_id: "tidak-ada".to_string(),
+            key: "sk".to_string(),
+            key_mode: KeyMode::Inline,
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("not found"), "{error}");
+}
+
+#[test]
+fn set_models_is_rejected_for_hermes_with_a_clear_message() {
+    let (_lock, root) = sandbox("op_set_models_hermes");
+    write(
+        &root.join("hermes/config.yaml"),
+        "providers:\n  gateway:\n    name: GW\n    base_url: https://gw.test/v1\n    key_env: GATEWAY_API_KEY\n    api_mode: chat_completions\n",
+    );
+
+    let error = api::apply_edit(
+        "hermes".into(),
+        EditOp::SetModels {
+            provider_id: "gateway".to_string(),
+            models: vec![ModelDraft {
+                id: "a".to_string(),
+                ..Default::default()
+            }],
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("no model list"), "{error}");
+}

@@ -22,6 +22,17 @@ use crate::engine::paths;
 
 pub struct PiAdapter;
 
+/// Seberapa jauh scope `enabledModels` boleh dilebarkan saat config berubah.
+#[derive(Clone, Copy)]
+enum Ensure<'a> {
+    /// Hanya buang pola yang sudah mati.
+    Nothing,
+    /// Provider yang disentuh dijamin tercakup seluruhnya (`<id>/**`).
+    Provider,
+    /// Hanya model tertentu yang dijamin tercakup (`<id>/<model>`).
+    Models(&'a [String]),
+}
+
 impl PiAdapter {
     fn agent_dir() -> PathBuf {
         paths::pi_dir().join("agent")
@@ -221,7 +232,7 @@ impl PiAdapter {
     fn reconcile_scope(
         docs: &mut Docs,
         touched: &str,
-        cover_touched: bool,
+        ensure: Ensure<'_>,
     ) -> Result<Option<String>> {
         // File settings yang belum ada tidak dibuat hanya untuk urusan scope.
         let Some(exists) = docs.get("settings").map(|doc| doc.exists) else {
@@ -255,19 +266,46 @@ impl PiAdapter {
             .map(|pattern| format!("dropped '{pattern}'"))
             .collect();
 
-        if cover_touched && catalog.contains_key(touched) {
-            let wide = glob::provider_wide_pattern(touched);
+        if catalog.contains_key(touched) {
             let narrow = glob::provider_narrow_pattern(touched);
-            let reference = format!("{touched}/contoh");
-
-            let had_narrow = patterns.iter().any(|p| p.eq_ignore_ascii_case(&narrow));
-            patterns.retain(|p| !p.eq_ignore_ascii_case(&narrow));
-            if had_narrow {
-                changes.push(format!("replaced '{narrow}'"));
-            }
-            if !glob::covers(&patterns, &reference) {
-                patterns.push(wide.clone());
-                changes.push(format!("added '{wide}'"));
+            match ensure {
+                Ensure::Nothing => {}
+                // Provider-wide: provider baru ditulis atau baru diaktifkan, jadi
+                // seluruh modelnya memang dimaksudkan terlihat.
+                Ensure::Provider => {
+                    let wide = glob::provider_wide_pattern(touched);
+                    let reference = format!("{touched}/contoh");
+                    let had_narrow = patterns.iter().any(|p| p.eq_ignore_ascii_case(&narrow));
+                    patterns.retain(|p| !p.eq_ignore_ascii_case(&narrow));
+                    if had_narrow {
+                        changes.push(format!("replaced '{narrow}'"));
+                    }
+                    if !glob::covers(&patterns, &reference) {
+                        patterns.push(wide.clone());
+                        changes.push(format!("added '{wide}'"));
+                    }
+                }
+                // Pemilihan model eksplisit: jangan melebar ke seluruh provider,
+                // cukup pastikan model yang ditulis tercakup namanya.
+                Ensure::Models(ids) => {
+                    let had_narrow = patterns.iter().any(|p| p.eq_ignore_ascii_case(&narrow));
+                    if had_narrow {
+                        patterns.retain(|p| !p.eq_ignore_ascii_case(&narrow));
+                        changes.push(format!("replaced '{narrow}'"));
+                    }
+                    for id in ids {
+                        let id = id.trim();
+                        if id.is_empty() {
+                            continue;
+                        }
+                        let reference = format!("{touched}/{id}");
+                        if glob::covers(&patterns, &reference) {
+                            continue;
+                        }
+                        patterns.push(reference.clone());
+                        changes.push(format!("added '{reference}'"));
+                    }
+                }
             }
         }
 
@@ -624,10 +662,119 @@ impl Adapter for PiAdapter {
                 // model), scope itu yang menentukan apa yang terlihat — model
                 // yang baru ditulis bisa tidak muncul sama sekali. Karena kita
                 // yang baru menulis modelnya, kita juga yang melebarkan scope-nya.
-                if let Some(summary) = Self::reconcile_scope(docs, draft.id.trim(), true)? {
+                if let Some(summary) =
+                    Self::reconcile_scope(docs, draft.id.trim(), Ensure::Provider)?
+                {
                     warnings.push(summary);
                 }
 
+                Ok(warnings)
+            }
+            EditOp::SetKey {
+                provider_id,
+                key,
+                key_mode,
+            } => {
+                let target = provider_id.trim().to_string();
+                let key = key.trim().to_string();
+                if key.is_empty() {
+                    anyhow::bail!("API key is empty.");
+                }
+                let env_var = crate::engine::doc::env_name_from(&target);
+                let mut warnings = Vec::new();
+
+                // Provider harus sudah ada: mengganti key bukan cara membuat
+                // provider baru, dan tanpa entry modelnya tidak ada artinya.
+                let models = docs.require("models")?;
+                if models
+                    .data()
+                    .get("providers")
+                    .and_then(|map| map.get(&target))
+                    .is_none()
+                {
+                    anyhow::bail!("Provider '{}' not found in models.json.", target);
+                }
+
+                match key_mode {
+                    KeyMode::Inline => {
+                        let auth = docs.require_mut("auth")?;
+                        auth.root_object().insert(
+                            target.clone(),
+                            serde_json::json!({ "type": "api_key", "key": key }),
+                        );
+                        // apiKey lama di models.json bisa menimpa kredensial
+                        // tersimpan, jadi dibersihkan.
+                        if let Some(models) = docs.get_mut("models") {
+                            if let Some(entry) = models
+                                .object_at("providers")
+                                .get_mut(&target)
+                                .and_then(Value::as_object_mut)
+                            {
+                                entry.remove("apiKey");
+                            }
+                        }
+                    }
+                    KeyMode::Env => {
+                        let models = docs.require_mut("models")?;
+                        if let Some(entry) = models
+                            .object_at("providers")
+                            .get_mut(&target)
+                            .and_then(Value::as_object_mut)
+                        {
+                            entry.insert(
+                                "apiKey".to_string(),
+                                Value::String(format!("${}", env_var)),
+                            );
+                        }
+                        if let Some(auth) = docs.get_mut("auth") {
+                            if auth.data().get(&target).is_some() {
+                                auth.root_object().remove(&target);
+                            }
+                        }
+                        warnings.push(format!(
+                            "Environment mode: the key is not written. Set {} in your shell.",
+                            env_var
+                        ));
+                    }
+                }
+
+                Ok(warnings)
+            }
+            EditOp::SetModels {
+                provider_id,
+                models,
+            } => {
+                let target = provider_id.trim().to_string();
+                if models.is_empty() {
+                    anyhow::bail!("Tambahkan minimal satu model.");
+                }
+
+                let document = docs.require_mut("models")?;
+                let Some(entry) = document
+                    .object_at("providers")
+                    .get_mut(&target)
+                    .and_then(Value::as_object_mut)
+                else {
+                    anyhow::bail!("Provider '{}' not found in models.json.", target);
+                };
+                entry.insert(
+                    "models".to_string(),
+                    Value::Array(models.iter().map(model_to_value).collect()),
+                );
+
+                let written: Vec<String> = models.iter().map(|model| model.id.clone()).collect();
+                let mut warnings = vec![format!(
+                    "{} model ditulis untuk '{}'.",
+                    models.len(),
+                    target
+                )];
+                // Daftar model berubah: scope ikut menyesuaikan, tanpa melebar
+                // ke model yang tidak dipilih.
+                if let Some(summary) =
+                    Self::reconcile_scope(docs, &target, Ensure::Models(&written))?
+                {
+                    warnings.push(summary);
+                }
                 Ok(warnings)
             }
             EditOp::SetEnabled {
@@ -654,7 +801,7 @@ impl Adapter for PiAdapter {
                     // Scope perlu mencakup provider yang baru hidup lagi, kalau
                     // tidak modelnya kembali ada tapi tetap tersembunyi.
                     let mut warnings = vec![format!("Provider '{}' re-enabled.", target)];
-                    if let Some(summary) = Self::reconcile_scope(docs, &target, true)? {
+                    if let Some(summary) = Self::reconcile_scope(docs, &target, Ensure::Provider)? {
                         warnings.push(summary);
                     }
                     Ok(warnings)
@@ -680,7 +827,7 @@ impl Adapter for PiAdapter {
                     )];
                     // Provider yang dinonaktifkan tidak punya model yang bisa
                     // dicocokkan, jadi polanya di scope ikut dibuang.
-                    if let Some(summary) = Self::reconcile_scope(docs, &target, false)? {
+                    if let Some(summary) = Self::reconcile_scope(docs, &target, Ensure::Nothing)? {
                         warnings.push(summary);
                     }
                     Ok(warnings)
@@ -776,7 +923,7 @@ impl Adapter for PiAdapter {
                 if !removed {
                     warnings.push(format!("Provider '{}' not found in models.json.", target));
                 }
-                if let Some(summary) = Self::reconcile_scope(docs, &target, false)? {
+                if let Some(summary) = Self::reconcile_scope(docs, &target, Ensure::Nothing)? {
                     warnings.push(summary);
                 }
                 Ok(warnings)
@@ -823,7 +970,7 @@ impl Adapter for PiAdapter {
 
     fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
         match notice.code.as_str() {
-            "pi.scope" => Self::reconcile_scope(docs, &notice.provider, true),
+            "pi.scope" => Self::reconcile_scope(docs, &notice.provider, Ensure::Provider),
             other => anyhow::bail!("pi has no automatic fix for '{other}'"),
         }
     }
@@ -850,4 +997,28 @@ impl Adapter for PiAdapter {
             .or_else(|| models.parked_value(target))?;
         get_str(&entry, "apiKey")
     }
+}
+
+/// Satu entri model untuk `models.json`.
+fn model_to_value(model: &crate::engine::model::ModelDraft) -> Value {
+    let mut object = serde_json::Map::new();
+    object.insert("id".to_string(), Value::String(model.id.trim().to_string()));
+    if let Some(name) = model
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|n| !n.is_empty())
+    {
+        object.insert("name".to_string(), Value::String(name.to_string()));
+    }
+    if let Some(window) = model.context_window.filter(|value| *value > 0) {
+        object.insert("contextWindow".to_string(), Value::from(window));
+    }
+    if let Some(max) = model.max_tokens.filter(|value| *value > 0) {
+        object.insert("maxTokens".to_string(), Value::from(max));
+    }
+    if model.reasoning {
+        object.insert("reasoning".to_string(), Value::Bool(true));
+    }
+    Value::Object(object)
 }

@@ -899,8 +899,19 @@ function wiringHarness(container) {
       const provider = state.snapshot?.providers.find((item) => item.id === id);
       if (!provider) return;
       openMenu(button, [
-        { label: t("provider.edit"), icon: "pencil", onSelect: () => openAdvancedForm("edit", provider) },
+        { label: t("provider.changeKey"), icon: "key", onSelect: () => openKeyModal(provider) },
+        {
+          label: t("provider.changeModels"),
+          icon: "list",
+          onSelect: () => openModelsModal(provider),
+        },
+        {
+          label: t("provider.changeDefaultModel"),
+          icon: "star",
+          onSelect: () => openProviderDefaultPicker(provider),
+        },
         { separator: true },
+        { label: t("provider.edit"), icon: "pencil", onSelect: () => openAdvancedForm("edit", provider) },
         { label: t("provider.delete"), icon: "trash", danger: true, onSelect: () => askDelete(id) },
       ]);
     });
@@ -1047,8 +1058,8 @@ function summaryFor(op) {
   }
 }
 
-async function commit(op) {
-  const harnessId = state.activeId;
+async function commit(op, targetHarness = null) {
+  const harnessId = targetHarness ?? state.activeId;
   let preview;
 
   try {
@@ -1203,6 +1214,218 @@ async function askDelete(providerId) {
   }
 
   await commit({ kind: "remove", providerId });
+}
+
+
+// ============================================================================
+// AKSI PER PROVIDER: ganti key, pilih model, jadikan default
+//
+// Tiga aksi ini sengaja dipisah supaya mengganti key tidak memaksa memilih
+// ulang model (dan sebaliknya). Semuanya memakai EditOp khusus yang hanya
+// menyentuh satu hal.
+// ============================================================================
+
+function activeHarnessId() {
+  return state.activeId;
+}
+
+/** Ganti key saja: inline ke file kredensial, atau referensi env. */
+function openKeyModal(provider) {
+  const harnessId = activeHarnessId();
+  const envName = `${provider.id.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}_API_KEY`;
+  let mode = provider.keyDisplay?.startsWith("$") ? "env" : "inline";
+
+  const { overlay, close } = openModal({
+    title: t("provider.changeKeyTitle", { name: provider.name || provider.id }),
+    subtitle: t("provider.changeKeySubtitle"),
+    size: "md",
+    body: `
+      <div class="space-y-4">
+        <div class="rounded-lg bg-surface-muted px-3 py-2 text-[12px] text-ink-secondary">
+          ${esc(t("advanced.keyCurrentLabel"))}
+          <span class="selectable font-mono font-semibold text-ink">${esc(provider.keyDisplay ?? t("provider.noKey"))}</span>
+        </div>
+        <div>
+          <label class="hk-label">${esc(t("add.keyLabel"))}</label>
+          <div class="hk-key-wrap">
+            <input data-key type="password" value="" autocomplete="off" spellcheck="false"
+              placeholder="${esc(t("advanced.keyReplace"))}" class="hk-input" />
+            <button data-action data-toggle-key class="hk-key-toggle">${esc(t("add.show"))}</button>
+          </div>
+        </div>
+        <div class="space-y-2">
+          <label class="flex cursor-pointer items-start gap-2 text-[13px] text-ink">
+            <input type="radio" name="keyMode" value="inline" ${mode === "inline" ? "checked" : ""}
+              class="mt-0.5 accent-[var(--color-brand)]" />
+            <span>${esc(t("advanced.keyInline"))}</span>
+          </label>
+          <label class="flex cursor-pointer items-start gap-2 text-[13px] text-ink">
+            <input type="radio" name="keyMode" value="env" ${mode === "env" ? "checked" : ""}
+              class="mt-0.5 accent-[var(--color-brand)]" />
+            <span>
+              ${esc(t("advanced.keyEnv"))}
+              <span class="selectable font-mono text-[11px] text-ink-secondary">${esc(envName)}</span>
+            </span>
+          </label>
+        </div>
+      </div>`,
+    footer: `
+      <button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.cancel"))}</button>
+      <button data-action data-save-key class="hk-btn hk-btn-primary">${esc(t("provider.changeKeySave"))}</button>`,
+  });
+
+  const input = $("[data-key]", overlay);
+  const toggle = $("[data-toggle-key]", overlay);
+  toggle?.addEventListener("click", () => {
+    const hidden = input.type === "password";
+    input.type = hidden ? "text" : "password";
+    toggle.textContent = hidden ? t("add.hide") : t("add.show");
+  });
+  input.focus();
+
+  $("[data-cancel]", overlay).addEventListener("click", close);
+  $("[data-save-key]", overlay).addEventListener("click", async () => {
+    const key = input.value.trim();
+    if (!key) return toast(t("add.needKey"), { variant: "err" });
+    const selected = $("input[name=keyMode]:checked", overlay)?.value ?? "inline";
+    close();
+    await commit({
+      kind: "set_key",
+      providerId: provider.id,
+      key,
+      keyMode: selected,
+    }, harnessId);
+  });
+}
+
+/** Nyalakan/matikan model milik satu provider (tanpa menyentuh key). */
+function openModelsModal(provider) {
+  const harnessId = activeHarnessId();
+  const current = new Map(
+    (provider.models ?? []).map((model) => [
+      model.id,
+      { on: true, name: model.name ?? "", contextWindow: model.contextWindow ?? null },
+    ]),
+  );
+
+  if (!current.size) {
+    toast(t("provider.noModelsToToggle"), { variant: "info" });
+    return;
+  }
+
+  const { overlay, close } = openModal({
+    title: t("provider.changeModelsTitle", { name: provider.name || provider.id }),
+    subtitle: t("provider.changeModelsSubtitle"),
+    size: "md",
+    body: `
+      <input data-search type="search" class="hk-input mb-2" autocomplete="off"
+        placeholder="${esc(t("provider.searchModels"))}" />
+      <div data-list class="max-h-[320px] space-y-1 overflow-y-auto"></div>
+      <p data-count class="mt-2 px-0.5 text-[11px] font-medium text-ink-muted"></p>`,
+    footer: `
+      <button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.cancel"))}</button>
+      <button data-action data-save-models class="hk-btn hk-btn-primary">${esc(t("action.save"))}</button>`,
+  });
+
+  const list = $("[data-list]", overlay);
+  const search = $("[data-search]", overlay);
+  const count = $("[data-count]", overlay);
+
+  const render = () => {
+    const term = search.value.trim().toLowerCase();
+    const rows = [...current.entries()].filter(
+      ([id, model]) => !term || id.toLowerCase().includes(term) || model.name.toLowerCase().includes(term),
+    );
+    list.innerHTML = rows
+      .map(
+        ([id, model]) => `
+        <label class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-surface-muted">
+          <input data-model="${esc(id)}" type="checkbox" class="hk-check" ${model.on ? "checked" : ""} />
+          <span class="min-w-0 flex-1 truncate text-[13px] text-ink">${esc(model.name || prettyModel(id))}</span>
+          <span class="shrink-0 truncate font-mono text-[10px] text-ink-muted" style="max-width:45%">${esc(id)}</span>
+        </label>`,
+      )
+      .join("");
+    const active = [...current.values()].filter((model) => model.on).length;
+    count.textContent = t("provider.modelsSelected", { active, total: current.size });
+  };
+  search.addEventListener("input", render);
+  list.addEventListener("change", (event) => {
+    const id = event.target?.dataset?.model;
+    if (!id || !current.has(id)) return;
+    current.get(id).on = event.target.checked;
+    render();
+  });
+  render();
+
+  $("[data-cancel]", overlay).addEventListener("click", close);
+  $("[data-save-models]", overlay).addEventListener("click", async () => {
+    const models = [...current.entries()]
+      .filter(([, model]) => model.on)
+      .map(([id, model]) => ({
+        id,
+        name: model.name || null,
+        contextWindow: model.contextWindow ?? null,
+      }));
+    if (!models.length) return toast(t("toast.needOneModel"), { variant: "err" });
+    close();
+    await commit({ kind: "set_models", providerId: provider.id, models }, harnessId);
+  });
+}
+
+/** Jadikan salah satu model provider ini sebagai default harness. */
+function openProviderDefaultPicker(provider) {
+  const models = provider.models ?? [];
+  if (!models.length) {
+    toast(t("provider.noModelsToToggle"), { variant: "info" });
+    return;
+  }
+  const harnessId = activeHarnessId();
+  const snapshot = state.snapshot;
+  const currentModel = snapshot?.defaultProvider === provider.id ? snapshot?.defaultModel : null;
+
+  const { overlay, close } = openModal({
+    title: t("provider.changeDefaultTitle", { name: provider.name || provider.id }),
+    subtitle: t("provider.changeDefaultSubtitle"),
+    size: "md",
+    body: `
+      <input data-search type="search" class="hk-input mb-2" autocomplete="off"
+        placeholder="${esc(t("provider.searchModels"))}" />
+      <div data-list class="max-h-[320px] space-y-1 overflow-y-auto"></div>`,
+    footer: `<button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.cancel"))}</button>`,
+  });
+
+  const list = $("[data-list]", overlay);
+  const search = $("[data-search]", overlay);
+  const render = () => {
+    const term = search.value.trim().toLowerCase();
+    const rows = models.filter(
+      (model) =>
+        !term || model.id.toLowerCase().includes(term) || (model.name ?? "").toLowerCase().includes(term),
+    );
+    list.innerHTML = rows
+      .map(
+        (model) => `
+        <button data-action data-pick="${esc(model.id)}"
+          class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-brand-soft">
+          <span class="shrink-0 text-ink-muted">${model.id === currentModel ? icon("check", "h-4 w-4 text-brand-strong") : icon("star", "h-4 w-4")}</span>
+          <span class="min-w-0 flex-1 truncate text-[13px] text-ink">${esc(model.name || prettyModel(model.id))}</span>
+          <span class="shrink-0 truncate font-mono text-[10px] text-ink-muted" style="max-width:45%">${esc(model.id)}</span>
+        </button>`,
+      )
+      .join("");
+  };
+  search.addEventListener("input", render);
+  render();
+
+  $("[data-cancel]", overlay).addEventListener("click", close);
+  $$("[data-pick]", list).forEach((button) => {
+    button.addEventListener("click", async () => {
+      const modelId = button.dataset.pick;
+      close();
+      await commit({ kind: "set_default", providerId: provider.id, modelId }, harnessId);
+    });
+  });
 }
 
 // ============================================================================
