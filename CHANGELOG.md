@@ -4,7 +4,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
-## [Unreleased]
+## [0.4.3]
+
+Sync daftar model dari endpoint, perapian config yang tidak terlihat harness,
+dan perintah `doctor` untuk memeriksa sisanya.
 
 ### Added
 

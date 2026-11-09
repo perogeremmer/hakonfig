@@ -1,2 +1,2 @@
 // Dibuat oleh scripts/version.mjs - jangan diedit manual.
-export const APP_VERSION = "0.4.2";
+export const APP_VERSION = "0.4.3";
