@@ -4,7 +4,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
-## [Unreleased]
+## [0.4.5]
+
+Aksi per provider dipisah jadi tiga (ganti key, pilih model, jadikan default)
+supaya mengganti satu hal tidak perlu mengirim ulang key.
 
 ### Added
 
