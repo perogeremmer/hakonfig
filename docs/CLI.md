@@ -29,7 +29,7 @@ Other channels:
 The install scripts download the binary from the latest **published** release,
 verify it against the release's `SHA256SUMS`, and install into
 `~/.local/bin` (override with `HAKONFIG_INSTALL_DIR`). A specific version can
-be installed by passing the tag, e.g. `install.sh v0.4.0`.
+be installed by passing the tag, e.g. `install.sh v0.4.2`.
 
 ## Global flags
 

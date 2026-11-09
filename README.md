@@ -171,6 +171,9 @@ Also available as:
 | npm | `npm i -g hakonfig` (or one-off: `bunx hakonfig-cli list`) |
 | crates.io | `cargo install hakonfig-cli` |
 
+The npm package is a single install containing the binaries for all three
+platforms plus a shim, so the same command works on macOS, Linux, and Windows.
+
 Installs go to `~/.local/bin` (override with `HAKONFIG_INSTALL_DIR`); binaries
 are checksum-verified against the release's `SHA256SUMS` before anything is
 written. The script follows the latest **published** release, not drafts.
@@ -215,7 +218,7 @@ See [Adding a new tool](#adding-a-new-tool).
 
 ## Providers and logos
 
-`src-tauri/presets/providers.json` holds the catalog. Each entry needs an `id`, `name`,
+`src-tauri/crates/core/presets/providers.json` holds the catalog. Each entry needs an `id`, `name`,
 `baseUrl`, `api` type, `envVar` and a `models` list; `models` may be empty, in which case
 the user fills it with **Sync models** once a key is set.
 
@@ -347,12 +350,14 @@ bunx tauri build --bundles nsis    # Windows
 
 ### Automated releases
 
-Two workflows live in `.github/workflows/`:
+Four workflows live in `.github/workflows/`:
 
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ci.yml` | push to `master`, every PR, manual | version check, JS tests, Tailwind build, `cargo test --locked`, `cargo check`, and a `.deb` dry-run build |
-| `release.yml` | tag `v*.*.*`, or manual | builds macOS (universal `.dmg`), Windows (NSIS `.exe`), Ubuntu (`.deb`) and uploads them to one **draft release** |
+| `release.yml` | tag `v*.*.*`, or manual | builds macOS (universal `.dmg`), Windows (NSIS `.exe`), Ubuntu (`.deb`) plus the `hakonfig-cli` binary for each platform, uploads everything to a draft release with `SHA256SUMS`, publishes npm, publishes crates.io, then publishes the release itself |
+| `homebrew-tap.yml` | manual, per tag | regenerates `Formula/hakonfig-cli.rb` in `perogeremmer/homebrew-tap` from the release's binaries and their sha256 |
+| `publish-crates.yml` | manual, per tag | pushes `hakonfig-core` + `hakonfig-cli` to crates.io without rebuilding the desktop app (idempotent; used when the crates step of `release.yml` was skipped) |
 
 Release flow:
 
@@ -361,10 +366,37 @@ node scripts/version.mjs bump minor     # 0.2.0 -> 0.3.0, updates every file
 git commit -am "chore: release v0.3.0"
 git tag v0.3.0
 git push --follow-tags
+gh workflow run homebrew-tap.yml -f tag=v0.3.0   # after the release is up
 ```
 
-When the workflow finishes, open the **Releases** tab, check the assets, then **Publish**.
-Releases are drafts on purpose so you can inspect them first.
+`release.yml` creates a draft, fills it with assets, and publishes it in its
+last job (`gh release edit --draft=false --latest`), so the download links are
+live as soon as the run is green — you only need to look at the assets
+beforehand if you want to. The npm and crates.io steps skip versions that are
+already on the registry, so re-running a failed job is safe.
+
+crates.io is best-effort: a rejection caused by the account rather than the
+code (e.g. unverified email) shows up as a warning instead of failing the run,
+and `publish-crates.yml` can push the crates afterwards.
+
+### npm packaging
+
+`npm i -g hakonfig` installs one package that carries the binary for every
+platform (`bin/hakonfig-cli-darwin`, `-linux-x64`, `-win32-x64.exe`, ~5 MB
+compressed) and a `bin.js` shim that picks the right one. Platform-specific
+packages were tried first and are not used:
+
+- unscoped names like `hakonfig-win32-x64` are rejected by npm's spam detection
+  (`403 Package name triggered spam detection`), permanently and regardless of
+  delays or retries;
+- scoped names under `@perogeremmer/` publish fine but are stored *restricted* —
+  the packument returns 404 for anonymous visitors and the release token may
+  not change visibility — so `npm i -g hakonfig` found no binary at all.
+
+To change the layout, edit `scripts/publish-npm.mjs` (the `BINARIES` list) and
+keep `npm/hakonfig/bin.js` in sync. After publishing, the script re-reads the
+packument without credentials and fails if the version is not publicly
+reachable, so a silently private publish cannot ship again.
 
 What CI guards against:
 
@@ -433,6 +465,9 @@ hakonfig/
 │   │   └── commands.rs           # UI <-> engine bridge (Tauri commands)
 │   ├── crates/
 │   │   ├── core/                 # hakonfig-core: the engine as a plain library
+│   │   │   ├── presets/
+│   │   │   │   ├── providers.json    # provider presets
+│   │   │   │   └── harnesses.json    # tool catalog + install commands
 │   │   │   └── src/
 │   │   │       ├── api.rs        # single entry point shared by UI and CLI
 │   │   │       └── engine/
@@ -450,8 +485,6 @@ hakonfig/
 │   │   └── cli/                  # hakonfig-cli: the same engine without a GUI
 │   │       ├── src/              # main.rs, add.rs, draft.rs, output.rs, i18n.rs
 │   │       └── tests/cli.rs      # end-to-end tests of the real binary
-│   ├── presets/providers.json    # provider presets
-│   ├── presets/harnesses.json    # tool catalog + install commands
 │   ├── icons/
 │   └── tauri.conf.json
 ├── docs/UI-CONTRACT.md           # command and type contract between UI and Rust
@@ -459,6 +492,12 @@ hakonfig/
 ├── docs/screenshots/             # README images
 ├── scripts/sync-logos.mjs        # regenerates logo-index.js
 ├── scripts/version.mjs           # single source of truth for the version number
+├── scripts/install.sh            # CLI installer for macOS/Linux (checksum-verified)
+├── scripts/install.ps1           # CLI installer for Windows
+├── scripts/publish-npm.mjs       # packs + publishes the npm package
+├── scripts/gen-homebrew-formula.mjs # writes the Homebrew formula into the tap
+├── npm/hakonfig/                 # npm package source: bin.js shim + README
+├── .github/workflows/            # ci.yml, release.yml, homebrew-tap.yml, publish-crates.yml
 ├── CHANGELOG.md
 ├── LICENSE
 └── README.md

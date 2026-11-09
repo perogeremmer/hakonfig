@@ -7,6 +7,7 @@
 // Bentuk package: satu package, binari ikut di dalamnya.
 //   hakonfig
 //     bin.js                        shim yang memilih binari sesuai platform
+//     README.md                     tampil di halaman npmjs.com/package/hakonfig
 //     bin/hakonfig-cli-darwin       universal (Apple Silicon + Intel)
 //     bin/hakonfig-cli-linux-x64
 //     bin/hakonfig-cli-win32-x64.exe
@@ -191,11 +192,12 @@ writeFileSync(
   join(dir, "package.json"),
   packageJson({
     bin: { "hakonfig-cli": "bin.js" },
-    files: ["bin.js", "bin"],
+    files: ["bin.js", "bin", "README.md"],
     engines: { node: ">=18" },
   })
 );
 copyFileSync(join(ROOT, "npm", "hakonfig", "bin.js"), join(dir, "bin.js"));
+copyFileSync(join(ROOT, "npm", "hakonfig", "README.md"), join(dir, "README.md"));
 for (const binary of BINARIES) {
   if (!existsSync(binary.source)) {
     console.error(`binary tidak ada: ${binary.source}`);
