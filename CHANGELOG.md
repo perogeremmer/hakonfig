@@ -21,6 +21,18 @@ file oleh `scripts/version.mjs`.
 - Dokumentasi baru di `docs/CLI.md`: "Harnesses that run as another user
   (ADE / VPS)" — pola `sudo -u <user> -H`, peringatan root-ownership, dan
   perbedaan `--home` vs `--root`.
+- CLI: perintah `targets` — pindai `/etc/passwd` untuk home user lain
+  (pola ADE/VPS) yang punya harness terpasang (config asli atau binary di
+  `<home>/.local/bin`), keluaran `USER/HOME/HARNESS` plus `--json`.
+- CLI: flag global `--target <USER|DIR>` — singkatan `--home` dengan lookup
+  username lewat `/etc/passwd` (mis. `hakonfig-cli --target openbot show omp`).
+- CLI: harness kini dianggap terpasang bila binary-nya ada di
+  `<home>/.local/bin`, walau config belum pernah dibuat (home ADE yang baru).
+- Doctor: dua notice baru — `ade_home_mismatch` (harness terpasang di home
+  user lain, dengan perintah `--home` yang tepat) dan `ownership_mismatch`
+  (pemilik file ≠ pemilik home, gejala "sudah di-add tapi agent tidak baca";
+  menyertakan `chown` yang harus dijalankan — Hakonfig tidak pernah chown
+  otomatis).
 
 ## [0.5.0]
 

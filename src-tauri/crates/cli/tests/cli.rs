@@ -1642,3 +1642,96 @@ fn permission_denied_names_the_fix() {
         "pesan izin harus menyebut jalan keluarnya:\n{text}"
     );
 }
+
+// ------------------------------------------------------------------ targets (ADE / VPS)
+
+#[test]
+fn targets_command_is_safe_and_json_parseable() {
+    let root = sandbox("targets-json");
+    let output = run(&root, &["targets", "--json"]);
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout(&output)).expect("targets --json harus array JSON");
+    assert!(parsed.is_array());
+
+    let plain = run(&root, &["targets"]);
+    assert!(plain.status.success(), "{}", stderr(&plain));
+}
+
+#[test]
+fn target_flag_resolves_a_directory_like_home() {
+    // --target menerima path langsung (bentuk user ditest via unit test
+    // resolve_target; bentuk path ini yang bisa dibuat tanpa user baru).
+    let target = sandbox("target-dir");
+
+    let mut command = Command::new(BIN);
+    for (name, _) in std::env::vars() {
+        if name.ends_with("_API_KEY") {
+            command.env_remove(&name);
+        }
+    }
+    let output = command
+        .args([
+            "--target",
+            target.to_str().unwrap(),
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "groq",
+            "--no-test",
+        ])
+        .stdin(Stdio::null())
+        .output()
+        .expect("gagal menjalankan binary");
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        target.join(".pi/agent/models.json").exists(),
+        "--target <dir> harus perilaku sama dengan --home <dir>"
+    );
+    assert!(
+        stderr(&output).contains("target home:"),
+        "harus konfirmasi home hasil resolusi: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn target_flag_rejects_unknown_user_and_missing_dir() {
+    let root = sandbox("target-unknown");
+    let output = run(&root, &["--target", "no-such-user-xyz", "list"]);
+
+    assert!(!output.status.success(), "target asing harus ditolak");
+    let text = stderr(&output);
+    assert!(
+        text.contains("not a known user"),
+        "pesan harus menjelaskan dua bentuk yang sah:\n{text}"
+    );
+}
+
+#[test]
+fn installed_counts_binaries_in_local_bin() {
+    // Home ADE yang baru: binary ada, config belum pernah dibuat.
+    // Harus dilaporkan terpasang (dengan 0 provider), bukan hilang.
+    let target = sandbox("ade-binary-only");
+    let omp_bin = target.join(".local/bin");
+    std::fs::create_dir_all(&omp_bin).unwrap();
+    std::fs::write(omp_bin.join("omp"), "#!/bin/sh\n").unwrap();
+
+    let output = run_home(&target, &["list", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout(&output)).expect("list --json harus array JSON");
+    let omp = parsed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["id"] == "omp")
+        .expect("omp harus ada di list");
+
+    assert_eq!(omp["installed"], true, "binary saja cukup: {omp}");
+    assert_eq!(omp["providerCount"], 0, "belum ada config: {omp}");
+}

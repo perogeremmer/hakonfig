@@ -36,6 +36,7 @@ be installed by passing the tag, e.g. `install.sh v0.4.2`.
 | Flag | Effect |
 |---|---|
 | `--home <DIR>` | Treat `DIR` as the HOME of the target user, e.g. an agent's dedicated home (`/var/lib/openbot`). Harness directories resolve inside it with their **real** layout (`<DIR>/.omp`, `<DIR>/.pi`, ...), and version probes use its `.local/bin`. Same as `HAKONFIG_HOME`. |
+| `--target <USER\|DIR>` | Shorthand for `--home` with user lookup: a username resolves its home via `/etc/passwd`, a path is used as-is. Conflicts with `--home`. |
 | `--root <DIR>` | Redirect every harness directory under `DIR` as a **test** layout (`<DIR>/<harness>/...`). For tests and sandboxes — this is not `--home`. Same as `HAKONFIG_ROOT`. |
 | `--json` | Print machine-readable JSON instead of tables. Also forces non-interactive mode. |
 | `--lang <en\|id>` | UI language. Default `en`; `HAKONFIG_LANG` env var is also honoured. |
@@ -73,6 +74,15 @@ Rules of thumb:
   `/usr/local/bin`), not in `~/.npm-global` of the admin user.
 - Writes into a home you cannot write report the fix directly: the error
   message names `sudo -u <user> -H hakonfig-cli ...`.
+- A harness counts as **installed** when its binary exists in
+  `<home>/.local/bin`, even if no config has been created yet.
+- `doctor` reports two dedicated notices:
+  - `ade_home_mismatch` — the harness is also installed for another user
+    (with their home path and the exact `--home` command to manage it);
+  - `ownership_mismatch` — a config file is owned by a different uid than
+    the home's owner (the classic "I added it but the agent sees nothing"
+    symptom, usually a root write). Hakonfig never changes ownership on its
+    own; the notice includes the `chown` to run.
 - If the agent runs its harness **inside a container**, none of the above
   applies: target it through `docker exec` / `kubectl exec` instead.
 
@@ -241,6 +251,26 @@ model-picker refresh. Automatic repairs appear in the preview as an ordinary
 diff of `settings.json` / `config.yml` / `opencode.json` and are covered by the
 same backup.
 
+### `targets`
+
+Homes of other users (ADE / VPS) that have harnesses installed: scans
+`/etc/passwd` for agent-like homes (outside `/home/<name>`) and marks every
+harness whose config **or** binary (`<home>/.local/bin/<bin>`) is present
+there. Read-only; never touches files.
+
+```json
+[
+  {
+    "user": "openbot",
+    "home": "/var/lib/openbot",
+    "harnesses": ["omp"]
+  }
+]
+```
+
+Target any of them with `--target <user>` or `--home <dir>`. Windows reports
+an empty list.
+
 ### `paths [HARNESS]`
 
 Config file paths used by a harness. `--json` prints an array of
@@ -326,4 +356,5 @@ warnings are included in `warnings`.
 | Variable | Effect |
 |---|---|
 | `HAKONFIG_ROOT` | Same as `--root`: redirect all harness directories. |
+| `HAKONFIG_HOME` | Same as `--home`: treat the value as the target user's HOME. Takes precedence over `HAKONFIG_ROOT`. |
 | `HAKONFIG_LANG` | Same as `--lang`: output language (`en`, `id`). |

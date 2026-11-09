@@ -106,13 +106,27 @@ pub trait Adapter {
                 sensitive: spec.sensitive,
             })
             .collect();
-        let installed = files.iter().any(|f| f.exists);
+        // "Terpasang" berarti config ada ATAU binary harness ada di
+        // `<home>/.local/bin` (katalog). Home ADE yang baru berisi binary
+        // tapi belum pernah membuat config — dilaporkan terpasang, bukan hilang.
+        let has_config = files.iter().any(|f| f.exists);
+        let binary_installed = super::catalog::get(self.id())
+            .and_then(|entry| entry.binary.clone())
+            .filter(|binary| !binary.trim().is_empty())
+            .map(|binary| {
+                super::paths::target_home()
+                    .join(".local/bin")
+                    .join(binary)
+                    .exists()
+            })
+            .unwrap_or(false);
+        let installed = has_config || binary_installed;
 
         let mut provider_count = 0;
         let mut connected_count = 0;
         let mut read_error = None;
 
-        if installed {
+        if has_config {
             match Docs::load(&specs).and_then(|docs| self.snapshot(&docs)) {
                 Ok(snapshot) => {
                     provider_count = snapshot.providers.len();

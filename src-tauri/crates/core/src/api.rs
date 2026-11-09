@@ -19,7 +19,8 @@ use crate::engine::model::{
     ApplyResult, BackupInfo, CatalogTarget, EditOp, FileDiff, HarnessInfo, HarnessSnapshot, Notice,
     PreviewResult, ProviderPreset, TestResult,
 };
-use crate::engine::{preset, version, write};
+use crate::engine::targets::{self, TargetInfo};
+use crate::engine::{paths, preset, version, write};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,6 +45,25 @@ pub fn list_harnesses() -> Vec<HarnessInfo> {
         .iter()
         .map(|adapter| adapter.info())
         .collect()
+}
+
+/// Home agent lain (ADE / VPS) yang harness-nya terdeteksi, untuk perintah
+/// `targets`. GUI bisa memakai ini untuk menampilkan target terpisah.
+pub fn list_targets() -> Vec<TargetInfo> {
+    targets::list_targets()
+}
+
+/// `--target <user|dir>`: home untuk username tersebut (dari `/etc/passwd`),
+/// atau path direktori home. Gagal dengan pesan yang menyebut keduanya.
+pub fn resolve_target(spec: &str) -> Result<String, String> {
+    targets::resolve_target(spec)
+        .map(|home| home.display().to_string())
+        .ok_or_else(|| {
+            format!(
+                "target '{spec}' is not a known user and not an existing directory \
+                 (pass --home <dir> or a username from /etc/passwd)"
+            )
+        })
 }
 
 pub fn list_presets() -> Vec<ProviderPreset> {
@@ -227,13 +247,13 @@ pub fn list_notices(harness_id: Option<String>) -> Result<Vec<Notice>, String> {
         };
 
         let mut notices = Vec::new();
-        for id in ids {
-            let adapter = match harness(&id) {
+        for id in &ids {
+            let adapter = match harness(id) {
                 Ok(adapter) => adapter,
                 Err(error) => {
                     notices.push(Notice {
                         code: "harness.unknown".to_string(),
-                        harness: id,
+                        harness: id.clone(),
                         provider: String::new(),
                         message: format!("{:#}", error),
                         fix: None,
@@ -276,7 +296,33 @@ pub fn list_notices(harness_id: Option<String>) -> Result<Vec<Notice>, String> {
                 .map(|entry| ProviderRef::new(&entry.id, entry.base_url.as_deref()))
                 .collect();
             notices.extend(adapter.notices(&docs, &providers));
+
+            // Pemilik file ≠ pemilik home: bekas penulisan sebagai root,
+            // gejala khas "sudah di-add tapi agent tidak membaca apa pun".
+            #[cfg(unix)]
+            if let Some(home_uid) = targets::file_owner_uid(&paths::target_home()) {
+                let files: Vec<std::path::PathBuf> = adapter
+                    .specs()
+                    .iter()
+                    .map(|spec| spec.path.clone())
+                    .collect();
+                notices.extend(targets::ownership_notices(
+                    adapter.id(),
+                    &files,
+                    home_uid,
+                    targets::file_owner_uid,
+                ));
+            }
         }
+
+        // Harness yang sama terpasang di home user lain (ADE / VPS):
+        // pengelolaan dari HOME proses ini tidak pernah sampai ke agent-nya.
+        notices.extend(targets::cross_home_notices(
+            &ids,
+            &paths::target_home(),
+            &targets::passwd_entries(),
+        ));
+
         Ok(notices)
     };
     collect().map_err(err)
@@ -364,8 +410,8 @@ pub fn probe_catalogs(harness_id: Option<String>) -> Result<Vec<Notice>, String>
             .map_err(|error| format!("failed to build the HTTP client: {error}"))?;
 
         let mut notices = Vec::new();
-        for id in ids {
-            let adapter = match harness(&id) {
+        for id in &ids {
+            let adapter = match harness(id) {
                 Ok(adapter) => adapter,
                 Err(_) => continue,
             };

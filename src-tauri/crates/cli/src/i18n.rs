@@ -368,6 +368,16 @@ messages! {
         "warning: home '{path}' does not exist yet; configs will be created there.",
         "peringatan: home '{path}' belum ada; config akan dibuat di sana."
     ),
+
+    // ---- targets
+    HeaderUser => ("USER", "USER"),
+    HeaderHome => ("HOME", "HOME"),
+    HeaderHarnesses => ("HARNESS", "HARNESS"),
+    TargetsNone => (
+        "no other user's home has a harness installed.",
+        "tidak ada home user lain yang punya harness terpasang."
+    ),
+    TargetsCount => ("{count} targets found.", "{count} target ditemukan."),
 }
 
 /// Teks menurut bahasa aktif.

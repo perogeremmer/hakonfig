@@ -112,6 +112,12 @@ struct Cli {
     #[arg(long, global = true, value_name = "DIR")]
     home: Option<String>,
 
+    /// Target by username (resolved via /etc/passwd) or home directory.
+    ///
+    /// Shorthand for --home with user lookup, e.g. --target openbot.
+    #[arg(long, global = true, value_name = "USER|DIR", conflicts_with = "home")]
+    target: Option<String>,
+
     /// Print JSON, for scripts.
     #[arg(long, global = true)]
     json: bool,
@@ -185,6 +191,8 @@ enum Command {
         /// harness id. Optional when only one exists.
         harness: Option<String>,
     },
+    /// Homes of other users (ADE / VPS) with harnesses installed.
+    Targets,
     /// Find config the harness will not show, and optionally fix it.
     Doctor {
         /// Limit the check to one harness.
@@ -301,6 +309,20 @@ fn main() -> ExitCode {
             )
         );
     }
+    if let Some(target) = &cli.target {
+        match api::resolve_target(target.trim()) {
+            Ok(home) => {
+                std::env::set_var("HAKONFIG_HOME", &home);
+                // Konfirmasi hasil resolusi, sama seperti --home: tanpa ini,
+                // salah target berarti gagal senyap.
+                eprintln!("{}", i18n::fill(t(Msg::TargetHome), &[("path", home)]));
+            }
+            Err(error) => {
+                eprintln!("hakonfig: {error}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
 
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
@@ -384,6 +406,7 @@ fn run(cli: &Cli) -> Result<()> {
             } => manage::run_remove(harness.clone(), provider.clone(), cli.json, *yes),
         },
         Some(Command::Paths { harness }) => paths(harness.as_deref(), cli.json),
+        Some(Command::Targets) => targets_cmd(cli.json),
         Some(Command::Doctor {
             harness,
             fix,
@@ -587,6 +610,47 @@ fn show(harness: Option<&str>, json: bool) -> Result<()> {
     for warning in &snapshot.warnings {
         println!("! {warning}");
     }
+    Ok(())
+}
+
+/// `targets`: home user lain (ADE / VPS) yang harness-nya terdeteksi.
+///
+/// Perintah baca: tidak pernah menulis apa pun. Output menunjuk cara
+/// menargetkan tiap home dengan `--home`.
+fn targets_cmd(json: bool) -> Result<()> {
+    let found = api::list_targets();
+
+    if json {
+        return output::print_json(&found);
+    }
+
+    if found.is_empty() {
+        println!("{}", t(Msg::TargetsNone));
+        return Ok(());
+    }
+
+    let rows: Vec<Vec<String>> = found
+        .iter()
+        .map(|entry| {
+            vec![
+                entry.user.clone(),
+                entry.home.clone(),
+                entry.harnesses.join(", "),
+            ]
+        })
+        .collect();
+    output::print_table(
+        &[
+            t(Msg::HeaderUser),
+            t(Msg::HeaderHome),
+            t(Msg::HeaderHarnesses),
+        ],
+        rows,
+    );
+    println!(
+        "\n{}",
+        i18n::fill(t(Msg::TargetsCount), &[("count", found.len().to_string())])
+    );
     Ok(())
 }
 

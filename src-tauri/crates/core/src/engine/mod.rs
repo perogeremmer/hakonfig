@@ -8,6 +8,7 @@ pub mod glob;
 pub mod model;
 pub mod paths;
 pub mod preset;
+pub mod targets;
 pub mod version;
 pub mod write;
 
