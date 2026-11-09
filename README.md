@@ -379,8 +379,10 @@ Release flow:
 ```bash
 node scripts/version.mjs bump minor     # 0.2.0 -> 0.3.0, updates every file
 git commit -am "chore: release v0.3.0"
-git tag v0.3.0
+git tag -a v0.3.0 -m "v0.3.0"           # annotated: `--follow-tags` skips lightweight tags
 git push --follow-tags
+# Kalau tag terlanjur dibuat lightweight:
+git push origin v0.3.0
 gh workflow run homebrew-tap.yml -f tag=v0.3.0   # after the release is up
 ```
 
