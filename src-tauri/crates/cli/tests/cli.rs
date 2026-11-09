@@ -21,20 +21,42 @@ fn sandbox(name: &str) -> PathBuf {
     dir
 }
 
+/// Command dasar dengan environment yang sudah dibersihkan.
+///
+/// `doctor` membaca kredensial dari environment (`*_API_KEY`) karena harness
+/// me-refresh katalog provider yang punya key di env; test tidak boleh
+/// bergantung pada environment mesin yang menjalankannya.
+fn base_command(root: &Path) -> Command {
+    let mut command = Command::new(BIN);
+    command.arg("--root").arg(root);
+    for (name, _) in std::env::vars() {
+        if name.ends_with("_API_KEY") {
+            command.env_remove(&name);
+        }
+    }
+    command
+}
+
 fn run(root: &Path, args: &[&str]) -> Output {
-    Command::new(BIN)
-        .arg("--root")
-        .arg(root)
+    base_command(root)
         .args(args)
         .stdin(Stdio::null())
         .output()
         .expect("gagal menjalankan binary")
 }
 
+/// Jalankan binary dengan environment tambahan (untuk mengarahkan endpoint tes).
+fn run_env(root: &Path, args: &[&str], envs: &[(&str, &str)]) -> Output {
+    let mut command = base_command(root);
+    command.args(args).stdin(Stdio::null());
+    for (name, value) in envs {
+        command.env(name, value);
+    }
+    command.output().expect("gagal menjalankan binary")
+}
+
 fn run_stdin(root: &Path, args: &[&str], input: &str) -> Output {
-    let mut child = Command::new(BIN)
-        .arg("--root")
-        .arg(root)
+    let mut child = base_command(root)
         .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -726,6 +748,86 @@ fn doctor_does_not_touch_files_without_fix() {
         std::fs::read_to_string(root.join("pi/agent/settings.json")).unwrap(),
         before,
         "doctor tanpa --fix tidak boleh menulis apa pun"
+    );
+}
+
+// ---------------------------------------------------------------- katalog
+
+#[test]
+fn doctor_reports_a_credential_that_refreshes_without_a_provider() {
+    let root = sandbox("doctor-catalog-credential");
+    write_file(&root, "pi/agent/models.json", r#"{"providers":{}}"#);
+    write_file(
+        &root,
+        "pi/agent/auth.json",
+        r#"{"xai":{"type":"api_key","key":"xai-fake"}}"#,
+    );
+
+    let output = run(&root, &["doctor", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON valid");
+    let notice = parsed
+        .as_array()
+        .expect("array")
+        .iter()
+        .find(|notice| notice["code"] == "catalog.credential-without-provider")
+        .expect("harus melaporkan kredensial tanpa provider");
+
+    assert_eq!(notice["provider"], "xai");
+    assert!(notice["fix"].is_null(), "tidak bisa diperbaiki otomatis");
+    assert!(
+        output.status.success(),
+        "notice manual tidak menggagalkan doctor: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn doctor_online_reports_a_failing_catalog_with_the_real_error() {
+    let root = sandbox("doctor-catalog-online");
+    write_file(&root, "pi/agent/models.json", r#"{"providers":{}}"#);
+    write_file(
+        &root,
+        "pi/agent/auth.json",
+        r#"{"xai":{"type":"api_key","key":"xai-fake"}}"#,
+    );
+
+    // Port 1 selalu menolak koneksi: deterministik dan tanpa jaringan.
+    let output = run_env(
+        &root,
+        &["doctor", "--online", "--harness", "pi"],
+        &[("HAKONFIG_PI_CATALOG_BASE", "http://127.0.0.1:1")],
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("catalog request for 'xai' failed"),
+        "harus menyebut provider dan kegagalannya: {}",
+        stdout(&output)
+    );
+}
+
+#[test]
+fn doctor_without_online_never_touches_the_network() {
+    let root = sandbox("doctor-offline");
+    write_file(&root, "pi/agent/models.json", r#"{"providers":{}}"#);
+    write_file(
+        &root,
+        "pi/agent/auth.json",
+        r#"{"xai":{"type":"api_key","key":"xai-fake"}}"#,
+    );
+
+    // Endpoint yang pasti mati: kalau doctor mencoba, pesannya akan muncul.
+    let output = run_env(
+        &root,
+        &["doctor", "--harness", "pi"],
+        &[("HAKONFIG_PI_CATALOG_BASE", "http://127.0.0.1:1")],
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stdout(&output).contains("catalog request"),
+        "tanpa --online tidak boleh ada permintaan katalog: {}",
+        stdout(&output)
     );
 }
 

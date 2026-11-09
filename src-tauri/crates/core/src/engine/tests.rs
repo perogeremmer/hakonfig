@@ -7,6 +7,7 @@ use std::path::Path;
 
 use crate::api;
 use crate::engine::adapters;
+use crate::engine::adapters::Adapter;
 use crate::engine::doc::Docs;
 use crate::engine::model::{EditOp, KeyMode, ModelDraft, ProviderDraft};
 use crate::engine::testutil::sandbox;
@@ -1396,7 +1397,7 @@ fn pi_without_enabled_models_has_no_scope_notice() {
 
     let notices = api::list_notices(Some("pi".to_string())).unwrap();
     assert!(
-        notices.is_empty(),
+        !notices.iter().any(|notice| notice.code == "pi.scope"),
         "tanpa enabledModels semua model terlihat: {notices:?}"
     );
 }
@@ -1554,7 +1555,102 @@ fn genuine_builtin_provider_is_not_flagged_as_a_collision() {
 
     let notices = api::list_notices(Some("pi".to_string())).unwrap();
     assert!(
-        notices.is_empty(),
+        !notices
+            .iter()
+            .any(|notice| notice.code == "harness.builtin-id"),
         "provider asli tidak boleh diperingatkan: {notices:?}"
+    );
+}
+
+// ------------------------------------------------------------------ katalog
+
+#[test]
+fn credential_without_a_provider_entry_is_reported() {
+    let (_lock, root) = sandbox("catalog_credential_only");
+    let dir = root.join("pi/agent");
+    write(&dir.join("models.json"), r#"{"providers":{}}"#);
+    write(
+        &dir.join("auth.json"),
+        r#"{"xai":{"type":"api_key","key":"xai-fake"}}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "catalog.credential-without-provider")
+        .expect("kredensial tanpa provider harus dilaporkan");
+    assert_eq!(notice.provider, "xai");
+    assert!(notice.message.contains("Could not refresh xai"));
+    assert!(
+        notice.fix.is_none(),
+        "tidak ada perbaikan otomatis untuk ini"
+    );
+}
+
+#[test]
+fn empty_stored_catalog_is_reported() {
+    let (_lock, root) = sandbox("catalog_empty_cache");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"xai":{"baseUrl":"https://api.x.ai/v1","api":"openai-completions","models":[{"id":"grok"}]}}}"#,
+    );
+    // Bentuk yang ditulis pi ketika permintaan katalog gagal atau ditolak.
+    write(
+        &dir.join("models-store.json"),
+        r#"{"xai":{"models":[],"lastModified":0,"checkedAt":1794000000000}}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "catalog.empty-cache")
+        .expect("cache kosong harus dilaporkan");
+    assert_eq!(notice.provider, "xai");
+}
+
+#[test]
+fn healthy_stored_catalog_produces_no_notice() {
+    let (_lock, root) = sandbox("catalog_ok_cache");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"xai":{"baseUrl":"https://api.x.ai/v1","api":"openai-completions","models":[{"id":"grok"}]}}}"#,
+    );
+    write(
+        &dir.join("models-store.json"),
+        r#"{"xai":{"models":[{"id":"grok"}],"lastModified":1793900000000,"checkedAt":1794000000000}}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    assert!(
+        !notices
+            .iter()
+            .any(|notice| notice.code == "catalog.empty-cache"),
+        "{notices:?}"
+    );
+}
+
+#[test]
+fn catalog_probe_targets_only_builtin_credentialed_providers() {
+    let (_lock, root) = sandbox("catalog_targets");
+    let dir = root.join("pi/agent");
+    write(&dir.join("models.json"), r#"{"providers":{}}"#);
+    write(
+        &dir.join("auth.json"),
+        r#"{"xai":{"type":"api_key","key":"k"},"gateway-saya":{"type":"api_key","key":"k"}}"#,
+    );
+
+    let adapter = adapters::pi::PiAdapter;
+    let docs = Docs::load(&adapter.specs()).unwrap();
+    let targets = adapter.catalog_targets(&docs);
+    let ids: Vec<&str> = targets
+        .iter()
+        .map(|target| target.provider.as_str())
+        .collect();
+    assert_eq!(
+        ids,
+        vec!["xai"],
+        "gateway custom tidak punya katalog di pi.dev"
     );
 }

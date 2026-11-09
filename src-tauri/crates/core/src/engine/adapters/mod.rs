@@ -3,7 +3,7 @@ use anyhow::Result;
 use std::path::PathBuf;
 
 use super::doc::{Docs, FileSpec};
-use super::model::{ConfigFileInfo, EditOp, HarnessInfo, HarnessSnapshot, Notice};
+use super::model::{CatalogTarget, ConfigFileInfo, EditOp, HarnessInfo, HarnessSnapshot, Notice};
 use shared::ProviderRef;
 
 pub mod hermes;
@@ -68,6 +68,14 @@ pub trait Adapter {
     /// Default: hanya bentrok id dengan provider bawaan.
     fn notices(&self, _docs: &Docs, providers: &[ProviderRef<'_>]) -> Vec<Notice> {
         shared::builtin_id_notices(self.id(), self.builtin_providers(), providers)
+    }
+
+    /// Katalog jarak jauh yang di-refresh harness untuk provider tertentu.
+    ///
+    /// Dipakai `doctor --online`: satu-satunya cara melihat kegagalan refresh
+    /// yang tidak meninggalkan jejak di file config.
+    fn catalog_targets(&self, _docs: &Docs) -> Vec<CatalogTarget> {
+        Vec::new()
     }
 
     /// Terapkan perbaikan otomatis untuk satu notice.

@@ -69,7 +69,7 @@ It only writes to the files your tools already read.
 - **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS, no frontend framework
 - **UI:** Plus Jakarta Sans bundled locally, light and dark themes, English + Bahasa Indonesia
 - **CLI:** `hakonfig-cli`, the same engine without a GUI, for servers and scripts
-- **Tests:** 184 offline tests (136 Rust + 48 JS), no network required
+- **Tests:** 191 offline tests (143 Rust + 48 JS), no network required
 - **License:** [MIT](LICENSE), free to use, modify, and redistribute
 
 ### Open source
@@ -194,6 +194,7 @@ hakonfig-cli add --harness pi --provider groq --key-stdin
 hakonfig-cli add --harness pi --provider groq --key-stdin --sync   # model list from the endpoint
 hakonfig-cli doctor                         # config the harness will not show
 hakonfig-cli doctor --fix                   # repair what can be repaired automatically
+hakonfig-cli doctor --online                # also check the remote model catalogs
 ```
 
 Rules it holds since day one:
@@ -203,7 +204,7 @@ Rules it holds since day one:
 - In a terminal without flags, `add` runs as a wizard.
 - An explicit `--test` that fails aborts with a non-zero exit code and writes nothing.
 - Read-only commands (`list`, `show`, `providers`, `paths`, `doctor`) never touch files
-  unless `doctor --fix` is passed.
+  unless `doctor --fix` is passed, and `doctor` only uses the network with `--online`.
 - Reconciliations happen inside the write, so they appear in the preview and the backup
   instead of being applied behind your back.
 
@@ -431,7 +432,7 @@ as repository secrets and pass them to `tauri-action`.
 ### Tests
 
 ```bash
-bun run test        # 136 Rust tests + 48 JS tests
+bun run test        # 143 Rust tests + 48 JS tests
 bun run test:rust   # cargo test --workspace
 bun run test:js     # node --test web/*.test.js
 ```
@@ -452,8 +453,8 @@ sandbox).
 | Unit (`cli/src/output.rs`) | 8 | line diff trimming, removed/added budget split, preview rendering |
 | Unit (`cli/src/i18n.rs`) | 5 | language parsing, EN/ID message parity |
 | Unit (`src/commands.rs`) | 4 | streamed install command execution, failure detection |
-| Integration (`engine/tests.rs`) | 29 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key`, notice detection + auto-reconcile (`enabledModels`, disable lists, built-in id) |
-| Integration (`cli/tests/cli.rs`) | 31 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, `--sync` against a loopback stub, `doctor` report/fix, language switch, JSON output |
+| Integration (`engine/tests.rs`) | 33 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key`, notice detection + auto-reconcile (`enabledModels`, disable lists, built-in id) |
+| Integration (`cli/tests/cli.rs`) | 34 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, `--sync` against a loopback stub, `doctor` report/fix, language switch, JSON output |
 | Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks, XSS escaping, output trimming |
 | Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholders, untranslated strings, no em dash |
 | Unit (`web/provider-form.test.js`) | 12 | registered-provider detection, env variable naming |
@@ -618,7 +619,7 @@ Pull requests, issues, and new tool adapters are very welcome. To add a tool, se
 Before sending a PR:
 
 ```bash
-bun run test            # 136 Rust + 48 JS tests must pass
+bun run test            # 143 Rust + 48 JS tests must pass
 bun run version:check   # version consistent across files
 bun run css && bun run logos
 ```

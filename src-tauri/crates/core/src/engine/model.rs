@@ -177,6 +177,18 @@ pub struct ApplyResult {
     pub notices: Vec<Notice>,
 }
 
+/// Sumber katalog jarak jauh yang di-refresh harness untuk satu provider.
+///
+/// Dipakai `doctor --online` untuk mengecek hal yang tidak bisa dilihat dari
+/// file config: kalau permintaan katalognya gagal, harness diam-diam memakai
+/// katalog bawaan dan pengguna melihat "showing cached models".
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogTarget {
+    pub provider: String,
+    pub url: String,
+}
+
 /// Sesuatu yang membuat provider/model yang sudah ditulis tetap tidak terlihat
 /// oleh harness-nya: scope model di pi, daftar disable di omp, atau id yang
 /// bentrok dengan provider bawaan harness.

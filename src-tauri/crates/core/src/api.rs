@@ -16,8 +16,8 @@ use crate::engine::backup;
 use crate::engine::catalog;
 use crate::engine::doc::{Doc, Docs};
 use crate::engine::model::{
-    ApplyResult, BackupInfo, EditOp, FileDiff, HarnessInfo, HarnessSnapshot, Notice, PreviewResult,
-    ProviderPreset, TestResult,
+    ApplyResult, BackupInfo, CatalogTarget, EditOp, FileDiff, HarnessInfo, HarnessSnapshot, Notice,
+    PreviewResult, ProviderPreset, TestResult,
 };
 use crate::engine::{preset, version, write};
 
@@ -331,6 +331,111 @@ pub fn fix_notice(
         Ok(result)
     })()
     .map_err(err)
+}
+
+// ---------------------------------------------------------------- katalog
+
+/// Cek katalog jarak jauh yang di-refresh harness, satu permintaan per provider.
+///
+/// Ini satu-satunya bagian `doctor` yang butuh jaringan, karena kegagalan
+/// refresh tidak meninggalkan jejak di file config: harness diam-diam memakai
+/// katalog bawaan dan menampilkan "showing cached models". Permintaannya
+/// meniru pi (batas 4 detik per percobaan, dua retry) supaya hasilnya
+/// mencerminkan yang dialami harness, bukan kondisi jaringan yang berbeda.
+pub fn probe_catalogs(harness_id: Option<String>) -> Result<Vec<Notice>, String> {
+    let ids: Vec<String> = match harness_id {
+        Some(id) => vec![id],
+        None => adapters::all()
+            .iter()
+            .map(|adapter| adapter.id().to_string())
+            .collect(),
+    };
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| format!("failed to start a runtime: {error}"))?;
+
+    runtime.block_on(async move {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .user_agent(format!("hakonfig/{}", env!("CARGO_PKG_VERSION")))
+            .build()
+            .map_err(|error| format!("failed to build the HTTP client: {error}"))?;
+
+        let mut notices = Vec::new();
+        for id in ids {
+            let adapter = match harness(&id) {
+                Ok(adapter) => adapter,
+                Err(_) => continue,
+            };
+            let Ok(docs) = Docs::load(&adapter.specs()) else {
+                continue;
+            };
+            for target in adapter.catalog_targets(&docs) {
+                if let Some(notice) = probe_one(&client, adapter.id(), &target).await {
+                    notices.push(notice);
+                }
+            }
+        }
+        Ok(notices)
+    })
+}
+
+async fn probe_one(
+    client: &reqwest::Client,
+    harness: &str,
+    target: &CatalogTarget,
+) -> Option<Notice> {
+    let mut last_error = String::new();
+    for attempt in 0..3 {
+        const RETRYABLE: [u16; 7] = [408, 425, 429, 500, 502, 503, 504];
+        let response = match client
+            .get(&target.url)
+            .header("accept", "application/json")
+            .timeout(Duration::from_secs(4))
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(error) => {
+                last_error = if error.is_timeout() {
+                    "timed out after 4s".to_string()
+                } else {
+                    format!("{error}")
+                };
+                continue;
+            }
+        };
+
+        let status = response.status().as_u16();
+        if status < 400 || status == 304 {
+            return None;
+        }
+        let body = response.text().await.unwrap_or_default();
+        last_error = format!(
+            "HTTP {status}{}",
+            if body.trim().is_empty() {
+                String::new()
+            } else {
+                format!(": {}", body.chars().take(160).collect::<String>().trim())
+            }
+        );
+        if !RETRYABLE.contains(&status) || attempt == 2 {
+            break;
+        }
+    }
+
+    Some(Notice {
+        code: "catalog.refresh".to_string(),
+        harness: harness.to_string(),
+        provider: target.provider.clone(),
+        message: format!(
+            "the remote catalog request for '{}' failed ({}). The harness keeps using the catalog bundled with the installed version + the last cached copy, which is what shows up as a refresh warning.",
+            target.provider, last_error
+        ),
+        fix: None,
+    })
 }
 
 // ---------------------------------------------------------------- backup

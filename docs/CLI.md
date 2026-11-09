@@ -129,7 +129,7 @@ Preset model lists are static snapshots. In a terminal, `add` offers to sync
 the live list from the endpoint (default yes); with `--sync` it always does,
 and with `--models` it never does.
 
-### `doctor [--harness <id>] [--fix]`
+### `doctor [--harness <id>] [--fix] [--online]`
 
 `add` already reconciles the obvious cases while it writes — it widens a saved
 pi scope and lifts a disable flag for the provider it just wrote — so the new
@@ -141,6 +141,9 @@ older Hakonfig, an id that has to be renamed):
 |---|---|---|
 | `pi.scope` | pi limits the model picker to `enabledModels` in `settings.json`; models of a provider are outside it (a saved scope from `Ctrl+S`, or a pattern like `provider/*` that does not match ids containing `/`). | Adds `<provider>/**` and drops the narrower `<provider>/*`. |
 | `omp.disabled` / `opencode.disabled` | The provider is listed in `disabledProviders` / `disabled_providers`, so its models stay hidden even though they are in `models.yml` / `opencode.json`. | Removes the provider from the list (the entry and its models are kept). |
+| `catalog.credential-without-provider` | pi punya kredensial untuk provider itu (`auth.json` atau env seperti `XAI_API_KEY`), jadi pi me-refresh katalognya dari pi.dev — tetapi `models.json` tidak punya entry provider tersebut, jadi yang bisa dipakai hanya katalog bawaan. | Manual: tambahkan provider itu lewat `add`, atau hapus kredensialnya kalau tidak dipakai. |
+| `catalog.empty-cache` | Cache katalog pi.dev untuk provider itu tersimpan kosong/tanpa timestamp — permintaan terakhirnya gagal atau ditolak, dan pi jatuh ke daftar bawaan versi terpasang. | Manual: cek jaringan lalu buka `/model` di pi (refresh ulang). |
+| `catalog.refresh` | Muncul hanya dengan `--online`: permintaan katalog ke pi.dev gagal sekarang, dengan status/error aslinya. Inilah yang tampil di pi sebagai "Could not refresh <provider>; showing cached models". | Manual: jaringan, atau kredensial yang setengah hidup (mis. OAuth kedaluwarsa). |
 | `harness.builtin-id` | The provider id is also a built-in harness provider (`openrouter`, `deepseek`, `opencode-go`, …), so the remote catalog for that id is merged with your models and refresh warnings may mention it. | Manual: rename the gateway (for example `openrouter-gw`). |
 
 ```
@@ -154,7 +157,15 @@ fixed: enabledModels in settings.json: removed 'gateway/*'; added 'gateway/**'
 
 Read-only without `--fix`. Exit code is non-zero while an issue that `--fix`
 could repair remains, so it can gate a setup script; notices that are
-manual-only never fail the run. `--json` prints the notices as they are
+manual-only never fail the run.
+
+`--online` is the only part that uses the network: it asks every remote catalog
+the harness would refresh (one request per provider, 4 s per attempt, two
+retries, mirroring pi) and reports the real status/error, because a failed
+refresh leaves no trace in the config files — it only shows up as a warning
+inside the harness. Without `--online`, `doctor` stays completely offline. The
+catalog base URL can be redirected with `HAKONFIG_PI_CATALOG_BASE` (tests,
+proxies). `--json` prints the notices as they are
 returned by the API (`code`, `harness`, `provider`, `message`, `fix`).
 
 The same notices are included in `add`'s `ApplyResult`, so anything Hakonfig

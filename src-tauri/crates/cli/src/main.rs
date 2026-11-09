@@ -79,6 +79,9 @@ enum Command {
         /// Apply the automatic fixes.
         #[arg(long)]
         fix: bool,
+        /// Also check the remote model catalogs the harness refreshes (network).
+        #[arg(long)]
+        online: bool,
     },
     /// Add or change a provider. Runs as a wizard when called without flags.
     Add {
@@ -172,7 +175,11 @@ fn run(cli: &Cli) -> Result<()> {
         Some(Command::Show { harness }) => show(harness.as_deref(), cli.json),
         Some(Command::Providers { search, free }) => providers(search.as_deref(), *free, cli.json),
         Some(Command::Paths { harness }) => paths(harness.as_deref(), cli.json),
-        Some(Command::Doctor { harness, fix }) => doctor(harness.as_deref(), *fix, cli.json),
+        Some(Command::Doctor {
+            harness,
+            fix,
+            online,
+        }) => doctor(harness.as_deref(), *fix, *online, cli.json),
         Some(Command::Add {
             harness,
             provider,
@@ -428,13 +435,18 @@ fn providers(search: Option<&str>, free_only: bool, json: bool) -> Result<()> {
 /// Periksa hal-hal yang membuat config yang sudah ditulis tetap tidak terlihat
 /// harness: scope model di pi (`enabledModels`), daftar disable di omp dan
 /// OpenCode, serta id provider yang bentrok dengan provider bawaan.
-fn doctor(harness: Option<&str>, fix: bool, json: bool) -> Result<()> {
+fn doctor(harness: Option<&str>, fix: bool, online: bool, json: bool) -> Result<()> {
     let requested = match harness {
         Some(id) => Some(pick_harness_id(id)?),
         None => None,
     };
 
     let mut notices = api::list_notices(requested.clone()).map_err(|error| anyhow!(error))?;
+    let mut catalog_notices = if online {
+        api::probe_catalogs(requested.clone()).map_err(|error| anyhow!(error))?
+    } else {
+        Vec::new()
+    };
 
     if fix {
         let mut fixed = Vec::new();
@@ -468,7 +480,10 @@ fn doctor(harness: Option<&str>, fix: bool, json: bool) -> Result<()> {
             }
         }
         // Sesudah diperbaiki, tampilkan kondisi terbaru (sisa notice).
-        notices = api::list_notices(requested).map_err(|error| anyhow!(error))?;
+        notices = api::list_notices(requested.clone()).map_err(|error| anyhow!(error))?;
+        if online {
+            catalog_notices = api::probe_catalogs(requested).map_err(|error| anyhow!(error))?;
+        }
 
         if json {
             output::print_json(&serde_json::json!({
@@ -500,6 +515,7 @@ fn doctor(harness: Option<&str>, fix: bool, json: bool) -> Result<()> {
             println!("{}", t(Msg::DoctorNothingToFix));
         }
     } else if json {
+        notices.extend(catalog_notices);
         output::print_json(&notices)?;
         return if notices.iter().any(|notice| notice.fix.is_some()) {
             Err(anyhow!(t(Msg::DoctorRemaining)))
@@ -508,10 +524,11 @@ fn doctor(harness: Option<&str>, fix: bool, json: bool) -> Result<()> {
         };
     }
 
-    if notices.is_empty() {
+    if notices.is_empty() && catalog_notices.is_empty() {
         println!("{}", t(Msg::DoctorClean));
         return Ok(());
     }
+    notices.extend(catalog_notices);
 
     let rows: Vec<Vec<String>> = notices
         .iter()

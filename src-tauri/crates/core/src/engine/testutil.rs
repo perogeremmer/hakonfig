@@ -15,6 +15,16 @@ pub fn sandbox(name: &str) -> (std::sync::MutexGuard<'static, ()>, PathBuf) {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::env::set_var("HAKONFIG_ROOT", &dir);
+    // `doctor` juga membaca kredensial dari environment (`*_API_KEY`), karena
+    // harness me-refresh katalog provider yang punya key di env. Test harus
+    // tidak bergantung pada environment mesin yang menjalankannya.
+    let inherited: Vec<String> = std::env::vars()
+        .map(|(name, _)| name)
+        .filter(|name| name.ends_with("_API_KEY"))
+        .collect();
+    for name in inherited {
+        std::env::remove_var(name);
+    }
     (guard, dir)
 }
 

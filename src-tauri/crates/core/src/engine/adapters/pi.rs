@@ -16,7 +16,7 @@ use super::Adapter;
 use crate::engine::doc::{get_str, mask_key, Docs, FileSpec, Format};
 use crate::engine::glob;
 use crate::engine::model::{
-    ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, Notice, ProviderSummary,
+    CatalogTarget, ConfigFileInfo, EditOp, HarnessSnapshot, KeyMode, Notice, ProviderSummary,
 };
 use crate::engine::paths;
 
@@ -191,6 +191,122 @@ impl PiAdapter {
             "settings.json enabledModels updated so pi shows the new models: {}",
             summary.trim_end_matches("; ").trim()
         )))
+    }
+
+    /// Env var yang dipakai pi untuk kredensial provider bawaan.
+    ///
+    /// pi membaca kredensial dari `auth.json` **atau** env; yang dari env tidak
+    /// terlihat di file mana pun, jadi daftar kecil ini dipakai untuk menebak
+    /// provider mana yang akan di-refresh katalognya.
+    fn env_api_keys() -> &'static [(&'static str, &'static str)] {
+        &[
+            ("anthropic", "ANTHROPIC_API_KEY"),
+            ("cerebras", "CEREBRAS_API_KEY"),
+            ("deepseek", "DEEPSEEK_API_KEY"),
+            ("fireworks", "FIREWORKS_API_KEY"),
+            ("google", "GEMINI_API_KEY"),
+            ("groq", "GROQ_API_KEY"),
+            ("mistral", "MISTRAL_API_KEY"),
+            ("openai", "OPENAI_API_KEY"),
+            ("openrouter", "OPENROUTER_API_KEY"),
+            ("xai", "XAI_API_KEY"),
+            ("zai", "ZAI_API_KEY"),
+        ]
+    }
+
+    /// Provider yang punya kredensial: dari `auth.json` atau dari environment.
+    fn credentialed_providers(docs: &Docs) -> Vec<String> {
+        let mut ids: Vec<String> = docs
+            .get("auth")
+            .and_then(|doc| doc.data().as_object())
+            .map(|map| map.keys().cloned().collect())
+            .unwrap_or_default();
+        for (id, variable) in Self::env_api_keys() {
+            let from_env = std::env::var(variable)
+                .map(|value| !value.trim().is_empty())
+                .unwrap_or(false);
+            if from_env && !ids.iter().any(|known| known == id) {
+                ids.push((*id).to_string());
+            }
+        }
+        ids.sort();
+        ids
+    }
+
+    /// Provider yang tersimpan di `models.json`, termasuk yang diparkir.
+    fn configured_providers(docs: &Docs) -> Vec<String> {
+        let Some(models) = docs.get("models") else {
+            return Vec::new();
+        };
+        let mut ids: Vec<String> = models
+            .data()
+            .get("providers")
+            .and_then(Value::as_object)
+            .map(|map| map.keys().cloned().collect())
+            .unwrap_or_default();
+        ids.extend(models.parked_ids());
+        ids.sort();
+        ids.dedup();
+        ids
+    }
+
+    /// Cache katalog pi.dev (`models-store.json`), dibaca langsung karena
+    /// file itu milik pi dan tidak pernah ditulis Hakonfig.
+    fn catalog_cache() -> serde_json::Map<String, Value> {
+        let path = Self::agent_dir().join("models-store.json");
+        std::fs::read_to_string(path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+            .and_then(|value| value.as_object().cloned())
+            .unwrap_or_default()
+    }
+
+    /// Notice yang tidak butuh jaringan: kredensial yang memicu refresh tanpa
+    /// provider di config, dan cache katalog yang tersimpan kosong.
+    fn catalog_notices(&self, docs: &Docs) -> Vec<Notice> {
+        let credentialed = Self::credentialed_providers(docs);
+        let configured = Self::configured_providers(docs);
+        let cache = Self::catalog_cache();
+        let mut notices = Vec::new();
+
+        for provider in &credentialed {
+            if !configured.iter().any(|id| id == provider) {
+                notices.push(Notice {
+                    code: "catalog.credential-without-provider".to_string(),
+                    harness: self.id().to_string(),
+                    provider: provider.clone(),
+                    message: format!(
+                        "pi has a credential for '{provider}', so it refreshes that provider's catalog from pi.dev, but there is no '{provider}' entry in models.json — only the built-in catalog is usable, and a failed refresh shows up as \"Could not refresh {provider}; showing cached models\"."
+                    ),
+                    fix: None,
+                });
+            }
+        }
+
+        for (provider, entry) in &cache {
+            let empty = entry
+                .get("models")
+                .and_then(Value::as_array)
+                .map(|models| models.is_empty())
+                .unwrap_or(false);
+            let no_timestamp = entry
+                .get("lastModified")
+                .and_then(Value::as_i64)
+                .map(|stamp| stamp == 0)
+                .unwrap_or(true);
+            if empty || no_timestamp {
+                notices.push(Notice {
+                    code: "catalog.empty-cache".to_string(),
+                    harness: self.id().to_string(),
+                    provider: provider.clone(),
+                    message: format!(
+                        "the stored pi.dev catalog for '{provider}' is empty or has no timestamp, so pi falls back to the list shipped with the installed version. The last catalog request for it never succeeded."
+                    ),
+                    fix: None,
+                });
+            }
+        }
+        notices
     }
 }
 
@@ -563,7 +679,31 @@ impl Adapter for PiAdapter {
         let mut notices =
             shared::builtin_id_notices(self.id(), self.builtin_providers(), providers);
         notices.extend(self.scope_notices(docs, providers));
+        notices.extend(self.catalog_notices(docs));
         notices
+    }
+
+    fn catalog_targets(&self, docs: &Docs) -> Vec<CatalogTarget> {
+        let base = std::env::var("HAKONFIG_PI_CATALOG_BASE")
+            .unwrap_or_else(|_| "https://pi.dev".to_string());
+        Self::credentialed_providers(docs)
+            .into_iter()
+            // Gateway custom tidak punya entri di pi.dev, jadi pi tidak pernah
+            // me-refresh katalognya; memeriksanya hanya menghasilkan alarm palsu.
+            .filter(|provider| {
+                self.builtin_providers()
+                    .iter()
+                    .any(|(id, _)| id == provider)
+            })
+            .map(|provider| CatalogTarget {
+                url: format!(
+                    "{}/api/models/providers/{}?types=chat,image,classifier",
+                    base.trim_end_matches('/'),
+                    provider
+                ),
+                provider,
+            })
+            .collect()
     }
 
     fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {

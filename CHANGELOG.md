@@ -4,6 +4,24 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [Unreleased]
+
+### Added
+
+- `doctor` juga melaporkan hal di luar file config yang membuat model tidak
+  tampil: `catalog.credential-without-provider` (pi punya kredensial untuk
+  provider yang tidak ada di `models.json`, jadi pi me-refresh katalognya
+  tanpa ada yang bisa dipakai) dan `catalog.empty-cache` (cache katalog
+  pi.dev tersimpan kosong — permintaan terakhirnya gagal/ditolak).
+- `doctor --online` memeriksa katalog jarak jauh yang di-refresh harness
+  (satu permintaan per provider, 4 detik per percobaan, dua retry seperti pi)
+  dan melaporkan status/error aslinya sebagai `catalog.refresh`. Ini
+  satu-satunya bagian `doctor` yang memakai jaringan; tanpa flag itu doctor
+  tetap sepenuhnya offline. Base URL bisa diarahkan lewat
+  `HAKONFIG_PI_CATALOG_BASE`.
+- Gateway custom tidak pernah dimasukkan ke pemeriksaan katalog (pi.dev tidak
+  mengenal id-nya), jadi tidak ada alarm palsu.
+
 ## [0.4.3]
 
 Sync daftar model dari endpoint, perapian config yang tidak terlihat harness,
