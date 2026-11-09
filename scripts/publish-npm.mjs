@@ -115,36 +115,60 @@ async function publish(dir) {
  * sebagai pengunjung tanpa token.
  */
 async function verifyPublic(atVersion) {
-  const attempts = 10;
+  // Registry perlu waktu mengindeks versi baru setelah publish. Dua menit
+  // (10 x 15 detik) pernah tidak cukup, jadi jendelanya dilonggarkan sambil
+  // tetap gagal keras kalau versinya benar-benar tidak publik.
+  const attempts = 24;
+  const interval = 15_000;
   for (let attempt = 1; attempt <= attempts; attempt++) {
-    let status = "tidak ada respons";
-    try {
-      const res = await fetch(
-        `https://registry.npmjs.org/${PACKAGE_NAME}?cb=${Date.now()}`,
-        { headers: { "Cache-Control": "no-cache" } }
-      );
-      if (res.ok) {
-        const doc = await res.json();
-        if (doc.versions?.[atVersion]) {
-          console.log(`terverifikasi publik: ${PACKAGE_NAME}@${atVersion}`);
-          return;
-        }
-        status = "versi belum terindeks";
-      } else {
-        status = `HTTP ${res.status}`;
-      }
-    } catch (error) {
-      status = String(error.message);
+    const status = await checkPublished(atVersion);
+    if (status === "ok") {
+      console.log(`terverifikasi publik: ${PACKAGE_NAME}@${atVersion}`);
+      return;
     }
     if (attempt === attempts) {
       throw new Error(
-        `${PACKAGE_NAME}@${atVersion} tidak bisa diakses publik (${status}); ` +
-          `cek visibilitas package di npmjs.com`
+        `${PACKAGE_NAME}@${atVersion} tidak bisa diakses publik setelah ` +
+          `${(attempts * interval) / 1000} detik (${status}); cek visibilitas ` +
+          `package di npmjs.com`
       );
     }
     console.log(`verifikasi ${attempt}/${attempts} belum lolos (${status}); ulangi 15 detik.`);
-    await sleep(15_000);
+    await sleep(interval);
   }
+}
+
+/** "ok" hanya kalau registry tanpa token sudah menyajikan versi itu. */
+async function checkPublished(atVersion) {
+  let status = "tidak ada respons";
+  try {
+    const packument = await fetch(
+      `https://registry.npmjs.org/${PACKAGE_NAME}?cb=${Date.now()}`,
+      { headers: { "Cache-Control": "no-cache" } }
+    );
+    if (packument.ok) {
+      const doc = await packument.json();
+      if (doc.versions?.[atVersion]) return "ok";
+      status = "versi belum terindeks";
+    } else {
+      status = `HTTP ${packument.status}`;
+    }
+  } catch (error) {
+    status = String(error.message);
+  }
+
+  // Endpoint per versi kadang terindeks lebih dulu daripada packument-nya.
+  try {
+    const single = await fetch(
+      `https://registry.npmjs.org/${PACKAGE_NAME}/${atVersion}?cb=${Date.now()}`,
+      { headers: { "Cache-Control": "no-cache" } }
+    );
+    if (single.ok) return "ok";
+    if (status === "versi belum terindeks") status += `, endpoint versi HTTP ${single.status}`;
+  } catch (error) {
+    status += `, ${String(error.message)}`;
+  }
+  return status;
 }
 
 /**

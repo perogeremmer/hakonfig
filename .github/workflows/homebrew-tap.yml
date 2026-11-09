@@ -23,9 +23,11 @@ jobs:
     name: Update formula di homebrew-tap
     runs-on: ubuntu-latest
     steps:
+      # Sengaja mengambil branch default, bukan tag: logika workflow dan
+      # script formula harus versi terbaru, sementara tag hanya menentukan aset
+      # mana yang dibaca. Dulu checkout ke tag, sehingga perbaikan script tidak
+      # pernah terpakai saat mengulang rilis yang gagal.
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag }}
 
       - name: Cek token tap
         env:

@@ -219,6 +219,9 @@ jobs:
 
       - name: Publish ke crates.io (hakonfig-core + hakonfig-cli)
         id: crates
+        # crates.io tidak bergantung pada npm: kalau verifikasi npm lambat atau
+        # gagal, crate tetap harus terbit (ini yang bikin 0.4.4 tertinggal).
+        if: ${{ always() }}
         # Opsional: crates.io bisa menolak publish karena hal yang bukan urusan
         # kode (mis. email akun crates.io belum diverifikasi). Jangan sampai
         # menghalangi aset desktop dan rilisnya.

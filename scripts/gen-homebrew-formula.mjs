@@ -26,7 +26,10 @@ const release = JSON.parse(
   })
 );
 const assets = Object.fromEntries(
-  release.assets.map((asset) => [asset.name, asset.browser_download_url])
+  release.assets.map((asset) => [
+    asset.name,
+    { url: asset.browser_download_url, id: asset.id },
+  ])
 );
 
 const WANTED = {
@@ -40,13 +43,45 @@ for (const name of Object.values(WANTED)) {
   }
 }
 
-/** Unduh aset dan kembalikan sha256-nya. */
+/**
+ * Unduh aset dan kembalikan sha256-nya.
+ *
+ * `browser_download_url` dilayani CDN GitHub dan untuk aset yang baru diunggah
+ * kadang menjawab 504 terus-menerus (terjadi pada v0.4.4, sementara aset yang
+ * sama bisa diunduh utuh lewat API). Jadi API aset dipakai lebih dulu, dengan
+ * URL CDN hanya sebagai cadangan.
+ */
 function sha256(name) {
+  const asset = assets[name];
   const dir = mkdtempSync(join(tmpdir(), "hakonfig-formula-"));
-  execFileSync("curl", ["-fsSL", assets[name], "-o", join(dir, name)]);
-  return createHash("sha256")
-    .update(readFileSync(join(dir, name)))
-    .digest("hex");
+  const target = join(dir, name);
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  const apiUrl = `https://api.github.com/repos/${REPO}/releases/assets/${asset.id}`;
+
+  const attempts = [
+    ["api", ["-fsSL", "-H", "Accept: application/octet-stream"]],
+    ["cdn", ["-fsSL", "--retry", "3", "--retry-delay", "5", "--retry-all-errors"]],
+  ];
+
+  let downloaded = false;
+  let lastError;
+  for (const [kind, flags] of attempts) {
+    const url = kind === "api" ? apiUrl : asset.url;
+    const headers = kind === "api" && token ? ["-H", `Authorization: Bearer ${token}`] : [];
+    try {
+      execFileSync("curl", [...flags, ...headers, url, "-o", target], {
+        stdio: ["ignore", "ignore", "pipe"],
+      });
+      downloaded = true;
+      break;
+    } catch (error) {
+      lastError = error;
+      console.error(`unduh ${name} lewat ${kind} gagal; coba cara lain.`);
+    }
+  }
+  if (!downloaded) throw lastError ?? new Error(`gagal mengunduh ${name}`);
+
+  return createHash("sha256").update(readFileSync(target)).digest("hex");
 }
 
 const darwinSha = sha256(WANTED.darwin);
@@ -61,7 +96,7 @@ process.stdout.write(`class HakonfigCli < Formula
   head "https://github.com/${REPO}.git", branch: "master"
 
   on_macos do
-    url "${assets[WANTED.darwin]}"
+    url "${assets[WANTED.darwin].url}"
     sha256 "${darwinSha}"
 
     def install
@@ -71,7 +106,7 @@ process.stdout.write(`class HakonfigCli < Formula
   end
 
   on_linux do
-    url "${assets[WANTED.linux]}"
+    url "${assets[WANTED.linux].url}"
     sha256 "${linuxSha}"
 
     def install
