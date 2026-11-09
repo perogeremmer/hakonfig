@@ -1,36 +1,42 @@
-// Rakit dan publish package npm `hakonfig` + package platform-nya.
+// Rakit dan publish package npm `hakonfig`.
 //
 // Dipakai oleh release workflow, tapi bisa dijalankan manual:
-//   node scripts/publish-npm.mjs <path-binary-darwin> <path-binary-linux> <path-binary-win.exe>
+//   node scripts/publish-npm.mjs <darwin-bin> <linux-bin> <win-bin.exe>
 //   node scripts/publish-npm.mjs --dry-run <...>   # rakit tanpa publish
 //
-// Struktur:
-//   hakonfig                              -> shim bin.js + optionalDependencies
-//   @perogeremmer/hakonfig-darwin         -> binary universal (Apple Silicon + Intel)
-//   @perogeremmer/hakonfig-linux-x64      -> binary linux x86_64
-//   @perogeremmer/hakonfig-win32-x64      -> binary windows x86_64
+// Bentuk package: satu package, binari ikut di dalamnya.
+//   hakonfig
+//     bin.js                        shim yang memilih binari sesuai platform
+//     bin/hakonfig-cli-darwin       universal (Apple Silicon + Intel)
+//     bin/hakonfig-cli-linux-x64
+//     bin/hakonfig-cli-win32-x64.exe
 //
-// Binary diambil dari argumen (di CI: hasil unduhan aset release), jadi
-// script ini tidak pernah membangun Rust sendiri.
+// Kenapa tidak pakai package platform terpisah (pola esbuild)? Dua kali gagal
+// di npm:
+//   1. nama unscoped `hakonfig-win32-x64` ditolak permanen dengan
+//      `403 Package name triggered spam detection` (heuristic nama
+//      auto-generated dari akun baru), walau darwin dan linux lolos;
+//   2. package scoped `@perogeremmer/hakonfig-*` berhasil di-publish tapi
+//      tersimpan sebagai restricted — `GET /@perogeremmer%2Fhakonfig-linux-x64`
+//      menjawab 404 untuk pengunjung anonim, dan token rilis tidak boleh
+//      mengubah visibilitas (`POST /-/package/.../access` → 403 karena
+//      pembatasan token bypass-2FA). Akibatnya `npm i -g hakonfig` tidak
+//      mendapat binari apa pun.
+// Binari gabungan hanya ~11 MB (≈5 MB terkompresi) dan menghilangkan seluruh
+// ketergantungan pada optionalDependencies, visibilitas scope, maupun
+// heuristic nama. Ini juga yang membuat install di Windows akhirnya berhasil.
 //
-// Kenapa package platform scoped? npm menolak nama unscoped berpola seperti
-// `hakonfig-win32-x64` dengan `403 Package name triggered spam detection`
-// (proteksi nama mirip package auto-generated dari akun baru) — sudah dicoba
-// berkali-kali, termasuk jeda dan retry berjam-jam, dan selalu ditolak.
-// Package scoped tidak terkena heuristik itu: ini pola yang dipakai esbuild
-// (`@esbuild/linux-x64`) dan swc (`@swc/core-linux-x64-gnu`). Scope diambil
-// dari username/org npm yang punya token; pindah ke org nanti cukup ganti
-// SCOPE di bawah (mis. `@hakonfig`) plus nama package di npm/hakonfig/bin.js.
+// Binari diambil dari argumen (di CI: hasil unduhan aset release), jadi script
+// ini tidak pernah membangun Rust sendiri.
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, chmodSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, chmodSync, existsSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const REPO = "perogeremmer/hakonfig";
-const SCOPE = "@perogeremmer";
+const PACKAGE_NAME = "hakonfig";
 const ROOT = new URL("..", import.meta.url).pathname;
-const SPACING_MS = 30_000; // jeda antar publish
-const RETRY_MS = 60_000; // tunggu sebelum mencoba ulang
+const RETRY_MS = 60_000; // tunggu sebelum mencoba publish ulang
 const RETRIES = 3;
 
 const argv = process.argv.slice(2);
@@ -47,57 +53,53 @@ const version = execFileSync("node", [join(ROOT, "scripts/version.mjs"), "show"]
   encoding: "utf8",
 }).trim();
 
-const PLATFORMS = [
-  {
-    pkg: `${SCOPE}/hakonfig-darwin`,
-    os: ["darwin"],
-    cpu: ["x64", "arm64"],
-    ext: "",
-    bin: binaries[0],
-  },
-  {
-    pkg: `${SCOPE}/hakonfig-linux-x64`,
-    os: ["linux"],
-    cpu: ["x64"],
-    ext: "",
-    bin: binaries[1],
-  },
-  {
-    pkg: `${SCOPE}/hakonfig-win32-x64`,
-    os: ["win32"],
-    cpu: ["x64"],
-    ext: ".exe",
-    bin: binaries[2],
-  },
+// Nama file di dalam package; harus sama dengan peta di npm/hakonfig/bin.js.
+const BINARIES = [
+  { source: binaries[0], name: "hakonfig-cli-darwin" },
+  { source: binaries[1], name: "hakonfig-cli-linux-x64" },
+  { source: binaries[2], name: "hakonfig-cli-win32-x64.exe" },
 ];
 
-const tmp = mkdtempSync(join(tmpdir(), "hakonfig-npm-"));
+// Package platform versi lama: unscoped (0.4.0) dan scoped (0.4.1). Keduanya
+// tidak dipakai lagi — ditandai deprecated supaya yang menginstall versi itu
+// dapat peringatan, bukan bingung karena binarinya tidak ketemu.
+const LEGACY_PACKAGES = [
+  "hakonfig-darwin@0.4.0",
+  "hakonfig-linux-x64@0.4.0",
+  "@perogeremmer/hakonfig-darwin@0.4.1",
+  "@perogeremmer/hakonfig-linux-x64@0.4.1",
+  "@perogeremmer/hakonfig-win32-x64@0.4.1",
+];
+
 const npm = (args, cwd) =>
   execFileSync("npm", args, { cwd, encoding: "utf8", stdio: "pipe" });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** Sudah terpublish? Supaya re-run release tidak gagal di langkah yang sama. */
-function isPublished(name, atVersion) {
+function isPublished(atVersion) {
   try {
-    npm(["view", `${name}@${atVersion}`, "version"]);
+    npm(["view", `${PACKAGE_NAME}@${atVersion}`, "version"]);
     return true;
   } catch {
     return false;
   }
 }
 
-/** Publish dengan retry: 403 spam detection biasanya hilang setelah jeda. */
-async function publish(dir, name) {
+/**
+ * Publish dengan retry: 403 dari npm (rate limit / spam detection) biasanya
+ * hilang setelah jeda.
+ */
+async function publish(dir) {
   for (let attempt = 1; attempt <= RETRIES; attempt++) {
     try {
       npm(["publish", "--access", "public"], dir);
-      console.log(`terpublish: ${name}@${version}`);
+      console.log(`terpublish: ${PACKAGE_NAME}@${version}`);
       return;
     } catch (error) {
       const output = String(error.stderr || error.message);
       if (attempt === RETRIES) throw error;
       console.error(
-        `percobaan ${attempt}/${RETRIES} gagal untuk ${name}; mencoba ulang ` +
+        `percobaan ${attempt}/${RETRIES} gagal; mencoba ulang ` +
           `${RETRY_MS / 1000} detik lagi.\n${output.split("\n").slice(-4).join("\n")}`
       );
       await sleep(RETRY_MS);
@@ -106,47 +108,62 @@ async function publish(dir, name) {
 }
 
 /**
- * Pastikan package scoped bisa dibaca siapa saja. `npm publish --access public`
- * tidak selalu cukup: package scoped bisa tersimpan sebagai restricted, dan
- * gejalanya halus — publish sukses, tapi `GET /@scope/nama` menjawab 404 untuk
- * pengunjung anonim sehingga `npm i -g hakonfig` tidak mendapat binary-nya.
- * Best-effort: kegagalan tidak boleh menggagalkan rilis.
+ * Pastikan package benar-benar bisa dibaca publik. Publish bisa melaporkan
+ * sukses sementara packument tetap 404 untuk pengunjung anonim — persis
+ * kegagalan yang membuat rilis 0.4.1 tidak terpakai — jadi ini diverifikasi
+ * sebagai pengunjung tanpa token.
  */
-function ensurePublic(name) {
-  try {
-    npm(["access", "set", "status=public", name]);
-    console.log(`publik: ${name}`);
-  } catch (error) {
-    console.log(`lewati set public ${name}: ${String(error.message).split("\n")[0]}`);
+async function verifyPublic(atVersion) {
+  const attempts = 10;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let status = "tidak ada respons";
+    try {
+      const res = await fetch(
+        `https://registry.npmjs.org/${PACKAGE_NAME}?cb=${Date.now()}`,
+        { headers: { "Cache-Control": "no-cache" } }
+      );
+      if (res.ok) {
+        const doc = await res.json();
+        if (doc.versions?.[atVersion]) {
+          console.log(`terverifikasi publik: ${PACKAGE_NAME}@${atVersion}`);
+          return;
+        }
+        status = "versi belum terindeks";
+      } else {
+        status = `HTTP ${res.status}`;
+      }
+    } catch (error) {
+      status = String(error.message);
+    }
+    if (attempt === attempts) {
+      throw new Error(
+        `${PACKAGE_NAME}@${atVersion} tidak bisa diakses publik (${status}); ` +
+          `cek visibilitas package di npmjs.com`
+      );
+    }
+    console.log(`verifikasi ${attempt}/${attempts} belum lolos (${status}); ulangi 15 detik.`);
+    await sleep(15_000);
   }
 }
 
 /**
- * Tandai artefak lama yang sudah tidak dipakai sebagai deprecated, supaya
- * yang menginstall versi itu dapat peringatan. Best-effort: kegagalan di sini
- * tidak boleh menggagalkan rilis.
+ * Tandai artefak lama sebagai deprecated. Best-effort: kegagalan di sini tidak
+ * boleh menggagalkan rilis.
  */
 function deprecate(spec, message) {
   try {
     npm(["deprecate", spec, message]);
     console.log(`deprecated: ${spec}`);
   } catch (error) {
-    console.log(`lewati deprecate ${spec}: ${String(error.message).split("\n")[0]}`);
+    const first = String(error.stderr || error.message).split("\n").slice(-3).join(" ").trim();
+    console.log(`lewati deprecate ${spec}: ${first.slice(0, 160)}`);
   }
 }
 
-// Package platform versi lama memakai nama unscoped, yang kini tidak dipakai
-// lagi dan hanya berisi 0.4.0 (win32-nya bahkan tidak pernah lolos publish).
-const LEGACY_PLATFORM_PACKAGES = [
-  "hakonfig-darwin",
-  "hakonfig-linux-x64",
-  "hakonfig-win32-x64",
-];
-
-function packageJson(name, extra) {
+function packageJson(extra) {
   return JSON.stringify(
     {
-      name,
+      name: PACKAGE_NAME,
       version,
       description: "hakonfig CLI: manage AI coding harness provider configs",
       license: "MIT",
@@ -156,8 +173,8 @@ function packageJson(name, extra) {
         directory: "npm",
       },
       homepage: `https://github.com/${REPO}`,
-      // Scoped package defaultnya restricted; tanpa ini
-      // `npm i -g hakonfig` di mesin orang lain tidak menemukan binary-nya.
+      // Package ini unscoped, tapi tetap ditulis eksplisit: kalau suatu saat
+      // dipindah ke scope, default-nya restricted dan install akan rusak.
       publishConfig: { access: "public" },
       ...extra,
     },
@@ -166,86 +183,52 @@ function packageJson(name, extra) {
   ) + "\n";
 }
 
-/** Siapkan direktori package dan kembalikan path-nya. */
-function buildPackage(name, files, extra) {
-  // Nama scoped berisi "/": buat nama direktori yang datar.
-  const dir = join(tmp, name.replace("/", "__"));
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "package.json"), packageJson(name, extra));
-  for (const [src, dest] of files) {
-    const target = join(dir, dest);
-    mkdirSync(join(target, ".."), { recursive: true });
-    copyFileSync(src, target);
-    chmodSync(target, 0o755);
-  }
-  return dir;
-}
-
-// ------------------------------------------------------------------ utama
-// Package utama tetap unscoped (`hakonfig`) supaya perintah install-nya
-// pendek; hanya package platform yang scoped.
-const mainDir = buildPackage("hakonfig", [
-  [join(ROOT, "npm", "hakonfig", "bin.js"), "bin.js"],
-], {
-  bin: { "hakonfig-cli": "bin.js" },
-  files: ["bin.js"],
-  engines: { node: ">=18" },
-  optionalDependencies: Object.fromEntries(
-    PLATFORMS.map((platform) => [platform.pkg, version])
-  ),
-});
-
-// ------------------------------------------------------------------ platform
-const platformDirs = PLATFORMS.map((platform) => {
-  if (!existsSync(platform.bin)) {
-    console.error(`binary tidak ada: ${platform.bin}`);
+// ------------------------------------------------------------------ rakit
+const tmp = mkdtempSync(join(tmpdir(), "hakonfig-npm-"));
+const dir = join(tmp, PACKAGE_NAME);
+mkdirSync(join(dir, "bin"), { recursive: true });
+writeFileSync(
+  join(dir, "package.json"),
+  packageJson({
+    bin: { "hakonfig-cli": "bin.js" },
+    files: ["bin.js", "bin"],
+    engines: { node: ">=18" },
+  })
+);
+copyFileSync(join(ROOT, "npm", "hakonfig", "bin.js"), join(dir, "bin.js"));
+for (const binary of BINARIES) {
+  if (!existsSync(binary.source)) {
+    console.error(`binary tidak ada: ${binary.source}`);
     process.exit(1);
   }
-  const binName = `hakonfig-cli${platform.ext}`;
-  const dir = buildPackage(platform.pkg, [[platform.bin, join("bin", binName)]], {
-    os: platform.os,
-    cpu: platform.cpu,
-    files: ["bin"],
-  });
-  return { name: platform.pkg, dir };
-});
+  const target = join(dir, "bin", binary.name);
+  copyFileSync(binary.source, target);
+  chmodSync(target, 0o755);
+  console.log(`+ ${binary.name} (${statSync(target).size} byte)`);
+}
 
 // ------------------------------------------------------------------ publish
 if (dryRun) {
-  npm(["pack", "--dry-run"], mainDir);
-  console.log(`[dry-run] hakonfig@${version} valid.`);
-  for (const { name, dir } of platformDirs) {
-    npm(["pack", "--dry-run"], dir);
-    console.log(`[dry-run] ${name}@${version} valid.`);
-  }
+  npm(["pack", "--dry-run"], dir);
+  console.log(`[dry-run] ${PACKAGE_NAME}@${version} valid.`);
 } else {
-  if (isPublished("hakonfig", version)) {
-    console.log(`hakonfig@${version} sudah ada, dilewati.`);
+  if (isPublished(version)) {
+    console.log(`${PACKAGE_NAME}@${version} sudah ada, dilewati.`);
   } else {
-    await publish(mainDir, "hakonfig");
-    await sleep(SPACING_MS);
+    await publish(dir);
   }
+  await verifyPublic(version);
 
-  for (const { name, dir } of platformDirs) {
-    if (isPublished(name, version)) {
-      console.log(`${name}@${version} sudah ada, dilewati.`);
-      continue;
-    }
-    await publish(dir, name);
-    ensurePublic(name);
-    await sleep(SPACING_MS);
-  }
-
-  deprecate(
-    "hakonfig@0.4.0",
-    `Versi ini tidak bisa dipakai di Windows (paket binary win32 gagal publish). Pakai hakonfig@${version} atau lebih baru.`
-  );
-  for (const legacy of LEGACY_PLATFORM_PACKAGES) {
+  for (const spec of LEGACY_PACKAGES) {
     deprecate(
-      `${legacy}@0.4.0`,
-      `Nama package ini sudah diganti ${SCOPE}/${legacy} sejak ${version}. Pakai hakonfig@${version}.`
+      spec,
+      `Tidak dipakai lagi sejak ${version}: binari semua platform sekarang ada di dalam paket ${PACKAGE_NAME}. Pakai hakonfig@${version} atau lebih baru.`
     );
   }
+  deprecate(
+    "hakonfig@0.4.0",
+    `Versi ini tidak punya binari Windows. Pakai hakonfig@${version} atau lebih baru.`
+  );
 }
 
 console.log(`\nselesai${dryRun ? " (dry-run)" : ""}; artefak di ${tmp}`);

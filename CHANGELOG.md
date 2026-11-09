@@ -4,7 +4,34 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [0.4.2]
+
+### Fixed
+
+- npm: binari semua platform kini ikut di dalam satu paket `hakonfig`
+  (≈5 MB terkompresi), menggantikan rencana paket per-platform. Dua percobaan
+  sebelumnya gagal karena alasan di luar kode kita: nama unscoped
+  `hakonfig-win32-x64` ditolak permanen dengan `403 Package name triggered spam
+  detection`, lalu paket scoped `@perogeremmer/hakonfig-*` tersimpan
+  *restricted* (packument 404 untuk pengunjung anonim) dan token rilis tidak
+  boleh mengubah visibilitasnya. Dengan binari gabungan, `npm i -g hakonfig`
+  bekerja di macOS, Linux, dan Windows tanpa `optionalDependencies` sama sekali.
+- Rilis: draft release sekarang benar-benar di-publish (`gh release edit
+  --draft=false --latest`) di akhir workflow. Sebelumnya tidak ada langkah ini,
+  jadi setiap rilis tertinggal sebagai draft dan tautan unduhan 404.
+- Rilis: kegagalan publish crates.io (mis. email akun crates.io belum
+  diverifikasi — kasus yang terjadi pada 0.4.1) tidak lagi menggagalkan
+  workflow yang sama dengan aset desktop; sebagai gantinya muncul warning.
+- npm: `scripts/publish-npm.mjs` memverifikasi hasil publish lewat registry
+  tanpa autentikasi, jadi publish yang tersimpan *private* langsung ketahuan
+  alih-alih baru ketahuan saat pengguna meng-install.
+
 ## [0.4.1]
+
+Dirilis untuk memperbaiki distribusi npm: paket platform dipindah ke scope
+`@perogeremmer/` setelah nama unscoped kena spam detection. Ternyata paket
+scoped tersimpan *restricted*, jadi 0.4.1 tetap tidak terpakai lewat npm —
+digantikan 0.4.2 (binari gabungan). Aset desktop 0.4.1 sendiri normal.
 
 ### Fixed
 

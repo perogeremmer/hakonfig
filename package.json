@@ -1,7 +1,7 @@
 {
   "name": "hakonfig",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.2",
   "type": "module",
   "scripts": {
     "css": "tailwindcss -i ./web/styles.src.css -o ./web/styles.css --minify",

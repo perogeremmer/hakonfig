@@ -218,6 +218,11 @@ jobs:
             dist/hakonfig-cli-x86_64-pc-windows-msvc.exe
 
       - name: Publish ke crates.io (hakonfig-core + hakonfig-cli)
+        id: crates
+        # Opsional: crates.io bisa menolak publish karena hal yang bukan urusan
+        # kode (mis. email akun crates.io belum diverifikasi). Jangan sampai
+        # menghalangi aset desktop dan rilisnya.
+        continue-on-error: true
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
@@ -231,3 +236,27 @@ jobs:
           # dependency-nya.
           sleep 30
           cargo publish -p hakonfig-cli
+
+      - name: Ringkasan kalau crates.io gagal
+        if: ${{ steps.crates.outcome == 'failure' }}
+        run: |
+          echo "::warning::publish crates.io gagal; rilis npm + aset desktop tidak terpengaruh."
+
+  # Draft release hanya bisa diunduh orang lain setelah di-publish. Sebelumnya
+  # tidak ada langkah ini, jadi setiap rilis — termasuk 0.4.0 dan 0.4.1 —
+  # tertinggal sebagai draft dan tautan unduhan 404.
+  publish-release:
+    name: "Publish draft release"
+    needs: [guard, build, publish-cli]
+    # Tetap jalan walau publish-cli gagal: aset desktop sudah lengkap dan tidak
+    # boleh ikut tertahan sebagai draft gara-gara npm atau crates.io.
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Buka draft jadi rilis publik
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ needs.guard.outputs.version }}"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          echo "::notice::rilis $TAG sudah publik"
