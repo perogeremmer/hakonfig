@@ -1,6 +1,6 @@
 // =============================================================================
 // Hakonfig - frontend (vanilla JS, tanpa framework)
-// Kontrak backend: docs/UI-CONTRACT.md · Rencana desain: docs/UI-REVAMP-PLAN.md
+// Kontrak backend: docs/UI-CONTRACT.md
 // =============================================================================
 
 import { esc, renderDiff } from "./diff.js";

@@ -139,6 +139,12 @@ Issues and pull requests are welcome. See [Contributing](#contributing).
 - **Change the default model** per tool with a searchable list that spans all providers.
 - **Safe writes:** merge (unknown fields preserved), atomic write (`tmp` + `rename`),
   `0600` permissions for files that hold credentials.
+- **Visible after writing, not invisible after a refresh.** A write is not done if the
+  harness still refuses to show it, so Hakonfig also fixes the things that hide it: it
+  widens a saved pi model scope (`provider/*` → `provider/**`, other patterns untouched,
+  never inventing a scope where there was none) and lifts the provider out of the Oh My
+  Pi/OpenCode disable list. Those edits show up in the preview as a normal diff and are
+  covered by the same backup.
 - **Secrets masked** everywhere in the preview (API keys, tokens, passwords).
 
 ---
@@ -196,7 +202,10 @@ Rules it holds since day one:
 - Any flag or `--json` means fully non-interactive: it never prompts (safe for scripts and servers).
 - In a terminal without flags, `add` runs as a wizard.
 - An explicit `--test` that fails aborts with a non-zero exit code and writes nothing.
-- Read-only commands (`list`, `show`, `providers`, `paths`) never touch files.
+- Read-only commands (`list`, `show`, `providers`, `paths`, `doctor`) never touch files
+  unless `doctor --fix` is passed.
+- Reconciliations happen inside the write, so they appear in the preview and the backup
+  instead of being applied behind your back.
 
 Every command accepts `--json` for stable, scriptable output. The command
 reference and the JSON schemas live in [docs/CLI.md](docs/CLI.md).
@@ -212,7 +221,10 @@ reference and the JSON schemas live in [docs/CLI.md](docs/CLI.md).
 | **OpenCode** | stable | `~/.config/opencode/opencode.json` (or `.jsonc`) + `~/.local/share/opencode/auth.json` |
 | **Hermes** | experimental | `~/.hermes/config.yaml` + `~/.hermes/.env` |
 
-¹ read-only, used to show the current default provider/model; never written.
+¹ also holds the default provider/model, plus the harness-side switches that can
+hide a provider you just wrote (`enabledModels` in pi, `disabledProviders` /
+`disabled_providers` in Oh My Pi and OpenCode). Hakonfig reads them and, when it
+writes the provider, reconciles them so the new models actually appear.
 
 Adding another tool means one adapter file; the UI renders itself from backend data.
 See [Adding a new tool](#adding-a-new-tool).
@@ -438,7 +450,7 @@ sandbox).
 | Unit (`cli/src/output.rs`) | 8 | line diff trimming, removed/added budget split, preview rendering |
 | Unit (`cli/src/i18n.rs`) | 5 | language parsing, EN/ID message parity |
 | Unit (`src/commands.rs`) | 4 | streamed install command execution, failure detection |
-| Integration (`engine/tests.rs`) | 29 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key` |
+| Integration (`engine/tests.rs`) | 29 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key`, notice detection + auto-reconcile (`enabledModels`, disable lists, built-in id) |
 | Integration (`cli/tests/cli.rs`) | 31 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, `--sync` against a loopback stub, `doctor` report/fix, language switch, JSON output |
 | Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks, XSS escaping, output trimming |
 | Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholders, untranslated strings, no em dash |
@@ -476,7 +488,8 @@ hakonfig/
 │   │   │   └── src/
 │   │   │       ├── api.rs        # single entry point shared by UI and CLI
 │   │   │       └── engine/
-│   │   │           ├── model.rs          # shared types
+│   │   │           ├── model.rs          # shared types, including Notice
+│   │   │           ├── glob.rs           # enabledModels matching (* vs **)
 │   │   │           ├── paths.rs          # per-OS path resolution
 │   │   │           ├── doc.rs            # documents: parse / mutate / render / redact
 │   │   │           ├── backup.rs         # snapshot + restore + manifest + retention
@@ -493,7 +506,7 @@ hakonfig/
 │   ├── icons/
 │   └── tauri.conf.json
 ├── docs/UI-CONTRACT.md           # command and type contract between UI and Rust
-├── docs/CLI.md                   # CLI command reference + JSON schemas
+├── docs/CLI.md                   # CLI command reference, JSON schemas, doctor
 ├── docs/screenshots/             # README images
 ├── scripts/sync-logos.mjs        # regenerates logo-index.js
 ├── scripts/version.mjs           # single source of truth for the version number
