@@ -20,9 +20,75 @@ use hakonfig_core::engine::model::{HarnessInfo, KeyMode};
 mod add;
 mod draft;
 mod i18n;
+mod manage;
 mod output;
 
 use i18n::{t, Msg};
+
+#[derive(Subcommand)]
+enum SetWhat {
+    /// Replace the API key only.
+    Key {
+        /// harness id.
+        #[arg(long)]
+        harness: Option<String>,
+        /// Provider id.
+        #[arg(long)]
+        provider: Option<String>,
+        /// Read the key from stdin instead of the environment.
+        #[arg(long)]
+        key_stdin: bool,
+        /// New key value (prefer --key-stdin so it stays out of history).
+        #[arg(long, value_name = "KEY")]
+        key: Option<String>,
+        /// Keep the key in the environment instead of the config file.
+        #[arg(long)]
+        env: bool,
+    },
+    /// Replace the model list of a provider.
+    Models {
+        /// harness id.
+        #[arg(long)]
+        harness: Option<String>,
+        /// Provider id.
+        #[arg(long)]
+        provider: Option<String>,
+        /// Comma-separated model ids.
+        #[arg(long, value_name = "IDS")]
+        models: Option<String>,
+        /// Ask the endpoint for the model list (uses the saved key).
+        #[arg(long)]
+        sync: bool,
+    },
+    /// Make one model of a provider the harness default.
+    Default {
+        /// harness id.
+        #[arg(long)]
+        harness: Option<String>,
+        /// Provider id.
+        #[arg(long)]
+        provider: Option<String>,
+        /// Model id that becomes the default.
+        #[arg(long, value_name = "MODEL_ID")]
+        model: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum RemoveWhat {
+    /// Remove a provider from a harness config.
+    Provider {
+        /// harness id.
+        #[arg(long)]
+        harness: Option<String>,
+        /// Provider id.
+        #[arg(long)]
+        provider: Option<String>,
+        /// Skip the confirmation prompt.
+        #[arg(long, short = 'y')]
+        yes: bool,
+    },
+}
 
 #[derive(Parser)]
 #[command(
@@ -57,14 +123,52 @@ enum Command {
         /// harness id (e.g. pi, opencode). Optional when only one exists.
         harness: Option<String>,
     },
-    /// Search built-in provider presets.
+    /// Providers installed on this machine — the door to managing them.
+    ///
+    /// With a terminal it opens the provider, so a key, model list, default
+    /// model, endpoint, or the provider itself can be changed one at a time.
     Providers {
+        /// Limit to one harness.
+        #[arg(long)]
+        harness: Option<String>,
+        /// Open this provider straight away.
+        #[arg(long)]
+        provider: Option<String>,
+        /// Print the built-in catalog instead (moved to `catalog`).
+        #[arg(long, hide = true)]
+        catalog: bool,
+        /// Filter the catalog by id or name (implies --catalog).
+        #[arg(long, short)]
+        search: Option<String>,
+        /// Only catalog providers badged free or local (implies --catalog).
+        #[arg(long)]
+        free: bool,
+    },
+    /// Provider presets this build supports (the catalog).
+    #[command(visible_alias = "presets", visible_alias = "provider-list")]
+    Catalog {
         /// Filter by id or name.
         #[arg(long, short)]
         search: Option<String>,
         /// Only providers badged free or local.
         #[arg(long)]
         free: bool,
+    },
+    /// Default provider and model of each harness.
+    Default {
+        /// Limit to one harness.
+        #[arg(long)]
+        harness: Option<String>,
+    },
+    /// Change one thing on a provider that is already installed.
+    Set {
+        #[command(subcommand)]
+        what: SetWhat,
+    },
+    /// Remove a provider from a harness config.
+    Remove {
+        #[command(subcommand)]
+        what: RemoveWhat,
     },
     /// Config file paths used by a harness.
     Paths {
@@ -83,7 +187,7 @@ enum Command {
         #[arg(long)]
         online: bool,
     },
-    /// Add or change a provider. Runs as a wizard when called without flags.
+    /// Add a provider (wizard without flags). Opens its settings if it already exists.
     Add {
         /// harness id (e.g. pi, opencode).
         #[arg(long)]
@@ -123,6 +227,9 @@ enum Command {
         /// Only set the default model of the harness (no other change).
         #[arg(long, value_name = "MODEL_ID")]
         default_model: Option<String>,
+        /// Rewrite the whole provider even though it already exists.
+        #[arg(long)]
+        everything: bool,
         /// Test the endpoint even when non-interactive; a failure aborts.
         #[arg(long, conflicts_with = "no_test")]
         test: bool,
@@ -183,7 +290,69 @@ fn run(cli: &Cli) -> Result<()> {
     match &cli.command {
         Some(Command::List) => list(cli.json),
         Some(Command::Show { harness }) => show(harness.as_deref(), cli.json),
-        Some(Command::Providers { search, free }) => providers(search.as_deref(), *free, cli.json),
+        Some(Command::Providers {
+            harness,
+            provider,
+            catalog,
+            search,
+            free,
+        }) => {
+            // `--search`/`--free`/`--catalog` menjaga skrip lama tetap jalan.
+            if *catalog || search.is_some() || *free {
+                manage::run_catalog(search.clone(), *free, cli.json)
+            } else {
+                manage::run(manage::ManageOptions {
+                    harness: harness.clone(),
+                    provider: provider.clone(),
+                    json: cli.json,
+                })
+            }
+        }
+        Some(Command::Catalog { search, free }) => {
+            manage::run_catalog(search.clone(), *free, cli.json)
+        }
+        Some(Command::Default { harness }) => manage::run_default(harness.clone(), cli.json),
+        Some(Command::Set { what }) => match what {
+            SetWhat::Key {
+                harness,
+                provider,
+                key,
+                env,
+                ..
+            } => manage::run_set_key(
+                harness.clone(),
+                provider.clone(),
+                key.clone(),
+                if *env { KeyMode::Env } else { KeyMode::Inline },
+                cli.json,
+            ),
+            SetWhat::Models {
+                harness,
+                provider,
+                models,
+                sync,
+            } => manage::run_set_models(
+                harness.clone(),
+                provider.clone(),
+                models.clone(),
+                *sync,
+                cli.json,
+            ),
+            SetWhat::Default {
+                harness,
+                provider,
+                model,
+            } => {
+                manage::run_set_default(harness.clone(), provider.clone(), model.clone(), cli.json)
+            }
+        },
+        Some(Command::Remove { what }) => match what {
+            RemoveWhat::Provider {
+                harness,
+                provider,
+                yes,
+            } => manage::run_remove(harness.clone(), provider.clone(), cli.json, *yes),
+        },
         Some(Command::Paths { harness }) => paths(harness.as_deref(), cli.json),
         Some(Command::Doctor {
             harness,
@@ -203,6 +372,7 @@ fn run(cli: &Cli) -> Result<()> {
             key_only,
             models_only,
             default_model,
+            everything,
             test,
             no_test,
             dry_run,
@@ -228,6 +398,8 @@ fn run(cli: &Cli) -> Result<()> {
             key_only: *key_only,
             models_only: *models_only,
             default_model: default_model.clone(),
+            everything: *everything,
+            keep_key: false,
             dry_run: *dry_run,
             yes: *yes,
             test: if *test {
@@ -388,69 +560,6 @@ fn show(harness: Option<&str>, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn providers(search: Option<&str>, free_only: bool, json: bool) -> Result<()> {
-    let needle = search.unwrap_or_default().trim().to_lowercase();
-    let presets: Vec<_> = api::list_presets()
-        .into_iter()
-        .filter(|preset| {
-            if free_only && !matches!(preset.badge.as_deref(), Some("free") | Some("local")) {
-                return false;
-            }
-            if needle.is_empty() {
-                return true;
-            }
-            preset.id.to_lowercase().contains(&needle)
-                || preset.name.to_lowercase().contains(&needle)
-        })
-        .collect();
-
-    if json {
-        return output::print_json(&presets);
-    }
-
-    if presets.is_empty() {
-        bail!(
-            "{}",
-            i18n::fill(t(Msg::ProvidersNone), &[("needle", needle)])
-        );
-    }
-
-    let rows: Vec<Vec<String>> = presets
-        .iter()
-        .map(|preset| {
-            vec![
-                preset.id.clone(),
-                preset.name.clone(),
-                preset.models.len().to_string(),
-                preset.badge.clone().unwrap_or_default(),
-                preset.env_var.clone().unwrap_or_default(),
-            ]
-        })
-        .collect();
-
-    output::print_table(
-        &[
-            t(Msg::HeaderId),
-            t(Msg::HeaderName),
-            t(Msg::HeaderPresetModels),
-            t(Msg::HeaderBadge),
-            t(Msg::HeaderEnv),
-        ],
-        rows,
-    );
-    println!(
-        "\n{}",
-        i18n::fill(
-            t(Msg::ProvidersCount),
-            &[("count", presets.len().to_string())]
-        )
-    );
-    Ok(())
-}
-
-/// Periksa hal-hal yang membuat config yang sudah ditulis tetap tidak terlihat
-/// harness: scope model di pi (`enabledModels`), daftar disable di omp dan
-/// OpenCode, serta id provider yang bentrok dengan provider bawaan.
 fn doctor(harness: Option<&str>, fix: bool, online: bool, json: bool) -> Result<()> {
     let requested = match harness {
         Some(id) => Some(pick_harness_id(id)?),

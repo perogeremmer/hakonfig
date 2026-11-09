@@ -893,6 +893,147 @@ fn sync_models_only_reuses_the_stored_key() {
     );
 }
 
+// ------------------------------------------------- providers / catalog / set
+
+#[test]
+fn providers_lists_what_is_installed_not_the_catalog() {
+    let root = sandbox("providers-installed");
+    pi_provider_fixture(&root);
+
+    let output = run(&root, &["providers", "--harness", "pi", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    let rows = parsed.as_array().unwrap();
+    assert_eq!(rows.len(), 1, "hanya provider terpasang: {parsed}");
+    assert_eq!(rows[0]["id"], "deepseek");
+    assert_eq!(rows[0]["harness"], "pi");
+    assert_eq!(rows[0]["hasKey"], true);
+    assert_eq!(
+        rows[0]["models"].as_array().unwrap().len(),
+        2,
+        "model yang terpasang ikut tampil"
+    );
+}
+
+#[test]
+fn catalog_still_lists_the_built_in_presets() {
+    let root = sandbox("catalog-presets");
+    let output = run(&root, &["catalog", "--search", "deepseek", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    let rows = parsed.as_array().unwrap();
+    assert!(
+        rows.iter().any(|row| row["id"] == "deepseek"),
+        "katalog harus memuat preset deepseek: {parsed}"
+    );
+    // Alias lama tetap jalan untuk skrip.
+    let legacy = run(&root, &["providers", "--search", "deepseek", "--json"]);
+    assert!(legacy.status.success(), "{}", stderr(&legacy));
+}
+
+#[test]
+fn default_shows_and_sets_the_harness_default() {
+    let root = sandbox("default-cli");
+    pi_provider_fixture(&root);
+
+    let empty = run(&root, &["default", "--harness", "pi", "--json"]);
+    assert!(empty.status.success(), "{}", stderr(&empty));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&empty)).unwrap();
+    assert_eq!(parsed[0]["defaultProvider"], serde_json::Value::Null);
+
+    let set = run(
+        &root,
+        &[
+            "set",
+            "default",
+            "--harness",
+            "pi",
+            "--provider",
+            "deepseek",
+            "--model",
+            "b",
+            "--json",
+        ],
+    );
+    assert!(set.status.success(), "{}", stderr(&set));
+
+    let after = run(&root, &["default", "--harness", "pi", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&after)).unwrap();
+    assert_eq!(parsed[0]["defaultProvider"], "deepseek");
+    assert_eq!(parsed[0]["defaultModel"], "deepseek/b");
+    assert_eq!(
+        read_json(&auth_path(&root))["deepseek"]["key"],
+        "lama",
+        "set default tidak menyentuh key"
+    );
+}
+
+#[test]
+fn set_key_replaces_only_the_key() {
+    let root = sandbox("set-key-cli");
+    pi_provider_fixture(&root);
+
+    let output = run_stdin(
+        &root,
+        &[
+            "set",
+            "key",
+            "--harness",
+            "pi",
+            "--provider",
+            "deepseek",
+            "--json",
+        ],
+        "sk-set-key\n",
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    assert_eq!(parsed["action"], "set_key");
+    assert_eq!(
+        read_json(&auth_path(&root))["deepseek"]["key"],
+        "sk-set-key"
+    );
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["deepseek"]["models"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+}
+
+#[test]
+fn remove_provider_deletes_the_entry_and_its_key() {
+    let root = sandbox("remove-cli");
+    pi_provider_fixture(&root);
+
+    let output = run(
+        &root,
+        &[
+            "remove",
+            "provider",
+            "--harness",
+            "pi",
+            "--provider",
+            "deepseek",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    assert_eq!(parsed["action"], "remove");
+
+    let models = read_json(&models_path(&root));
+    assert!(models["providers"].get("deepseek").is_none(), "{models}");
+    let auth = read_json(&auth_path(&root));
+    assert!(
+        auth.get("deepseek").is_none(),
+        "entry key harus ikut hilang: {auth}"
+    );
+}
+
 // ------------------------------------------------------------------ doctor
 
 fn write_file(root: &Path, relative: &str, contents: &str) {

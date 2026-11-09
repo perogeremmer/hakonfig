@@ -99,69 +99,64 @@ one installed harness exists. `--json` prints a `HarnessSnapshot`:
 Key values are never included: only `hasKey` (boolean) and `keyDisplay`
 (masked) are exposed.
 
-### `providers`
+### `providers [--harness <id>] [--provider <id>]`
 
-Search the built-in preset catalog.
-
-| Flag | Effect |
-|---|---|
-| `--search`, `-s <TEXT>` | Filter by id or name. |
-| `--free` | Only providers badged `free` or `local`. |
-
-With `--json` it prints an array of presets:
-
-```json
-{
-  "id": "groq",
-  "name": "Groq",
-  "baseUrl": "https://api.groq.com/openai/v1",
-  "api": "openai-completions",
-  "envVar": "GROQ_API_KEY",
-  "docsUrl": null,
-  "keyRequired": true,
-  "badge": "free",
-  "notes": "",
-  "models": [{ "id": "llama-3.3-70b-versatile", "name": null, "contextWindow": 128000, "maxTokens": null, "reasoning": false }]
-}
-```
-
-Preset model lists are static snapshots. In a terminal, `add` offers to sync
-the live list from the endpoint (default yes); with `--sync` it always does,
-and with `--models` it never does.
-
-Provider yang **sudah terpasang** tidak harus ditulis ulang seluruhnya. Begitu
-provider bertanda ✓ dipilih, `add` menanyakan satu hal saja (tidak ada menu
-lain sebelumnya):
+**Provider yang terpasang**, bukan katalog. Tanpa argumen di terminal, ini pintu
+kelola (sama seperti layar provider di aplikasi desktop): pilih harness → pilih
+provider → menu detail.
 
 ```
-> This provider already exists. What do you want to do?
+gateway  ·  Gateway  ·  pi  ·  3 models  ·  key saved  ·  ★ gateway/live-b
+> What do you want to change?
   Change the API key only
   Choose models (key stays)
   Set the default model
-  Change everything (endpoint, name, models)
-  Cancel
+  Change endpoint and name
+  Remove this provider
+  Back
 ```
 
-`Cancel` benar-benar berhenti — tidak lanjut ke alur `add` dan tidak meminta
-API key.
+Non-interaktif (`--json` atau bukan TTY) mencetak tabel:
 
-*Choose models (key stays)* menawarkan **sync dari endpoint** dan memakai **API
-key yang sudah tersimpan** untuk provider itu, jadi daftar model bisa
-di-refresh tanpa mengetik key lagi. Untuk skrip:
+```
+HARNESS  ID       NAME     MODELS  KEY  DEFAULT
+pi       gateway  Gateway  3       yes  ★
+```
+
+### `catalog [--search <q>] [--free]` (alias `presets`, `provider-list`)
+
+Katalog preset yang didukung build ini: `ID NAME PRESET MODELS BADGE ENV`. Ini
+isi perintah `providers` sebelum 0.5.0; `providers --search`/`--free` masih
+diteruskan ke sini supaya skrip lama tidak patah.
+
+### `default [--harness <id>]`
+
+Default provider + model tiap harness, dibaca dari config harness itu:
+
+```
+HARNESS  DEFAULT PROVIDER  DEFAULT MODEL
+pi       deepseek           deepseek/deepseek-v4-pro
+```
+
+### `set <key|models|default>`
+
+Mengubah **satu hal** pada provider yang sudah terpasang:
 
 ```bash
-hakonfig-cli add --harness pi --provider deepseek --models-only --sync
+hakonfig-cli set key --harness pi --provider deepseek          # key dari stdin
+hakonfig-cli set models --harness pi --provider deepseek --sync
+hakonfig-cli set models --harness pi --provider deepseek --models a,b
+hakonfig-cli set default --harness pi --provider deepseek --model deepseek-v4-pro
 ```
 
-Di mode non-interaktif aturannya eksplisit:
+Default itu milik **harness**, jadi harness dipilih lebih dulu dan nilainya
+ditulis sebagai referensi `provider/model`. Interaktif tanpa `--provider` /
+`--model` menanyakan provider lalu model dari provider itu.
 
-| Yang diberikan | Yang dilakukan |
-|---|---|
-| hanya key (`--key-stdin`) | `set_key` — model, endpoint, nama tidak disentuh |
-| `--models`/`--sync` | `set_models` — key tidak disentuh |
-| `--default-model <id>` | `set_default` |
-| `--key-only` / `--models-only` | memaksa salah satu di atas walau flag lain ada |
-| `--name`/`--base-url`/`--api` | `upsert` penuh (hanya berlaku untuk provider custom; endpoint provider katalog selalu mengikuti preset) |
+### `remove provider [--harness <id>] [--provider <id>] [--yes]`
+
+Menghapus provider dari config harness, termasuk entry kredensialnya.
+Konfirmasi defaultnya "tidak", dan backup dibuat lebih dulu.
 
 ### `doctor [--harness <id>] [--fix] [--online]`
 
@@ -216,7 +211,18 @@ Config file paths used by a harness. `--json` prints an array of
 
 ### `add`
 
-Add or change a provider. Non-interactive contract:
+Menambah provider baru. Kalau provider itu sudah terpasang, `add` membuka
+detailnya lewat menu `providers` (bukan menu terpisah). Untuk skrip, flag sempit
+tetap berlaku dan hanya menyentuh satu hal:
+
+| Yang diberikan | Yang dilakukan |
+|---|---|
+| hanya key (`--key-stdin`) | `set_key` |
+| `--models` / `--sync` | `set_models` |
+| `--default-model <id>` | `set_default` |
+| `--everything` | tulis ulang penuh |
+
+Non-interactive contract:
 
 | Flag | Effect |
 |---|---|
@@ -228,9 +234,10 @@ Add or change a provider. Non-interactive contract:
 | `--key-stdin` | Read the API key from piped stdin, e.g. `printf '%s' "$KEY" \| hakonfig-cli add ...`. |
 | `--key-env` | Store an environment reference (`$PROVIDER_API_KEY`) instead of the inline key. |
 | `--models <ID1,ID2>` | Comma separated model ids. Default: every preset model. |
-| `--key-only` | Provider sudah ada: ganti API key saja, daftar model tidak disentuh. |
-| `--models-only` | Provider sudah ada: ganti daftar model saja, key tidak disentuh. |
-| `--default-model <ID>` | Provider sudah ada: jadikan model ini default harness, tanpa perubahan lain. |
+| `--key-only` | Provider sudah ada: ganti API key saja (alias `set key`). |
+| `--models-only` | Provider sudah ada: ganti daftar model saja (alias `set models`). |
+| `--default-model <ID>` | Provider sudah ada: jadikan model ini default harness (alias `set default`). |
+| `--everything` | Provider sudah ada: tulis ulang penuh (endpoint, nama, model). |
 | `--sync` | Ask the endpoint which models it has and use that list instead of the preset list. Needs the key itself (`--key-stdin`) unless the endpoint is keyless; a failure aborts. |
 | `--test` | Test the endpoint even when non-interactive; a failure aborts. |
 | `--no-test` | Skip the connection test. |

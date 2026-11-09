@@ -4,6 +4,43 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [0.5.0]
+
+Perintah CLI dipisah menurut pekerjaannya, mengikuti aplikasi desktop. Ini
+breaking untuk `providers` (lihat di bawah).
+
+### Added
+
+- `providers` sekarang menampilkan **provider yang terpasang**, dan di terminal
+  menjadi pintu kelola: pilih harness → provider → menu detail (ganti key,
+  pilih/sync model, jadikan default, ubah endpoint+nama, hapus).
+- `catalog` (alias `presets`, `provider-list`) untuk katalog preset yang
+  didukung build ini — isi `providers` sebelum 0.5.0.
+- `default` menampilkan default provider + model tiap harness.
+- `set key|models|default`, masing-masing menyentuh satu hal saja.
+  `set default` selalu memilih harness lebih dulu karena default milik harness.
+- `remove provider` untuk menghapus provider beserta entry kredensialnya
+  (konfirmasi + backup).
+- `add` membuka detail provider yang sudah terpasang alih-alih menawarkan menu
+  kedua, dan setelah provider baru tersimpan detailnya langsung dibuka.
+
+### Changed
+
+- `providers --search` / `--free` diteruskan ke `catalog` supaya skrip lama
+  tidak patah.
+- `add` pada provider terpasang tanpa flag sempit tetap kompatibel: hanya key →
+  `set_key`, `--models`/`--sync` → `set_models`, `--default-model` →
+  `set_default`, `--everything` → tulis ulang penuh.
+- `set key` menyimpan key di config secara default; pakai `--env` untuk
+  menyimpan referensi environment.
+
+### Fixed
+
+- Aksi "Change endpoint and name" tidak lagi meminta API key baru: kredensial
+  yang tersimpan dipakai untuk uji koneksi dan tidak ditulis ulang.
+- Provider custom yang sudah terpasang tidak lagi ditolak dengan "not in the
+  catalog" saat diubah dari pintu kelola.
+
 ## [0.4.8]
 
 *Choose models (key stays)* sekarang bisa sync daftar model dari endpoint

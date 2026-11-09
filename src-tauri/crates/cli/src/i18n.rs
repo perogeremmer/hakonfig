@@ -102,19 +102,11 @@ messages! {
     KeyPresent => ("yes", "ada"),
 
     // ---- providers
-    ProvidersNone => (
-        "No provider matched '{needle}'.",
-        "Tidak ada provider yang cocok dengan '{needle}'."
-    ),
-    ProvidersCount => ("{count} providers.", "{count} provider."),
     ProviderCountLabel => ("{count} providers", "{count} provider"),
     HeaderName => ("NAME", "NAMA"),
     HeaderVersion => ("VERSION", "VERSI"),
     HeaderProviders => ("PROVIDERS", "PROVIDER"),
     HeaderNote => ("NOTE", "CATATAN"),
-    HeaderPresetModels => ("PRESET MODELS", "MODEL PRESET"),
-    HeaderBadge => ("BADGE", "BADGE"),
-    HeaderEnv => ("ENV", "ENV"),
 
     // ---- error pemilihan harness
     HarnessUnsupported => (
@@ -142,24 +134,60 @@ messages! {
         "type to search · ✓ = already configured",
         "ketik untuk mencari · ✓ = sudah terpasang"
     ),
-    ProviderExists => (
-        "This provider already exists. What do you want to do?",
-        "Provider ini sudah terpasang. Mau diapakan?"
+    NoHarnessInstalled => (
+        "no harness with a config yet. Run `hakonfig-cli list` to see what is detected.",
+        "belum ada harness yang punya config. Jalankan `hakonfig-cli list` untuk lihat yang terdeteksi."
+    ),
+    HarnessNotInstalled => (
+        "'{harness}' is not installed on this machine.",
+        "'{harness}' belum terpasang di mesin ini."
+    ),
+    NoProviderInstalled => (
+        "no provider is installed for {harness} yet. Add one with `hakonfig-cli add`.",
+        "belum ada provider terpasang di {harness}. Tambahkan dengan `hakonfig-cli add`."
+    ),
+    PickInstalledProvider => ("Which provider?", "Provider mana?"),
+    ManageWhat => ("What do you want to change?", "Mau ubah apa?"),
+    ProviderHeader => (
+        "{provider}  ·  {name}  ·  {harness}  ·  {models} models  ·  key {key}  ·  {desc}",
+        "{provider}  ·  {name}  ·  {harness}  ·  {models} model  ·  key {key}  ·  {desc}"
+    ),
+    KeySavedLabel => ("saved", "tersimpan"),
+    KeyMissingLabel => ("missing", "belum ada"),
+    NoModelsYet => ("no models yet", "belum ada model"),
+    ProviderGone => (
+        "'{provider}' is no longer configured in {harness}.",
+        "'{provider}' sudah tidak terpasang di {harness}."
+    ),
+    ActionEndpoint => ("Change endpoint and name", "Ubah endpoint dan nama"),
+    EditName => ("Display name", "Nama tampilan"),
+    EditBaseUrl => ("Base URL", "Base URL"),
+    ActionRemove => ("Remove this provider", "Hapus provider ini"),
+    Back => ("Back", "Kembali"),
+    NeedHarnessFlag => (
+        "--harness <id> is required. Run `hakonfig-cli list` to see what is installed.",
+        "butuh --harness <id>. Jalankan `hakonfig-cli list` untuk lihat yang terpasang."
+    ),
+    ConfirmRemove => (
+        "Remove '{provider}' from the config?",
+        "Hapus '{provider}' dari config?"
+    ),
+    ConfirmRemoveHint => (
+        "a backup is written first; the key entry is removed too",
+        "backup dibuat lebih dulu; entry key ikut dihapus"
     ),
     ActionKey => ("Change the API key only", "Ganti API key saja"),
     ActionModels => ("Choose models (key stays)", "Pilih model (key tidak diubah)"),
     ActionDefault => ("Set the default model", "Jadikan model default"),
-    ActionAll => ("Change everything (endpoint, name, models)", "Ubah semuanya (endpoint, nama, model)"),
     KeyRequired => (
         "an API key is required for '{provider}'. Pipe it with --key-stdin, or run without flags in a terminal.",
         "butuh API key untuk '{provider}'. Kirim lewat --key-stdin, atau jalankan tanpa flag di terminal."
     ),
     PickDefaultModel => ("Which model becomes the default?", "Model mana yang jadi default?"),
     NoModelsToPick => (
-        "this provider has no model list yet; add models first",
-        "provider ini belum punya daftar model; tambahkan model dulu"
+        "'{provider}' has no model list yet; add models first",
+        "'{provider}' belum punya daftar model; tambahkan model dulu"
     ),
-    Cancel => ("Cancel", "Batal"),
     Cancelled => ("cancelled.", "dibatalkan."),
     NeedProviderFlag => (
         "--provider <id> is required. List presets with `hakonfig-cli providers`, \
