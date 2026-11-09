@@ -106,6 +106,22 @@ async function publish(dir, name) {
 }
 
 /**
+ * Pastikan package scoped bisa dibaca siapa saja. `npm publish --access public`
+ * tidak selalu cukup: package scoped bisa tersimpan sebagai restricted, dan
+ * gejalanya halus — publish sukses, tapi `GET /@scope/nama` menjawab 404 untuk
+ * pengunjung anonim sehingga `npm i -g hakonfig` tidak mendapat binary-nya.
+ * Best-effort: kegagalan tidak boleh menggagalkan rilis.
+ */
+function ensurePublic(name) {
+  try {
+    npm(["access", "set", "status=public", name]);
+    console.log(`publik: ${name}`);
+  } catch (error) {
+    console.log(`lewati set public ${name}: ${String(error.message).split("\n")[0]}`);
+  }
+}
+
+/**
  * Tandai artefak lama yang sudah tidak dipakai sebagai deprecated, supaya
  * yang menginstall versi itu dapat peringatan. Best-effort: kegagalan di sini
  * tidak boleh menggagalkan rilis.
@@ -140,6 +156,9 @@ function packageJson(name, extra) {
         directory: "npm",
       },
       homepage: `https://github.com/${REPO}`,
+      // Scoped package defaultnya restricted; tanpa ini
+      // `npm i -g hakonfig` di mesin orang lain tidak menemukan binary-nya.
+      publishConfig: { access: "public" },
       ...extra,
     },
     null,
@@ -213,6 +232,7 @@ if (dryRun) {
       continue;
     }
     await publish(dir, name);
+    ensurePublic(name);
     await sleep(SPACING_MS);
   }
 

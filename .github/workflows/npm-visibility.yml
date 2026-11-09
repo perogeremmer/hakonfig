@@ -1,0 +1,70 @@
+name: npm visibility
+
+# Utilitas manual: memastikan paket platform scoped
+# (`@perogeremmer/hakonfig-*`) benar-benar bisa diakses publik, lalu
+# memverifikasinya lewat registry *tanpa* autentikasi — persis seperti yang
+# dilakukan `npm i -g hakonfig` di mesin orang lain.
+#
+# Kenapa perlu: package scoped bisa tersimpan sebagai restricted walaupun
+# `npm publish --access public` melaporkan sukses. Gejalanya halus — publish
+# hijau, tapi `GET /@perogeremmer%2Fhakonfig-linux-x64` menjawab 404 untuk
+# pengunjung anonim, sehingga shim `hakonfig` gagal menemukan binary-nya.
+# Jalankan workflow ini setelah rilis kalau ada laporan "binary tidak
+# ditemukan" padahal publish sukses.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versi yang harus ada di registry (mis. 0.4.1)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  ensure-public:
+    name: "Scoped packages publik"
+    runs-on: ubuntu-22.04
+    env:
+      SCOPE: "@perogeremmer"
+      PLATFORMS: darwin linux-x64 win32-x64
+    steps:
+      - name: Tandai public
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NPM_TOKEN" ]; then
+            echo "::error::NPM_TOKEN belum di-set"
+            exit 1
+          fi
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > "$HOME/.npmrc"
+          for platform in $PLATFORMS; do
+            name="$SCOPE/hakonfig-$platform"
+            if npm access set status=public "$name"; then
+              echo "publik: $name"
+            else
+              echo "::warning::gagal menandai publik: $name"
+            fi
+          done
+
+      - name: Verifikasi sebagai pengunjung anonim
+        run: |
+          rm -f "$HOME/.npmrc"
+          failed=0
+          for platform in $PLATFORMS; do
+            name="$SCOPE/hakonfig-$platform"
+            url="https://registry.npmjs.org/$(printf '%s' "$name" | sed 's|/|%2F|')"
+            code=$(curl -s -o /tmp/pkg.json -w "%{http_code}" "$url")
+            if [ "$code" != "200" ]; then
+              echo "::error::$name tidak bisa diakses publik (HTTP $code)"
+              failed=1
+              continue
+            fi
+            if grep -q "\"${{ inputs.version }}\"" /tmp/pkg.json; then
+              echo "ok: $name@${{ inputs.version }} publik"
+            else
+              echo "::error::$name publik tapi versi ${{ inputs.version }} tidak ada"
+              failed=1
+            fi
+          done
+          exit $failed
