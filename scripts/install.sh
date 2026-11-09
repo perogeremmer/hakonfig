@@ -55,7 +55,9 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 echo "mengunduh $asset ..."
-curl -fsSL "$base/$asset" -o "$tmp/$BIN"
+# Simpan dengan nama aset, bukan nama biner: baris di SHA256SUMS memakai nama
+# aset, dan `sha256sum -c` membaca nama file dari baris itu.
+curl -fsSL "$base/$asset" -o "$tmp/$asset"
 curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS"
 
 # ------------------------------------------------------------------ verifikasi
@@ -70,7 +72,7 @@ echo "checksum ok"
 
 # ------------------------------------------------------------------ pasang
 mkdir -p "$dest"
-mv "$tmp/$BIN" "$dest/$BIN"
+mv "$tmp/$asset" "$dest/$BIN"
 chmod 0755 "$dest/$BIN"
 
 # ------------------------------------------------------------------ laporan
