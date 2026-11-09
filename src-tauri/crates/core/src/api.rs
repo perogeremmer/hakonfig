@@ -211,7 +211,7 @@ fn commit(
     mut warnings: Vec<String>,
     touched: &[ProviderRef<'_>],
 ) -> Result<ApplyResult> {
-    let notices = adapter.notices(docs, touched);
+    let mut notices = adapter.notices(docs, touched);
     for notice in &notices {
         if !warnings.contains(&notice.message) {
             warnings.push(notice.message.clone());
@@ -233,6 +233,29 @@ fn commit(
     for doc in &changed {
         write::atomic_write(&doc.path, &doc.render(), doc.sensitive)?;
         files_written.push(doc.path.display().to_string());
+    }
+
+    // Verifikasi kepemilikan sesudah tulis: `--home` bisa menulis ke home user
+    // lain dari uid yang salah (mis. root), dan gejalanya baru terlihat jauh
+    // kemudian sebagai "sudah di-add tapi agent tidak membaca apa pun".
+    // Hakonfig tidak pernah chown otomatis; yang dikirim adalah perintahnya.
+    #[cfg(unix)]
+    {
+        if let Some(home_uid) = targets::file_owner_uid(&paths::target_home()) {
+            let written: Vec<std::path::PathBuf> =
+                files_written.iter().map(std::path::PathBuf::from).collect();
+            for notice in targets::ownership_notices(
+                adapter.id(),
+                &written,
+                home_uid,
+                targets::file_owner_uid,
+            ) {
+                if !warnings.contains(&notice.message) {
+                    warnings.push(notice.message.clone());
+                }
+                notices.push(notice);
+            }
+        }
     }
 
     // Backup lama dipangkas otomatis; beri tahu kalau ada yang dibuang.

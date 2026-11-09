@@ -371,6 +371,22 @@ messages! {
 
     // ---- targets
     HeaderEnv => ("ENV", "ENV"),
+    AsUserUnknown => (
+        "no user '{user}' in /etc/passwd. Run `hakonfig-cli targets` to see which homes have a harness.",
+        "tidak ada user '{user}' di /etc/passwd. Jalankan `hakonfig-cli targets` untuk lihat home mana yang punya harness."
+    ),
+    AsUserSwitch => (
+        "switching to {user} (home {path}) via sudo",
+        "berpindah ke {user} (home {path}) lewat sudo"
+    ),
+    AsUserNeedsSudo => (
+        "this needs to run as '{user}', and sudo needs a password here. Run: {command}",
+        "ini harus dijalankan sebagai '{user}', dan sudo butuh password di sini. Jalankan: {command}"
+    ),
+    AsUserFailed => (
+        "could not switch to that user ({error}). Run: {command}",
+        "gagal berpindah ke user itu ({error}). Jalankan: {command}"
+    ),
     HeaderHarness => ("HARNESS", "HARNESS"),
     HeaderDefault => ("DEFAULT", "DEFAULT"),
     HeaderDefaultProvider => ("DEFAULT PROVIDER", "PROVIDER DEFAULT"),

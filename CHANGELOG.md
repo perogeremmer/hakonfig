@@ -6,6 +6,24 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.5.2]
+
+### Added
+
+- CLI: `--as-user <USER>` — menjalankan perintah yang sama sebagai pemilik home
+  harness, dengan `sudo -n -u <user> -H` (tanpa prompt, jadi skrip tidak
+  menggantung). Kalau sudo butuh password, perintah siap-tempel dicetak lengkap
+  dengan argumen yang dipakai. Ini jalan pintas dari resep `sudo -u` yang
+  sebelumnya harus ditulis sendiri, dan menjaga file tetap milik user agent.
+
+### Changed
+
+- Setelah menulis, Hakonfig membandingkan pemilik setiap file yang ditulis
+  dengan pemilik home target. Ketidakcocokan menjadi notice
+  `ownership_mismatch` berisi `chown` yang harus dijalankan — gejala khas
+  "sudah di-add tapi agent tidak membaca apa pun" sekarang muncul tepat saat
+  penulisan, bukan hanya di `doctor`.
+
 ## [0.5.1]
 
 ### Added

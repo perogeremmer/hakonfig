@@ -1847,3 +1847,76 @@ fn relative_home_is_made_absolute() {
         stderr(&output)
     );
 }
+
+// --------------------------------------------------------------- --as-user (P2)
+
+/// Username proses test ini (dari `id -un`), untuk menguji jalur "sudah user
+/// yang benar". None di lingkungan aneh yang tidak punya `id`.
+fn current_user() -> Option<String> {
+    let output = Command::new("id").arg("-un").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let name = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    if name.is_empty() {
+        None
+    } else {
+        Some(name)
+    }
+}
+
+#[test]
+fn as_user_on_the_current_user_behaves_like_home() {
+    let Some(user) = current_user() else {
+        return;
+    };
+    let mut command = Command::new(BIN);
+    command
+        .arg("--as-user")
+        .arg(&user)
+        .args(["list", "--json"])
+        .stdin(Stdio::null());
+    for (name, _) in std::env::vars() {
+        if name.ends_with("_API_KEY") {
+            command.env_remove(&name);
+        }
+    }
+    let output = command.output().expect("gagal menjalankan binary");
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        !stderr(&output).contains("switching"),
+        "sudah user yang benar, tidak perlu sudo:\n{}",
+        stderr(&output)
+    );
+    // Home yang dipakai harus home user itu menurut /etc/passwd.
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    assert_eq!(parsed[0]["user"], user, "{parsed}");
+}
+
+#[test]
+fn as_user_rejects_unknown_users_with_a_next_step() {
+    let root = sandbox("as-user-unknown");
+    let output = run(&root, &["--as-user", "openbot-nobody-here", "list"]);
+    assert!(!output.status.success(), "user tak dikenal harus gagal");
+    let text = stderr(&output);
+    assert!(text.contains("openbot-nobody-here"), "{text}");
+    assert!(
+        text.contains("targets"),
+        "pesan harus menunjuk langkah berikutnya:\n{text}"
+    );
+}
+
+#[test]
+fn as_user_cannot_be_combined_with_home() {
+    let root = sandbox("as-user-conflict");
+    let output = run(&root, &["--as-user", "root", "--home", "/tmp", "list"]);
+    assert!(
+        !output.status.success(),
+        "dua target sekaligus harus ditolak"
+    );
+    let text = stderr(&output);
+    assert!(
+        text.contains("cannot be used with"),
+        "clap harus menolak kombinasi ini:\n{text}"
+    );
+}

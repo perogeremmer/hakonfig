@@ -83,6 +83,16 @@ Rules of thumb:
     the home's owner (the classic "I added it but the agent sees nothing"
     symptom, usually a root write). Hakonfig never changes ownership on its
     own; the notice includes the `chown` to run.
+- `--as-user <user>` is the one-flag version of that `sudo -u` recipe: it
+  re-executes the same command with `sudo -n -u <user> -H` (no prompt, so
+  scripts never hang). Without passwordless sudo it prints the exact command to
+  run instead, including your arguments. `--as-user` conflicts with
+  `--home`/`--target` because it resolves the home from `/etc/passwd`.
+- After any write, Hakonfig compares each written file's owner with the owner
+  of the target home. A mismatch becomes an `ownership_mismatch` notice with
+  the `chown` to run: it is the classic "already added but the agent reads
+  nothing" symptom, and it must not be fixed silently.
+
 - Output says which environment it read: with `--home`/`--target`, `list`,
   `providers` and `default` gain an `ENV` column and the JSON gains `home`
   (plus `user` when `/etc/passwd` knows the owner). Without a target, output

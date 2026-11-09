@@ -135,6 +135,70 @@ pub fn list_targets() -> Vec<TargetInfo> {
         .collect()
 }
 
+/// uid user dari `/etc/passwd` (`uid` adalah field ketiga).
+pub fn passwd_uid(user: &str) -> Option<u32> {
+    uid_in(&passwd_entries_with_uid(), user)
+}
+
+/// Entri passwd lengkap dengan uid, untuk lookup user → (home, uid).
+pub fn passwd_user(user: &str) -> Option<(PathBuf, u32)> {
+    passwd_entries_with_uid()
+        .into_iter()
+        .find(|entry| entry.0 == user)
+        .map(|entry| (entry.1, entry.2))
+}
+
+fn uid_in(entries: &[(String, PathBuf, u32)], user: &str) -> Option<u32> {
+    entries
+        .iter()
+        .find(|entry| entry.0 == user)
+        .map(|entry| entry.2)
+}
+
+/// `/etc/passwd` sebagai `(user, home, uid)`. Dipisah dari [`parse_passwd`]
+/// karena sebagian besar pemanggil hanya butuh home.
+pub fn passwd_entries_with_uid() -> Vec<(String, PathBuf, u32)> {
+    let Ok(text) = std::fs::read_to_string("/etc/passwd") else {
+        return Vec::new();
+    };
+    parse_passwd_with_uid(&text)
+}
+
+pub fn parse_passwd_with_uid(text: &str) -> Vec<(String, PathBuf, u32)> {
+    text.lines()
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split(':').collect();
+            if fields.len() < 7 {
+                return None;
+            }
+            let home = PathBuf::from(fields[5]);
+            if !home.is_absolute() || home == Path::new("/") {
+                return None;
+            }
+            let uid = fields[2].parse::<u32>().ok()?;
+            Some((fields[0].to_string(), home, uid))
+        })
+        .collect()
+}
+
+/// uid proses ini. Dipakai `--as-user`: tidak perlu sudo kalau sudah user itu.
+#[cfg(unix)]
+pub fn current_uid() -> Option<u32> {
+    Some(nix_uid())
+}
+
+#[cfg(unix)]
+fn nix_uid() -> u32 {
+    // Tanpa dependency tambahan: `id -u` selalu ada di sistem unix.
+    std::process::Command::new("id")
+        .arg("-u")
+        .output()
+        .ok()
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .and_then(|text| text.trim().parse::<u32>().ok())
+        .unwrap_or(0)
+}
+
 /// Username pemilik `home` menurut `/etc/passwd`, bila ada.
 ///
 /// Dipakai supaya output menyebut "omp · openbot@/var/lib/openbot" dan bukan

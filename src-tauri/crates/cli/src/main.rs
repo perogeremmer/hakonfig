@@ -118,6 +118,19 @@ struct Cli {
     #[arg(long, global = true, value_name = "USER|DIR", conflicts_with = "home")]
     target: Option<String>,
 
+    /// Run as the owner of the harness home, switching user when needed.
+    ///
+    /// Re-executes the same command via `sudo -n -u <USER> -H`, so files are
+    /// written with the right owner and the harness sees them. Without
+    /// passwordless sudo the exact command is printed instead.
+    #[arg(
+        long,
+        global = true,
+        value_name = "USER",
+        conflicts_with_all = ["home", "target"]
+    )]
+    as_user: Option<String>,
+
     /// Print JSON, for scripts.
     #[arg(long, global = true)]
     json: bool,
@@ -335,6 +348,10 @@ fn main() -> ExitCode {
         }
     }
 
+    if let Some(user) = &cli.as_user {
+        return switch_user(user, &cli);
+    }
+
     match run(&cli) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) if error.downcast_ref::<add::Cancelled>().is_some() => {
@@ -347,6 +364,170 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// `--as-user <user>`: pastikan perintah berjalan sebagai pemilik home.
+///
+/// Menulis ke home user lain dari uid yang salah menghasilkan file milik uid
+/// itu: harness bisa kehilangan akses ke key-nya sendiri, dan gejalanya baru
+/// terlihat jauh kemudian. Jadi kalau bukan user tersebut, perintah ini
+/// menjalankan ulang dirinya lewat `sudo -n -u <user> -H` (tanpa prompt, supaya
+/// skrip tidak menggantung), dan kalau sudo butuh password ia mencetak perintah
+/// siap-tempel alih-alih gagal tanpa penjelasan.
+fn switch_user(user: &str, cli: &Cli) -> ExitCode {
+    let Some((home, uid)) = hakonfig_core::engine::targets::passwd_user(user.trim()) else {
+        eprintln!(
+            "hakonfig: {}",
+            i18n::fill(t(Msg::AsUserUnknown), &[("user", user.trim().to_string())])
+        );
+        return ExitCode::FAILURE;
+    };
+    std::env::set_var("HAKONFIG_HOME", &home);
+
+    let home_label = home.display().to_string();
+    if hakonfig_core::engine::targets::current_uid() == Some(uid) {
+        // Sudah user yang benar: perilakunya sama dengan --home.
+        eprintln!(
+            "{}",
+            i18n::fill(t(Msg::TargetHome), &[("path", home_label.clone())])
+        );
+        return finish(run(cli));
+    }
+
+    let command = manual_command(user.trim(), &home_label, cli);
+    if !sudo_without_password() {
+        eprintln!(
+            "{}",
+            i18n::fill(
+                t(Msg::AsUserNeedsSudo),
+                &[("user", user.trim().to_string()), ("command", command)]
+            )
+        );
+        return ExitCode::FAILURE;
+    }
+
+    eprintln!(
+        "{}",
+        i18n::fill(
+            t(Msg::AsUserSwitch),
+            &[
+                ("user", user.trim().to_string()),
+                ("path", home_label.clone())
+            ]
+        )
+    );
+    match reexec(user.trim(), cli) {
+        Ok(code) => code,
+        Err(error) => {
+            eprintln!(
+                "hakonfig: {}",
+                i18n::fill(
+                    t(Msg::AsUserFailed),
+                    &[("error", format!("{error:#}")), ("command", command)]
+                )
+            );
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Selesai dengan exit code yang sama seperti perintah biasa.
+fn finish(result: Result<()>) -> ExitCode {
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) if error.downcast_ref::<add::Cancelled>().is_some() => {
+            println!("{}", t(Msg::Cancelled));
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("hakonfig: {error:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Perintah siap-tempel untuk dijalankan sendiri oleh pengguna.
+///
+/// Argumen asli ikut disertakan (tanpa `--as-user`) supaya bisa langsung
+/// disalin: perintah yang menyuruh "jalankan ulang" tanpa menyebut apa yang
+/// dijalankan hanya menambah teka-teki.
+fn manual_command(user: &str, home: &str, cli: &Cli) -> String {
+    let binary = std::env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| "hakonfig-cli".to_string());
+    let args: Vec<String> = forwarded_args(cli)
+        .into_iter()
+        .map(|arg| arg.to_string_lossy().to_string())
+        .collect();
+    let suffix = if args.is_empty() {
+        String::new()
+    } else {
+        format!(" {}", args.join(" "))
+    };
+    format!("sudo -u {user} -H env PATH=\"{home}/.local/bin:$PATH\" {binary}{suffix}")
+}
+
+/// `sudo -n true` = bisa sudo tanpa password. Kalau tidak, jangan menyerah pada
+/// prompt: skrip dan server akan menggantung menunggu input.
+fn sudo_without_password() -> bool {
+    std::process::Command::new("sudo")
+        .arg("-n")
+        .arg("true")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+/// Jalankan ulang dirinya sebagai `user`, tanpa flag `--as-user` (kalau tidak,
+/// setiap anak akan mencoba berpindah lagi).
+fn reexec(user: &str, cli: &Cli) -> Result<ExitCode> {
+    let binary = std::env::current_exe()?;
+    let home = std::env::var("HAKONFIG_HOME").unwrap_or_default();
+    let mut command = std::process::Command::new("sudo");
+    command
+        .arg("-n")
+        .arg("-u")
+        .arg(user)
+        .arg("-H")
+        .arg("env")
+        .arg(format!(
+            "PATH={home}/.local/bin:{}",
+            std::env::var("PATH").unwrap_or_default()
+        ))
+        .arg(binary)
+        .args(forwarded_args(cli));
+
+    let status = command.status()?;
+    Ok(ExitCode::from(
+        status.code().unwrap_or(1).clamp(0, 255) as u8
+    ))
+}
+
+/// Argumen asli tanpa pasangan `--as-user <user>` (bentuk `--flag=nilai` juga).
+fn forwarded_args(cli: &Cli) -> Vec<std::ffi::OsString> {
+    let raw: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    let mut kept = Vec::with_capacity(raw.len());
+    let mut skip_next = false;
+    for arg in raw {
+        if skip_next {
+            skip_next = false;
+            continue;
+        }
+        let text = arg.to_string_lossy().to_string();
+        if text == "--as-user" {
+            skip_next = true;
+            continue;
+        }
+        if text.starts_with("--as-user=") {
+            continue;
+        }
+        kept.push(arg);
+    }
+    let _ = cli;
+    kept
 }
 
 /// `--home` harus absolut: relatif akan tampil relatif di seluruh output dan
