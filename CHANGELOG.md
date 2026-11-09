@@ -4,7 +4,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
-## [Unreleased]
+## [0.4.8]
+
+*Choose models (key stays)* sekarang bisa sync daftar model dari endpoint
+memakai API key yang sudah tersimpan — tanpa mengetik key lagi.
 
 ### Added
 
