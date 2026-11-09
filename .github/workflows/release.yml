@@ -86,6 +86,31 @@ jobs:
             librsvg2-dev \
             patchelf
 
+      # `dtolnay/rust-toolchain` mengunduh rustup-init sekali dan langsung gagal
+      # kalau unduhan itu kena 5xx. Pada v0.4.5 runner Windows kena 504 tiga
+      # kali berturut-turut dan seluruh rilis tertahan. Pasang rustup dulu
+      # dengan retry; action di bawah lalu memakai rustup yang sudah ada.
+      - name: Bootstrap rustup (retry)
+        if: matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          if command -v rustup >/dev/null 2>&1; then
+            echo "rustup sudah tersedia"
+            exit 0
+          fi
+          for attempt in 1 2 3 4 5 6; do
+            if curl --proto '=https' --tlsv1.2 --retry 10 --retry-connrefused \
+                 --retry-all-errors --max-time 300 -sSf \
+                 https://win.rustup.rs/x86_64 -o rustup-init.exe; then
+              ./rustup-init.exe -y --default-toolchain none --profile minimal
+              exit 0
+            fi
+            echo "unduh rustup-init gagal (percobaan $attempt); ulangi 15 detik"
+            sleep 15
+          done
+          echo "::error::gagal mengunduh rustup-init setelah 6 percobaan"
+          exit 1
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust-targets }}
