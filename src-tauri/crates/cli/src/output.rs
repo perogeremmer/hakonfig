@@ -32,11 +32,11 @@ pub fn print_json<T: serde::Serialize>(value: &T) -> Result<()> {
     Ok(())
 }
 
-pub fn print_table(headers: &[&str], rows: Vec<Vec<String>>) {
+pub fn print_table<S: AsRef<str> + std::fmt::Display>(headers: &[S], rows: Vec<Vec<String>>) {
     let columns = headers.len();
     let mut widths: Vec<usize> = headers
         .iter()
-        .map(|header| header.chars().count())
+        .map(|header| header.as_ref().chars().count())
         .collect();
     for row in &rows {
         for (index, cell) in row.iter().take(columns).enumerate() {

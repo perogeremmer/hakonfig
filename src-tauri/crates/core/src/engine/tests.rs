@@ -1571,6 +1571,76 @@ fn genuine_builtin_provider_is_not_flagged_as_a_collision() {
     );
 }
 
+// ------------------------------------------------- home user lain (ADE / VPS)
+
+#[test]
+fn environment_keys_of_the_runner_do_not_count_for_another_home() {
+    // Saat --home menunjuk home user lain, environment yang dibaca adalah
+    // environment *runner*: DEEPSEEK_API_KEY milik operator bukan kredensial
+    // agent tersebut. Tanpa penjagaan ini, `doctor --home /var/lib/openbot`
+    // melaporkan kredensial yang tidak pernah dimiliki agent itu.
+    let (_lock, root) = sandbox("ade-env-keys");
+    let target = root.join("agent-home");
+    std::fs::create_dir_all(target.join(".pi/agent")).unwrap();
+    write(&target.join(".pi/agent/models.json"), r#"{"providers":{}}"#);
+    std::env::set_var("HAKONFIG_HOME", &target);
+    std::env::set_var("DEEPSEEK_API_KEY", "sk-milik-operator");
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    std::env::remove_var("HAKONFIG_HOME");
+    std::env::remove_var("DEEPSEEK_API_KEY");
+
+    assert!(
+        !notices
+            .iter()
+            .any(|notice| notice.code == "catalog.credential-without-provider"),
+        "env runner tidak boleh dihitung untuk home lain: {notices:?}"
+    );
+}
+
+#[test]
+fn environment_keys_still_count_for_the_own_home() {
+    // Kebalikannya juga harus benar: untuk home sendiri, env tetap dibaca.
+    let (_lock, root) = sandbox("own-env-keys");
+    let dir = root.join("pi/agent");
+    write(&dir.join("models.json"), r#"{"providers":{}}"#);
+    std::env::set_var("DEEPSEEK_API_KEY", "sk-milik-operator");
+
+    let notices = api::list_notices(Some("pi".to_string())).unwrap();
+    std::env::remove_var("DEEPSEEK_API_KEY");
+
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "catalog.credential-without-provider")
+        .expect("home sendiri tetap membaca env: {notices:?}");
+    assert_eq!(notice.provider, "deepseek");
+}
+
+#[test]
+fn snapshot_and_harness_info_carry_the_target_home() {
+    let (_lock, root) = sandbox("ade-identity");
+    let target = root.join("agent-home");
+    std::fs::create_dir_all(target.join(".omp/agent")).unwrap();
+    write(
+        &target.join(".omp/agent/models.yml"),
+        "providers:\n  groq:\n    baseUrl: https://api.groq.com/openai/v1\n    api: openai-completions\n    models:\n      - id: m1\n",
+    );
+    std::env::set_var("HAKONFIG_HOME", &target);
+
+    let info = api::list_harnesses();
+    let snapshot = api::read_harness("omp".to_string()).unwrap();
+    std::env::remove_var("HAKONFIG_HOME");
+
+    let expected = target.display().to_string();
+    let omp = info.iter().find(|entry| entry.id == "omp").unwrap();
+    assert_eq!(omp.home.as_deref(), Some(expected.as_str()));
+    assert_eq!(snapshot.home.as_deref(), Some(expected.as_str()));
+
+    // Tanpa --home, field itu tidak boleh muncul sama sekali.
+    let plain = api::list_harnesses();
+    assert!(plain.iter().all(|entry| entry.home.is_none()));
+}
+
 // ------------------------------------------------------------------ katalog
 
 #[test]

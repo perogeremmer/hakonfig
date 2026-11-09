@@ -7,6 +7,7 @@ fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             commands::list_harnesses,
+            commands::list_targets,
             commands::list_presets,
             commands::read_harness,
             commands::preview_edit,

@@ -370,6 +370,12 @@ messages! {
     ),
 
     // ---- targets
+    HeaderEnv => ("ENV", "ENV"),
+    HeaderHarness => ("HARNESS", "HARNESS"),
+    HeaderDefault => ("DEFAULT", "DEFAULT"),
+    HeaderDefaultProvider => ("DEFAULT PROVIDER", "PROVIDER DEFAULT"),
+    HeaderDefaultModel => ("DEFAULT MODEL", "MODEL DEFAULT"),
+    EnvHomeOnly => ("home {home}", "home {home}"),
     HeaderUser => ("USER", "USER"),
     HeaderHome => ("HOME", "HOME"),
     HeaderHarnesses => ("HARNESS", "HARNESS"),

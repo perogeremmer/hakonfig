@@ -199,15 +199,24 @@ pub fn run_default(harness: Option<String>, json: bool) -> Result<()> {
         ));
     }
 
+    let target = target_identity();
+
     if json {
         let payload: Vec<serde_json::Value> = rows
             .iter()
             .map(|(harness, provider, model)| {
-                serde_json::json!({
+                let mut value = serde_json::json!({
                     "harness": harness,
                     "defaultProvider": provider,
                     "defaultModel": model,
-                })
+                });
+                if let Some((home, user)) = &target {
+                    value["home"] = serde_json::json!(home);
+                    if let Some(user) = user {
+                        value["user"] = serde_json::json!(user);
+                    }
+                }
+                value
             })
             .collect();
         output::print_json(&payload)?;
@@ -217,14 +226,26 @@ pub fn run_default(harness: Option<String>, json: bool) -> Result<()> {
     let table: Vec<Vec<String>> = rows
         .iter()
         .map(|(harness, provider, model)| {
-            vec![
+            let mut line = vec![
                 harness.clone(),
                 provider.clone().unwrap_or_else(|| "-".to_string()),
                 model.clone().unwrap_or_else(|| "-".to_string()),
-            ]
+            ];
+            if let Some((home, user)) = &target {
+                line.push(environment_label(home, user.as_deref()));
+            }
+            line
         })
         .collect();
-    output::print_table(&["HARNESS", "DEFAULT PROVIDER", "DEFAULT MODEL"], table);
+    let mut headers = vec![
+        i18n::t(Msg::HeaderHarness).to_string(),
+        i18n::t(Msg::HeaderDefaultProvider).to_string(),
+        i18n::t(Msg::HeaderDefaultModel).to_string(),
+    ];
+    if target.is_some() {
+        headers.push(i18n::t(Msg::HeaderEnv).to_string());
+    }
+    output::print_table(&headers, table);
     Ok(())
 }
 
@@ -488,9 +509,10 @@ fn collect(harnesses: &[String]) -> Result<Vec<Installed>> {
 }
 
 fn rows_json(rows: &[Installed]) -> Vec<serde_json::Value> {
+    let target = target_identity();
     rows.iter()
         .map(|row| {
-            serde_json::json!({
+            let mut value = serde_json::json!({
                 "harness": row.harness,
                 "id": row.provider.id,
                 "name": row.provider.name,
@@ -501,29 +523,65 @@ fn rows_json(rows: &[Installed]) -> Vec<serde_json::Value> {
                 "enabled": row.provider.enabled,
                 "isDefault": row.is_default,
                 "models": row.provider.models.iter().map(|model| model.id.clone()).collect::<Vec<_>>(),
-            })
+            });
+            // Home target hanya muncul saat memang menunjuk home lain, supaya
+            // skrip yang membaca output biasa tidak menerima field baru.
+            if let Some((home, user)) = &target {
+                value["home"] = serde_json::json!(home);
+                if let Some(user) = user {
+                    value["user"] = serde_json::json!(user);
+                }
+            }
+            value
         })
         .collect()
 }
 
+/// Identitas target sekali untuk seluruh tabel: `(home, user)`.
+fn target_identity() -> Option<(String, Option<String>)> {
+    let home = hakonfig_core::engine::paths::explicit_home()?;
+    let user = hakonfig_core::engine::targets::user_for_home(&home);
+    Some((home.display().to_string(), user))
+}
+
+fn environment_label(home: &str, user: Option<&str>) -> String {
+    match user {
+        Some(user) => format!("{user}@{home}"),
+        None => home.to_string(),
+    }
+}
+
 fn print_rows(rows: &[Installed]) {
+    let target = target_identity();
     let table: Vec<Vec<String>> = rows
         .iter()
         .map(|row| {
-            vec![
+            let mut line = vec![
                 row.harness.clone(),
                 row.provider.id.clone(),
                 row.provider.name.clone(),
                 row.provider.models.len().to_string(),
                 if row.provider.has_key { "yes" } else { "-" }.to_string(),
                 if row.is_default { "★" } else { "" }.to_string(),
-            ]
+            ];
+            if let Some((home, user)) = &target {
+                line.push(environment_label(home, user.as_deref()));
+            }
+            line
         })
         .collect();
-    output::print_table(
-        &["HARNESS", "ID", "NAME", "MODELS", "KEY", "DEFAULT"],
-        table,
-    );
+    let mut headers = vec![
+        i18n::t(Msg::HeaderHarness).to_string(),
+        "ID".to_string(),
+        "NAME".to_string(),
+        i18n::t(Msg::HeaderModels).to_string(),
+        i18n::t(Msg::HeaderKey).to_string(),
+        i18n::t(Msg::HeaderDefault).to_string(),
+    ];
+    if target.is_some() {
+        headers.push(i18n::t(Msg::HeaderEnv).to_string());
+    }
+    output::print_table(&headers, table);
 }
 
 fn provider_label(snapshot: &HarnessSnapshot, provider: &ProviderSummary) -> String {

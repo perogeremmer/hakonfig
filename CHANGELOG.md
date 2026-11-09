@@ -34,6 +34,25 @@ file oleh `scripts/version.mjs`.
   menyertakan `chown` yang harus dijalankan — Hakonfig tidak pernah chown
   otomatis).
 
+### Fixed
+
+- Kredensial dari environment (`*_API_KEY`) tidak lagi dihitung saat `--home`
+  menunjuk home user lain. Environment itu milik yang menjalankan perintah,
+  bukan milik agent: sebelumnya `doctor --home /var/lib/openbot` melaporkan
+  kredensial yang tidak pernah dimiliki agent tersebut.
+- `--home` relatif kini dibuat absolut (dan file ditolak dengan pesan jelas),
+  supaya path di output tidak berubah arti kalau cwd berpindah.
+
+### Changed
+
+- Output menyebut environment yang dibaca: `list`, `providers`, dan `default`
+  menambah kolom `ENV` saat target eksplisit, dan JSON-nya menambah `home`
+  (plus `user` bila dikenali dari `/etc/passwd`). Tanpa target, output tidak
+  berubah.
+- Aplikasi desktop menampilkan banner home lain: `list_targets` tersedia
+  sebagai Tauri command, dan beranda menyebut user/home/harness beserta
+  perintah `hakonfig-cli --target <user> providers`.
+
 ## [0.5.0]
 
 Perintah CLI dipisah menurut pekerjaannya, mengikuti aplikasi desktop. Ini

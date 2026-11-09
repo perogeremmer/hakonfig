@@ -323,6 +323,9 @@ export default {
   "install.uninstallShort": "Uninstall",
   "docs": "Docs",
 
+  "home.targets.title": "Another user on this machine has a harness installed",
+  "home.targets.item": "{where} runs {harnesses}",
+  "home.targets.hint": "This window can only change your own config. Manage theirs with: {command}",
   "error.loadHarnesses": "Can't read your tool configs.",
   "error.notDesktop": "Hakonfig has to run as a desktop app.",
   "error.notDesktopHint": "Open it from the installed application, not a browser tab.",

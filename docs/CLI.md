@@ -83,6 +83,14 @@ Rules of thumb:
     the home's owner (the classic "I added it but the agent sees nothing"
     symptom, usually a root write). Hakonfig never changes ownership on its
     own; the notice includes the `chown` to run.
+- Output says which environment it read: with `--home`/`--target`, `list`,
+  `providers` and `default` gain an `ENV` column and the JSON gains `home`
+  (plus `user` when `/etc/passwd` knows the owner). Without a target, output
+  is byte-for-byte what it was before.
+- **Your environment is not the agent's environment.** `*_API_KEY` variables
+  belong to whoever runs the command, so they are ignored when `--home`
+  points at another home; otherwise `doctor` would report credentials the
+  agent never had. Credentials stored in that home's config are still read.
 - If the agent runs its harness **inside a container**, none of the above
   applies: target it through `docker exec` / `kubectl exec` instead.
 
@@ -111,9 +119,13 @@ it prints an array of `HarnessInfo`:
   "notes": "",
   "providerCount": 2,
   "connectedCount": 1,
-  "readError": null
+  "readError": null,
+  "home": "/var/lib/openbot",
+  "user": "openbot"
 }
 ```
+
+`home`/`user` only appear when `--home` or `--target` is used.
 
 ### `show [HARNESS]`
 
@@ -204,6 +216,24 @@ ditulis sebagai referensi `provider/model`. Interaktif tanpa `--provider` /
 
 Menghapus provider dari config harness, termasuk entry kredensialnya.
 Konfirmasi defaultnya "tidak", dan backup dibuat lebih dulu.
+
+### `targets`
+
+Homes of other users (ADE / VPS) that have a harness installed. Read-only, and
+it never writes: the point is to find the home an agent actually uses.
+
+```
+USER     HOME                HARNESS
+openbot  /var/lib/openbot    omp
+```
+
+A home is reported when it is outside the usual `/home/<name>` pattern and has
+either a harness config or the binary in `<home>/.local/bin`. `--json` prints
+`[{ "user": "...", "home": "...", "harnesses": ["omp"] }]`.
+
+The desktop app shows the same list as a banner on its home screen, because it
+can only write to its own home: the banner names the `hakonfig-cli --target
+<user> providers` command instead of pretending to manage that config.
 
 ### `doctor [--harness <id>] [--fix] [--online]`
 

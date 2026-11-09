@@ -135,6 +135,27 @@ pub fn list_targets() -> Vec<TargetInfo> {
         .collect()
 }
 
+/// Username pemilik `home` menurut `/etc/passwd`, bila ada.
+///
+/// Dipakai supaya output menyebut "omp · openbot@/var/lib/openbot" dan bukan
+/// hanya path: nama user yang harus dipakai `sudo -u` adalah bagian dari
+/// jawaban, bukan detail tambahan.
+pub fn user_for_home(home: &Path) -> Option<String> {
+    passwd_entries()
+        .into_iter()
+        .find(|entry| entry.home == home)
+        .map(|entry| entry.user)
+}
+
+/// Sama seperti [`user_for_home`], tetapi menerima data passwd yang sudah
+/// dibaca (dipakai test tanpa menyentuh `/etc/passwd`).
+pub fn user_for_home_in(entries: &[PasswdEntry], home: &Path) -> Option<String> {
+    entries
+        .iter()
+        .find(|entry| entry.home == home)
+        .map(|entry| entry.user.clone())
+}
+
 /// `--target <user|dir>`: username dikenali dari `/etc/passwd` → home-nya;
 /// selain itu dianggap path direktori home.
 pub fn resolve_target(spec: &str) -> Option<PathBuf> {

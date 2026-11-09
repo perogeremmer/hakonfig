@@ -15,6 +15,9 @@ pub fn sandbox(name: &str) -> (std::sync::MutexGuard<'static, ()>, PathBuf) {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::env::set_var("HAKONFIG_ROOT", &dir);
+    // `--home` menyatakan niat berbeda; test yang memakainya wajib melepasnya
+    // sendiri, dan sandbox memastikan sisa test sebelumnya tidak terbawa.
+    std::env::remove_var("HAKONFIG_HOME");
     // `doctor` juga membaca kredensial dari environment (`*_API_KEY`), karena
     // harness me-refresh katalog provider yang punya key di env. Test harus
     // tidak bergantung pada environment mesin yang menjalankannya.

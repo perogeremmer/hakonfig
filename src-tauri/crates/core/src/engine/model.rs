@@ -27,6 +27,13 @@ pub struct HarnessInfo {
     pub connected_count: usize,
     /// Terisi bila config ada tetapi gagal dibaca (mis. JSON rusak).
     pub read_error: Option<String>,
+    /// Home yang dipakai, hanya saat target eksplisit (`--home`/`--target`).
+    /// Kosong = home milik proses ini, jadi output biasa tidak berubah.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
+    /// Pemilik home target dari `/etc/passwd`, bila dikenali.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
 }
 
 // ---------------------------------------------------------------- snapshot
@@ -71,6 +78,12 @@ pub struct HarnessSnapshot {
     pub default_provider: Option<String>,
     pub default_model: Option<String>,
     pub warnings: Vec<String>,
+    /// Home yang dibaca, hanya saat target eksplisit (lihat `HarnessInfo`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
+    /// Pemilik home target, bila dikenali.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
 }
 
 // ---------------------------------------------------------------- edit input

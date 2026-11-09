@@ -69,7 +69,7 @@ It only writes to the files your tools already read.
 - **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS, no frontend framework
 - **UI:** Plus Jakarta Sans bundled locally, light and dark themes, English + Bahasa Indonesia
 - **CLI:** `hakonfig-cli`, the same engine without a GUI, for servers and scripts
-- **Tests:** 214 offline tests (166 Rust + 48 JS), no network required
+- **Tests:** 233 offline tests (185 Rust + 48 JS), no network required
 - **License:** [MIT](LICENSE), free to use, modify, and redistribute
 
 ### Open source
@@ -192,6 +192,9 @@ hakonfig-cli show pi                        # current providers of one tool
 hakonfig-cli providers                      # providers installed here, per harness
 hakonfig-cli catalog --search groq          # provider presets this build supports
 hakonfig-cli default                        # default provider + model of each harness
+hakonfig-cli targets                        # other users' homes that have a harness (ADE/VPS)
+hakonfig-cli --home /var/lib/openbot providers   # manage an agent's own home
+hakonfig-cli --target openbot providers     # same, by username
 hakonfig-cli add --harness pi --provider groq --key-stdin
 hakonfig-cli set key --harness pi --provider groq           # rotate the key only
 hakonfig-cli set models --harness pi --provider groq --sync  # sync pakai key tersimpan
@@ -438,7 +441,7 @@ as repository secrets and pass them to `tauri-action`.
 ### Tests
 
 ```bash
-bun run test        # 166 Rust tests + 48 JS tests
+bun run test        # 185 Rust tests + 48 JS tests
 bun run test:rust   # cargo test --workspace
 bun run test:js     # node --test web/*.test.js
 ```
@@ -460,7 +463,7 @@ sandbox).
 | Unit (`cli/src/i18n.rs`) | 5 | language parsing, EN/ID message parity |
 | Unit (`src/commands.rs`) | 4 | streamed install command execution, failure detection |
 | Integration (`engine/tests.rs`) | 33 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key`, notice detection + auto-reconcile (`enabledModels`, disable lists, built-in id) |
-| Integration (`cli/tests/cli.rs`) | 44 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, `--sync` against a loopback stub, `doctor` report/fix, language switch, JSON output |
+| Integration (`cli/tests/cli.rs`) | 54 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, `--sync` against a loopback stub, `doctor` report/fix, language switch, JSON output |
 | Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks, XSS escaping, output trimming |
 | Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholders, untranslated strings, no em dash |
 | Unit (`web/provider-form.test.js`) | 12 | registered-provider detection, env variable naming |
@@ -625,7 +628,7 @@ Pull requests, issues, and new tool adapters are very welcome. To add a tool, se
 Before sending a PR:
 
 ```bash
-bun run test            # 166 Rust + 48 JS tests must pass
+bun run test            # 185 Rust + 48 JS tests must pass
 bun run version:check   # version consistent across files
 bun run css && bun run logos
 ```

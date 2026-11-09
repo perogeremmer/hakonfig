@@ -160,6 +160,8 @@ impl Adapter for HermesAdapter {
 
         Ok(HarnessSnapshot {
             harness: self.id().to_string(),
+            home: None,
+            user: None,
             files,
             providers,
             default_provider,

@@ -291,14 +291,25 @@ fn main() -> ExitCode {
         std::env::set_var("HAKONFIG_ROOT", root);
     }
     if let Some(home) = &cli.home {
-        let target = std::path::PathBuf::from(home.trim());
+        let target = match absolute_home(home) {
+            Ok(path) => path,
+            Err(error) => {
+                eprintln!("hakonfig: {error}");
+                return ExitCode::FAILURE;
+            }
+        };
         if !target.is_dir() {
             eprintln!(
                 "hakonfig: {}",
-                i18n::fill(t(Msg::HomeMissing), &[("path", home.trim().to_string())])
+                i18n::fill(
+                    t(Msg::HomeMissing),
+                    &[("path", target.display().to_string())]
+                )
             );
         }
-        std::env::set_var("HAKONFIG_HOME", home.trim());
+        // Path absolut: path relatif akan tampil relatif di seluruh output dan
+        // berubah artinya kalau cwd berpindah (mis. lewat `sudo -u ... -H`).
+        std::env::set_var("HAKONFIG_HOME", &target);
         // Selalu konfirmasi home mana yang dipakai: kesalahan ketik di sini
         // persis seperti jebakan --root — gagal senyap tanpa konfirmasi.
         eprintln!(
@@ -336,6 +347,27 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// `--home` harus absolut: relatif akan tampil relatif di seluruh output dan
+/// artinya berubah kalau cwd berpindah. Path yang ada di-canonicalize supaya
+/// symlink tidak menghasilkan dua nama untuk home yang sama.
+fn absolute_home(raw: &str) -> Result<std::path::PathBuf> {
+    let path = std::path::PathBuf::from(raw.trim());
+    if path.as_os_str().is_empty() {
+        bail!("--home needs a directory");
+    }
+    let absolut = if path.is_absolute() {
+        path
+    } else {
+        std::env::current_dir()
+            .map_err(|error| anyhow!("cannot resolve relative --home: {error}"))?
+            .join(path)
+    };
+    if absolut.is_file() {
+        bail!("--home {} is a file, not a directory", absolut.display());
+    }
+    Ok(absolut.canonicalize().unwrap_or(absolut))
 }
 
 fn run(cli: &Cli) -> Result<()> {
@@ -477,10 +509,13 @@ fn list(json: bool) -> Result<()> {
         return output::print_json(&harnesses);
     }
 
+    // Saat target eksplisit, tabel menyebut targetnya sekali di kolom sendiri:
+    // tanpa itu hasil home lain terlihat identik dengan home sendiri.
+    let target = harnesses.iter().find_map(|entry| entry.home.clone());
     let rows: Vec<Vec<String>> = harnesses
         .iter()
         .map(|entry| {
-            vec![
+            let mut row = vec![
                 if entry.installed { "✓" } else { "·" }.to_string(),
                 entry.id.clone(),
                 entry.name.clone(),
@@ -499,21 +534,26 @@ fn list(json: bool) -> Result<()> {
                     .as_ref()
                     .map(|_| t(Msg::ReadFailed).to_string())
                     .unwrap_or_default(),
-            ]
+            ];
+            if target.is_some() {
+                row.push(environment_label(entry));
+            }
+            row
         })
         .collect();
 
-    output::print_table(
-        &[
-            "",
-            t(Msg::HeaderId),
-            t(Msg::HeaderName),
-            t(Msg::HeaderVersion),
-            t(Msg::HeaderProviders),
-            t(Msg::HeaderNote),
-        ],
-        rows,
-    );
+    let mut headers = vec![
+        String::new(),
+        t(Msg::HeaderId).to_string(),
+        t(Msg::HeaderName).to_string(),
+        t(Msg::HeaderVersion).to_string(),
+        t(Msg::HeaderProviders).to_string(),
+        t(Msg::HeaderNote).to_string(),
+    ];
+    if target.is_some() {
+        headers.push(t(Msg::HeaderEnv).to_string());
+    }
+    output::print_table(&headers, rows);
 
     let installed = harnesses.iter().filter(|entry| entry.installed).count();
     println!(
@@ -530,6 +570,16 @@ fn list(json: bool) -> Result<()> {
         println!("{}", t(Msg::ListNoConfig));
     }
     Ok(())
+}
+
+/// Label target untuk kolom `ENV`: `openbot@/var/lib/openbot` bila user-nya
+/// dikenali, `home <path>` bila tidak.
+fn environment_label(entry: &hakonfig_core::engine::model::HarnessInfo) -> String {
+    let home = entry.home.clone().unwrap_or_default();
+    match entry.user.as_deref() {
+        Some(user) => format!("{user}@{home}"),
+        None => i18n::fill(t(Msg::EnvHomeOnly), &[("home", home)]),
+    }
 }
 
 fn show(harness: Option<&str>, json: bool) -> Result<()> {

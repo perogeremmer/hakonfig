@@ -1735,3 +1735,115 @@ fn installed_counts_binaries_in_local_bin() {
     assert_eq!(omp["installed"], true, "binary saja cukup: {omp}");
     assert_eq!(omp["providerCount"], 0, "belum ada config: {omp}");
 }
+
+#[test]
+fn home_output_says_which_environment_it_is() {
+    // Tanpa penanda ini, hasil home lain terlihat identik dengan home sendiri:
+    // pengguna tidak bisa tahu apakah yang dibaca home agent atau home-nya.
+    let target = sandbox("ade-env-column");
+    let omp = target.join(".omp/agent");
+    std::fs::create_dir_all(&omp).unwrap();
+    std::fs::write(omp_models_path_home(&target), OMP_YAML_WITH_GROQ).unwrap();
+
+    let table = run_home(&target, &["list"]);
+    assert!(table.status.success(), "{}", stderr(&table));
+    let text = stdout(&table);
+    assert!(text.contains("ENV"), "tabel harus punya kolom ENV:\n{text}");
+    assert!(
+        text.contains(&target.display().to_string()),
+        "kolom ENV harus menyebut home target:\n{text}"
+    );
+
+    // Output biasa (home proses sendiri lewat --root) tidak berubah.
+    let root = sandbox("ade-env-column-root");
+    let plain = run(&root, &["list"]);
+    assert!(plain.status.success(), "{}", stderr(&plain));
+    assert!(
+        !stdout(&plain).contains("ENV"),
+        "tanpa --home tidak ada kolom baru:\n{}",
+        stdout(&plain)
+    );
+
+    // JSON: field home/user hanya muncul saat menunjuk home lain.
+    let json = run_home(&target, &["list", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&json)).unwrap();
+    let omp = parsed
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["id"] == "omp")
+        .unwrap();
+    assert_eq!(omp["home"], target.display().to_string(), "{omp}");
+
+    let plain_json = run(&root, &["list", "--json"]);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&plain_json)).unwrap();
+    assert!(
+        parsed
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry.get("home").is_none()),
+        "tanpa --home tidak ada field home"
+    );
+}
+
+#[test]
+fn providers_and_default_say_which_environment_they_read() {
+    let target = sandbox("ade-providers-env");
+    let omp = target.join(".omp/agent");
+    std::fs::create_dir_all(&omp).unwrap();
+    std::fs::write(omp_models_path_home(&target), OMP_YAML_WITH_GROQ).unwrap();
+
+    let providers = run_home(&target, &["providers", "--json"]);
+    assert!(providers.status.success(), "{}", stderr(&providers));
+    let rows: serde_json::Value = serde_json::from_str(&stdout(&providers)).unwrap();
+    assert_eq!(rows[0]["home"], target.display().to_string(), "{rows}");
+
+    let default = run_home(&target, &["default", "--json"]);
+    assert!(default.status.success(), "{}", stderr(&default));
+    let rows: serde_json::Value = serde_json::from_str(&stdout(&default)).unwrap();
+    assert_eq!(rows[0]["home"], target.display().to_string(), "{rows}");
+
+    // Tabel juga: kolom ENV muncul di kedua perintah.
+    let table = run_home(&target, &["providers"]);
+    assert!(stdout(&table).contains("ENV"), "{}", stdout(&table));
+    let table = run_home(&target, &["default"]);
+    assert!(stdout(&table).contains("ENV"), "{}", stdout(&table));
+}
+
+#[test]
+fn relative_home_is_made_absolute() {
+    // Path relatif akan tampil relatif di seluruh output dan berubah artinya
+    // kalau cwd berpindah (mis. lewat `sudo -u ... -H`): tolak diam-diam.
+    let target = sandbox("ade-relative-home");
+    std::fs::create_dir_all(target.join(".omp/agent")).unwrap();
+    std::fs::write(omp_models_path_home(&target), OMP_YAML_WITH_GROQ).unwrap();
+    let parent = target.parent().unwrap().to_path_buf();
+    let name = target.file_name().unwrap().to_string_lossy().to_string();
+
+    let mut command = Command::new(BIN);
+    command
+        .current_dir(&parent)
+        .arg("--home")
+        .arg(&name)
+        .arg("providers")
+        .env_remove("DEEPSEEK_API_KEY");
+    let output = command.output().expect("gagal menjalankan binary");
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains(&target.display().to_string()),
+        "konfirmasi home harus absolut:\n{}",
+        stderr(&output)
+    );
+
+    // File, bukan direktori: ditolak dengan jelas.
+    let file = target.join("not-a-home");
+    std::fs::write(&file, "x").unwrap();
+    let output = run_home(&file, &["list"]);
+    assert!(!output.status.success(), "file harus ditolak");
+    assert!(
+        stderr(&output).contains("is a file, not a directory"),
+        "{}",
+        stderr(&output)
+    );
+}

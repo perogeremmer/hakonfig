@@ -352,19 +352,29 @@ impl PiAdapter {
         ]
     }
 
-    /// Provider yang punya kredensial: dari `auth.json` atau dari environment.
+    /// Provider yang punya kredensial: dari `auth.json`, atau dari environment
+    /// **bila yang dikelola adalah home proses ini sendiri**.
+    ///
+    /// Environment yang dibaca adalah environment *runner*, bukan environment
+    /// user target. Saat `--home` menunjuk home user lain (mis. agent ADE di
+    /// `/var/lib/openbot`), env runner tidak ada hubungannya dengan harness
+    /// itu: membaca `DEEPSEEK_API_KEY` milik operator akan melaporkan
+    /// kredensial yang tidak pernah dimiliki agent tersebut. Jadi inferensi
+    /// dari env hanya dilakukan untuk home sendiri.
     fn credentialed_providers(docs: &Docs) -> Vec<String> {
         let mut ids: Vec<String> = docs
             .get("auth")
             .and_then(|doc| doc.data().as_object())
             .map(|map| map.keys().cloned().collect())
             .unwrap_or_default();
-        for (id, variable) in Self::env_api_keys() {
-            let from_env = std::env::var(variable)
-                .map(|value| !value.trim().is_empty())
-                .unwrap_or(false);
-            if from_env && !ids.iter().any(|known| known == id) {
-                ids.push((*id).to_string());
+        if crate::engine::paths::explicit_home().is_none() {
+            for (id, variable) in Self::env_api_keys() {
+                let from_env = std::env::var(variable)
+                    .map(|value| !value.trim().is_empty())
+                    .unwrap_or(false);
+                if from_env && !ids.iter().any(|known| known == id) {
+                    ids.push((*id).to_string());
+                }
             }
         }
         ids.sort();
@@ -582,6 +592,8 @@ impl Adapter for PiAdapter {
 
         Ok(HarnessSnapshot {
             harness: self.id().to_string(),
+            home: None,
+            user: None,
             files,
             providers,
             default_provider,

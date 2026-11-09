@@ -140,6 +140,8 @@ pub trait Adapter {
             id: self.id().to_string(),
             name: self.name().to_string(),
             installed,
+            home: None,
+            user: None,
             experimental: self.experimental(),
             files,
             notes: self.notes().to_string(),

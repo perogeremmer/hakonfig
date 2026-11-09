@@ -307,6 +307,9 @@ export default {
   "install.uninstallShort": "Uninstall",
   "docs": "Docs",
 
+  "home.targets.title": "Ada user lain di mesin ini yang punya harness terpasang",
+  "home.targets.item": "{where} memakai {harnesses}",
+  "home.targets.hint": "Jendela ini hanya bisa mengubah config milikmu. Kelola punya mereka dengan: {command}",
   "error.loadHarnesses": "Tidak bisa membaca config tool kamu.",
   "error.notDesktop": "Hakonfig harus dijalankan sebagai aplikasi desktop.",
   "error.notDesktopHint": "Buka dari aplikasi yang sudah dipasang, bukan dari tab browser.",

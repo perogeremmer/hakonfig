@@ -306,6 +306,8 @@ impl Adapter for OpenCodeAdapter {
 
         Ok(HarnessSnapshot {
             harness: self.id().to_string(),
+            home: None,
+            user: None,
             providers,
             files,
             default_provider,

@@ -19,7 +19,8 @@ use crate::engine::model::{
     ApplyResult, BackupInfo, CatalogTarget, EditOp, FileDiff, HarnessInfo, HarnessSnapshot, Notice,
     PreviewResult, ProviderPreset, TestResult,
 };
-use crate::engine::targets::{self, TargetInfo};
+use crate::engine::targets;
+pub use crate::engine::targets::TargetInfo;
 use crate::engine::{paths, preset, version, write};
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -40,11 +41,28 @@ fn harness(id: &str) -> Result<Box<dyn Adapter>> {
 
 // ---------------------------------------------------------------- discovery
 
+/// Identitas target: hanya terisi saat `--home`/`--target` dipakai.
+///
+/// Output biasa (home proses sendiri) sengaja tetap polos supaya skrip lama
+/// dan GUI tidak menerima field baru yang tidak mereka minta.
+fn target_identity() -> Option<(String, Option<String>)> {
+    let home = paths::explicit_home()?;
+    let user = targets::user_for_home(&home);
+    Some((home.display().to_string(), user))
+}
+
 pub fn list_harnesses() -> Vec<HarnessInfo> {
-    adapters::all()
+    let mut list: Vec<HarnessInfo> = adapters::all()
         .iter()
         .map(|adapter| adapter.info())
-        .collect()
+        .collect();
+    if let Some((home, user)) = target_identity() {
+        for info in &mut list {
+            info.home = Some(home.clone());
+            info.user = user.clone();
+        }
+    }
+    list
 }
 
 /// Home agent lain (ADE / VPS) yang harness-nya terdeteksi, untuk perintah
@@ -74,7 +92,12 @@ pub fn read_harness(harness_id: String) -> Result<HarnessSnapshot, String> {
     (|| -> Result<HarnessSnapshot> {
         let adapter = harness(&harness_id)?;
         let docs = Docs::load(&adapter.specs())?;
-        adapter.snapshot(&docs)
+        let mut snapshot = adapter.snapshot(&docs)?;
+        if let Some((home, user)) = target_identity() {
+            snapshot.home = Some(home);
+            snapshot.user = user;
+        }
+        Ok(snapshot)
     })()
     .map_err(err)
 }

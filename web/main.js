@@ -134,6 +134,7 @@ function pluralModels(count) {
 
 const api = {
   harnesses: () => invoke("list_harnesses"),
+  targets: () => invoke("list_targets"),
   presets: () => invoke("list_presets"),
   read: (harnessId) => invoke("read_harness", { harnessId }),
   preview: (harnessId, op) => invoke("preview_edit", { harnessId, op }),
@@ -188,6 +189,7 @@ const state = {
   harnesses: [],
   catalog: [],
   presets: [],
+  targets: [], // home user lain (ADE/VPS) yang punya harness terpasang
   versions: {},
   snapshot: null,
   form: null,
@@ -718,6 +720,7 @@ function renderHome() {
         <h1 class="text-[26px] font-extrabold leading-tight tracking-tight text-ink">${esc(t("home.title"))}</h1>
         <p class="mt-1 text-[14px] text-ink-secondary">${esc(t("home.subtitle"))}</p>
       </div>
+      ${targetsBanner()}
       ${section(
         t("home.installed"),
         t("home.installedHint"),
@@ -736,6 +739,35 @@ function renderHome() {
     </div>`;
 
   wiringHome(container);
+}
+
+/**
+ * Home user lain (ADE/VPS) yang punya harness terpasang.
+ *
+ * Aplikasi desktop hanya bisa mengelola home milik user yang menjalankannya,
+ * jadi banner ini menyebutkan keberadaannya beserta perintah CLI yang tepat.
+ * Tanpa ini, harness milik agent tampak "hilang" padahal hanya ada di home
+ * lain.
+ */
+function targetsBanner() {
+  if (!state.targets.length) return "";
+  const rows = state.targets
+    .map((target) => {
+      const where = `${target.user} (${target.home})`;
+      return `<li class="mt-1 text-[13px] text-ink-secondary">${esc(
+        t("home.targets.item", {
+          where,
+          harnesses: target.harnesses.join(", "),
+        }),
+      )}</li>`;
+    })
+    .join("");
+  const command = `hakonfig-cli --target ${state.targets[0].user} providers`;
+  return `<div class="mb-7 rounded-[14px] border border-line bg-surface-muted px-4 py-3">
+    <p class="text-[13px] font-semibold text-ink">${esc(t("home.targets.title"))}</p>
+    <ul class="mt-1 list-none">${rows}</ul>
+    <p class="mt-2 text-[12px] text-ink-muted">${esc(t("home.targets.hint", { command }))}</p>
+  </div>`;
 }
 
 function wiringHome(container) {
@@ -3041,6 +3073,12 @@ async function init() {
     state.catalog = await api.catalog();
   } catch {
     state.catalog = [];
+  }
+
+  try {
+    state.targets = await api.targets();
+  } catch {
+    state.targets = [];
   }
 
   await loadHarnesses();

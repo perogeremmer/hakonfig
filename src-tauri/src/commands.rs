@@ -29,6 +29,16 @@ pub fn list_harnesses() -> Vec<HarnessInfo> {
     core_api::list_harnesses()
 }
 
+/// Home user lain (ADE / VPS) yang punya harness terpasang.
+///
+/// GUI tidak mengelola home itu (file milik user lain), tetapi harus
+/// menyebutkannya: kalau tidak, pengguna mengira harness-nya hilang padahal
+/// hanya berada di home agent.
+#[tauri::command]
+pub fn list_targets() -> Vec<core_api::TargetInfo> {
+    core_api::list_targets()
+}
+
 #[tauri::command]
 pub fn list_presets() -> Vec<ProviderPreset> {
     core_api::list_presets()
