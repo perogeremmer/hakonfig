@@ -4,7 +4,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
-## [Unreleased]
+## [0.4.4]
+
+`doctor` kini juga melihat hal di luar file config (kredensial yang memicu
+refresh katalog, cache katalog kosong, dan dengan `--online` kegagalan
+permintaan katalog), dan pi menjaga `enabledModels` tetap masuk akal saat
+provider dinonaktifkan, diaktifkan lagi, atau modelnya berubah.
 
 ### Added
 
