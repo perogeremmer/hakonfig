@@ -138,58 +138,158 @@ impl PiAdapter {
         notices
     }
 
-    fn widen_scope(docs: &mut Docs, provider: &str) -> Result<Option<String>> {
-        let settings = docs.require_mut("settings")?;
-        let object = settings.root_object();
-        let wide = glob::provider_wide_pattern(provider);
-        let narrow = glob::provider_narrow_pattern(provider);
+    /// Provider aktif di `models.json` beserta id modelnya.
+    ///
+    /// Dibaca dari dokumen yang sudah dimutasi, jadi hasilnya keadaan *sesudah*
+    /// edit: provider yang dinonaktifkan (diparkir) tidak termasuk.
+    fn active_models(docs: &Docs) -> std::collections::BTreeMap<String, Vec<String>> {
+        let mut catalog: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        let Some(models) = docs.get("models") else {
+            return catalog;
+        };
+        let Some(providers) = models.data().get("providers").and_then(Value::as_object) else {
+            return catalog;
+        };
+        for (id, entry) in providers {
+            let ids = entry
+                .get("models")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|model| get_str(model, "id"))
+                        .map(|value| value.trim().to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            catalog.insert(id.clone(), ids);
+        }
+        catalog
+    }
 
-        // Scope hanya diurus kalau pengguna memang punya. Key yang tidak ada
-        // berarti "semua model terlihat"; menambahkannya justru mempersempit.
-        let Some(existing) = object.get("enabledModels").and_then(Value::as_array) else {
+    /// Buang sufiks thinking (`:high`, `:max`, …) dari satu referensi model.
+    fn strip_thinking(reference: &str) -> &str {
+        const LEVELS: [&str; 7] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
+        match reference.rsplit_once(':') {
+            Some((head, suffix)) if LEVELS.contains(&suffix.to_lowercase().as_str()) => head,
+            _ => reference,
+        }
+    }
+
+    /// Apakah pola `enabledModels` masih menunjuk sesuatu yang ada.
+    fn pattern_is_live(
+        pattern: &str,
+        catalog: &std::collections::BTreeMap<String, Vec<String>>,
+    ) -> bool {
+        let pattern = pattern.trim();
+        if pattern.is_empty() {
+            return false;
+        }
+        // Tanpa garis miring: pola global (`*`) atau pola id model lintas
+        // provider (`*sonnet*`). Tidak bisa dinilai, jadi dipertahankan.
+        let Some((provider, reference)) = pattern.split_once('/') else {
+            return true;
+        };
+        if provider.contains('*') || provider.contains('?') || provider.contains('[') {
+            return true;
+        }
+        let Some(models) = catalog.get(provider) else {
+            // Provider sudah tidak ada (dihapus atau dinonaktifkan).
+            return false;
+        };
+        if reference.contains('*') || reference.contains('?') || reference.contains('[') {
+            return true;
+        }
+        let model = Self::strip_thinking(reference);
+        models.iter().any(|id| id == model)
+    }
+
+    /// Selaraskan `enabledModels` dengan isi `models.json` sesudah mutasi.
+    ///
+    /// pi tidak punya saklar "nonaktifkan provider": provider yang dimatikan
+    /// berarti entry-nya tidak ada. Kalau scope masih menyebut provider itu, pi
+    /// menyimpan pola yang tidak cocok dengan apa pun (muncul sebagai peringatan
+    /// di pemilih model) dan pengguna harus memilih ulang lalu `Ctrl+S`.
+    /// Karena Hakonfig yang mengubah config, Hakonfig juga yang menjaga scope-nya
+    /// masuk akal:
+    ///
+    /// * pola yang menunjuk provider/model yang tidak ada lagi dibuang;
+    /// * provider yang baru ditulis atau baru diaktifkan dijamin tercakup
+    ///   (`<id>/**`), menggantikan pola sempit `<id>/*`;
+    /// * scope tidak pernah dikarang kalau belum ada, dan scope yang jadi kosong
+    ///   dihapus supaya pi kembali menampilkan semua model.
+    fn reconcile_scope(
+        docs: &mut Docs,
+        touched: &str,
+        cover_touched: bool,
+    ) -> Result<Option<String>> {
+        // File settings yang belum ada tidak dibuat hanya untuk urusan scope.
+        let Some(exists) = docs.get("settings").map(|doc| doc.exists) else {
             return Ok(None);
         };
-        if existing.is_empty() {
+        if !exists {
             return Ok(None);
         }
 
+        let catalog = Self::active_models(docs);
+        let settings = docs.require_mut("settings")?;
+        let object = settings.root_object();
+        let Some(existing) = object.get("enabledModels").and_then(Value::as_array) else {
+            return Ok(None);
+        };
         let mut patterns: Vec<String> = existing
             .iter()
             .filter_map(Value::as_str)
             .map(str::to_string)
             .collect();
-
-        let removed_narrow = patterns
-            .iter()
-            .filter(|pattern| pattern.eq_ignore_ascii_case(&narrow))
-            .count();
-        patterns.retain(|pattern| !pattern.eq_ignore_ascii_case(&narrow));
-
-        let reference = format!("{}/contoh", provider);
-        let already_covers = glob::covers(&patterns, &reference);
-        if !already_covers {
-            patterns.push(wide.clone());
-        }
-
-        if removed_narrow == 0 && already_covers {
+        if patterns.is_empty() {
             return Ok(None);
         }
 
-        object.insert(
-            "enabledModels".to_string(),
-            Value::Array(patterns.into_iter().map(Value::String).collect()),
-        );
+        let original = patterns.clone();
+        patterns.retain(|pattern| Self::pattern_is_live(pattern, &catalog));
 
-        let mut summary = String::new();
-        if removed_narrow > 0 {
-            summary.push_str(&format!("removed '{narrow}'; "));
+        let mut changes: Vec<String> = original
+            .iter()
+            .filter(|pattern| !patterns.contains(pattern))
+            .map(|pattern| format!("dropped '{pattern}'"))
+            .collect();
+
+        if cover_touched && catalog.contains_key(touched) {
+            let wide = glob::provider_wide_pattern(touched);
+            let narrow = glob::provider_narrow_pattern(touched);
+            let reference = format!("{touched}/contoh");
+
+            let had_narrow = patterns.iter().any(|p| p.eq_ignore_ascii_case(&narrow));
+            patterns.retain(|p| !p.eq_ignore_ascii_case(&narrow));
+            if had_narrow {
+                changes.push(format!("replaced '{narrow}'"));
+            }
+            if !glob::covers(&patterns, &reference) {
+                patterns.push(wide.clone());
+                changes.push(format!("added '{wide}'"));
+            }
         }
-        if !already_covers {
-            summary.push_str(&format!("added '{wide}'"));
+
+        if changes.is_empty() {
+            return Ok(None);
         }
+
+        if patterns.is_empty() {
+            // Scope kosong = "semua model"; key-nya dibuang supaya pi tidak
+            // menyimpan daftar yang tidak berarti.
+            object.remove("enabledModels");
+            changes.push("removed empty enabledModels".to_string());
+        } else {
+            object.insert(
+                "enabledModels".to_string(),
+                Value::Array(patterns.into_iter().map(Value::String).collect()),
+            );
+        }
+
         Ok(Some(format!(
-            "settings.json enabledModels updated so pi shows the new models: {}",
-            summary.trim_end_matches("; ").trim()
+            "settings.json enabledModels: {}",
+            changes.join(", ")
         )))
     }
 
@@ -524,7 +624,7 @@ impl Adapter for PiAdapter {
                 // model), scope itu yang menentukan apa yang terlihat — model
                 // yang baru ditulis bisa tidak muncul sama sekali. Karena kita
                 // yang baru menulis modelnya, kita juga yang melebarkan scope-nya.
-                if let Some(summary) = Self::widen_scope(docs, draft.id.trim())? {
+                if let Some(summary) = Self::reconcile_scope(docs, draft.id.trim(), true)? {
                     warnings.push(summary);
                 }
 
@@ -551,7 +651,13 @@ impl Adapter for PiAdapter {
                     };
                     models.object_at("providers").insert(target.clone(), value);
                     models.drop_parked(&target);
-                    Ok(vec![format!("Provider '{}' re-enabled.", target)])
+                    // Scope perlu mencakup provider yang baru hidup lagi, kalau
+                    // tidak modelnya kembali ada tapi tetap tersembunyi.
+                    let mut warnings = vec![format!("Provider '{}' re-enabled.", target)];
+                    if let Some(summary) = Self::reconcile_scope(docs, &target, true)? {
+                        warnings.push(summary);
+                    }
+                    Ok(warnings)
                 } else {
                     let Some(entry) = existing else {
                         if models.parked_value(&target).is_some() {
@@ -568,10 +674,16 @@ impl Adapter for PiAdapter {
                     if removed {
                         models.park(&target, &entry);
                     }
-                    Ok(vec![format!(
+                    let mut warnings = vec![format!(
                         "Provider '{}' disabled (commented out in models.json).",
                         target
-                    )])
+                    )];
+                    // Provider yang dinonaktifkan tidak punya model yang bisa
+                    // dicocokkan, jadi polanya di scope ikut dibuang.
+                    if let Some(summary) = Self::reconcile_scope(docs, &target, false)? {
+                        warnings.push(summary);
+                    }
+                    Ok(warnings)
                 }
             }
             EditOp::SetDefault {
@@ -664,6 +776,9 @@ impl Adapter for PiAdapter {
                 if !removed {
                     warnings.push(format!("Provider '{}' not found in models.json.", target));
                 }
+                if let Some(summary) = Self::reconcile_scope(docs, &target, false)? {
+                    warnings.push(summary);
+                }
                 Ok(warnings)
             }
         }
@@ -708,7 +823,7 @@ impl Adapter for PiAdapter {
 
     fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
         match notice.code.as_str() {
-            "pi.scope" => Self::widen_scope(docs, &notice.provider),
+            "pi.scope" => Self::reconcile_scope(docs, &notice.provider, true),
             other => anyhow::bail!("pi has no automatic fix for '{other}'"),
         }
     }

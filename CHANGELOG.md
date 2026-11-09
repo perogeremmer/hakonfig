@@ -8,6 +8,19 @@ file oleh `scripts/version.mjs`.
 
 ### Added
 
+- pi: `enabledModels` sekarang diselaraskan setiap kali config berubah, bukan
+  hanya saat menulis provider:
+  - provider dinonaktifkan atau dihapus → polanya dibuang dari scope (pi tidak
+    punya saklar disable, jadi pola itu hanya menyisakan peringatan "no models
+    match" di pemilih model);
+  - provider diaktifkan lagi → dijamin tercakup `<id>/**`, jadi modelnya
+    langsung terlihat tanpa memilih ulang dan Ctrl+S;
+  - model yang dihapus dari provider → id eksplisitnya (termasuk yang memakai
+    sufiks thinking seperti `gateway/a:high`) dibuang;
+  - scope yang jadi kosong dihapus, supaya pi kembali menampilkan semua model.
+
+### Added
+
 - `doctor` juga melaporkan hal di luar file config yang membuat model tidak
   tampil: `catalog.credential-without-provider` (pi punya kredensial untuk
   provider yang tidak ada di `models.json`, jadi pi me-refresh katalognya

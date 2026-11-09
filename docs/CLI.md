@@ -132,8 +132,9 @@ and with `--models` it never does.
 ### `doctor [--harness <id>] [--fix] [--online]`
 
 `add` already reconciles the obvious cases while it writes — it widens a saved
-pi scope and lifts a disable flag for the provider it just wrote — so the new
-models show up without extra steps. `doctor` is the safety net for state that
+pi scope, lifts a disable flag for the provider it just wrote, and (for pi)
+keeps `enabledModels` free of entries that no longer point at anything — so the
+new models show up without extra steps. `doctor` is the safety net for state that
 drifted afterwards (a scope saved later with `Ctrl+S`, a config written by an
 older Hakonfig, an id that has to be renamed):
 

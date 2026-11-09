@@ -17,6 +17,10 @@ fn write(path: &Path, contents: &str) {
     fs::write(path, contents).unwrap();
 }
 
+fn read_json_value(path: &Path) -> Value {
+    serde_json::from_str(&fs::read_to_string(path).unwrap()).unwrap()
+}
+
 fn draft(id: &str, key: Option<&str>, mode: KeyMode) -> ProviderDraft {
     ProviderDraft {
         id: id.to_string(),
@@ -1347,7 +1351,7 @@ fn pi_scope_fix_widens_the_pattern_and_writes_a_backup() {
     let dir = root.join("pi/agent");
     write(
         &dir.join("models.json"),
-        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"deepseek/b"}]}}}"#,
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"deepseek/b"}]},"other":{"baseUrl":"https://o.test/v1","api":"openai-completions","models":[{"id":"x"}]}}}"#,
     );
     write(
         &dir.join("settings.json"),
@@ -1466,6 +1470,11 @@ fn apply_widens_the_pi_scope_so_the_new_models_are_visible() {
     write(
         &dir.join("settings.json"),
         r#"{"enabledModels":["lain/**","gateway/*"]}"#,
+    );
+
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"lain":{"baseUrl":"https://l.test/v1","api":"openai-completions","models":[{"id":"x"}]}}}"#,
     );
 
     let result =
@@ -1652,5 +1661,177 @@ fn catalog_probe_targets_only_builtin_credentialed_providers() {
         ids,
         vec!["xai"],
         "gateway custom tidak punya katalog di pi.dev"
+    );
+}
+
+#[test]
+fn disabling_a_provider_removes_its_patterns_from_the_scope() {
+    let (_lock, root) = sandbox("scope_disable_prunes");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"}]},"lain":{"baseUrl":"https://l.test/v1","api":"openai-completions","models":[{"id":"b"}]}}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"enabledModels":["gateway/**","lain/**"]}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "gateway".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = read_json_value(&dir.join("settings.json"));
+    let patterns: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .expect("lain masih ada")
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect();
+    assert_eq!(patterns, vec!["lain/**"], "pola provider mati harus hilang");
+}
+
+#[test]
+fn disabling_the_last_provider_drops_the_scope_key() {
+    let (_lock, root) = sandbox("scope_disable_empty");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"}]}}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"enabledModels":["gateway/**"]}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "gateway".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = read_json_value(&dir.join("settings.json"));
+    assert!(
+        settings.get("enabledModels").is_none(),
+        "scope kosong harus dibuang supaya semua model terlihat: {settings:?}"
+    );
+}
+
+#[test]
+fn enabling_a_provider_covers_it_again() {
+    let (_lock, root) = sandbox("scope_enable_covers");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"lain":{"baseUrl":"https://l.test/v1","api":"openai-completions","models":[{"id":"b"}]}}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"enabledModels":["lain/**"]}"#,
+    );
+
+    // Provider baru dibuat, lalu dimatikan, lalu dihidupkan lagi.
+    api::apply_edit("pi".into(), upsert("gateway", Some("k"), KeyMode::Inline)).unwrap();
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "gateway".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "gateway".to_string(),
+            enabled: true,
+        },
+    )
+    .unwrap();
+
+    let settings = read_json_value(&dir.join("settings.json"));
+    let patterns: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .expect("scope harus ada")
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect();
+    assert!(patterns.contains(&"gateway/**"), "{patterns:?}");
+    assert!(patterns.contains(&"lain/**"), "{patterns:?}");
+}
+
+#[test]
+fn removing_a_provider_prunes_its_explicit_model_ids() {
+    let (_lock, root) = sandbox("scope_remove_provider");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"a"}]},"lain":{"baseUrl":"https://l.test/v1","api":"openai-completions","models":[{"id":"b"}]}}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"enabledModels":["gateway/a","gateway/a:high","lain/b"]}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::Remove {
+            provider_id: "gateway".to_string(),
+        },
+    )
+    .unwrap();
+
+    let settings = read_json_value(&dir.join("settings.json"));
+    let patterns: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .expect("scope harus ada")
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect();
+    assert_eq!(
+        patterns,
+        vec!["lain/b"],
+        "id model milik provider terhapus harus dibuang, termasuk yang pakai sufiks thinking"
+    );
+}
+
+#[test]
+fn dropping_a_model_from_a_provider_prunes_its_scope_entry() {
+    let (_lock, root) = sandbox("scope_remove_model");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"gateway":{"baseUrl":"https://gw.test/v1","api":"openai-completions","models":[{"id":"lama"},{"id":"baru"}]}}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"enabledModels":["gateway/lama","gateway/baru"]}"#,
+    );
+
+    let mut draft = draft("gateway", Some("k"), KeyMode::Inline);
+    draft.models = vec![ModelDraft {
+        id: "baru".to_string(),
+        ..Default::default()
+    }];
+    api::apply_edit("pi".into(), EditOp::Upsert(draft)).unwrap();
+
+    let settings = read_json_value(&dir.join("settings.json"));
+    let patterns: Vec<&str> = settings["enabledModels"]
+        .as_array()
+        .expect("scope harus ada")
+        .iter()
+        .map(|item| item.as_str().unwrap())
+        .collect();
+    assert!(
+        !patterns.contains(&"gateway/lama"),
+        "model yang dihapus tidak boleh tertinggal di scope: {patterns:?}"
     );
 }
