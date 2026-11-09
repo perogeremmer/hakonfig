@@ -4,6 +4,17 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [Unreleased]
+
+### Fixed
+
+- CLI: provider yang sudah terpasang (✓) tidak lagi menampilkan dua menu
+  berurutan — menu lama "Change key / models" yang muncul lebih dulu sudah
+  dihapus, jadi yang tampil langsung empat aksi: *Change the API key only*,
+  *Choose models (key stays)*, *Set the default model*, *Change everything*.
+- CLI: memilih *Cancel* sekarang benar-benar berhenti. Sebelumnya pembatalan
+  jatuh ke alur `add` biasa sehingga pengguna tetap dimintai API key.
+
 ## [0.4.6]
 
 `hakonfig-cli add` untuk provider yang sudah terpasang sekarang memisahkan

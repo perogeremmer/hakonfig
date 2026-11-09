@@ -129,8 +129,9 @@ Preset model lists are static snapshots. In a terminal, `add` offers to sync
 the live list from the endpoint (default yes); with `--sync` it always does,
 and with `--models` it never does.
 
-Provider yang **sudah terpasang** tidak harus ditulis ulang seluruhnya. Tanpa
-flag di terminal, `add` menawarkan pilihan:
+Provider yang **sudah terpasang** tidak harus ditulis ulang seluruhnya. Begitu
+provider bertanda ✓ dipilih, `add` menanyakan satu hal saja (tidak ada menu
+lain sebelumnya):
 
 ```
 > This provider already exists. What do you want to do?
@@ -140,6 +141,9 @@ flag di terminal, `add` menawarkan pilihan:
   Change everything (endpoint, name, models)
   Cancel
 ```
+
+`Cancel` benar-benar berhenti — tidak lanjut ke alur `add` dan tidak meminta
+API key.
 
 Di mode non-interaktif aturannya eksplisit:
 

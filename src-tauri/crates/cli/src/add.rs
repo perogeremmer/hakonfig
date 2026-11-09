@@ -111,8 +111,22 @@ pub fn run(options: AddOptions) -> Result<()> {
     // Provider yang sudah ada tidak harus lewat jalur "tulis ulang semuanya":
     // ganti key, ganti model, dan jadikan default adalah tiga aksi terpisah.
     if let Some(existing) = existing.as_ref() {
-        if let Some(action) = pick_existing_action(&options, interactive, &provider_id)? {
-            return run_existing_action(&options, action, &harness, &target, existing, interactive);
+        match pick_existing_action(&options, interactive, &provider_id)? {
+            ExistingChoice::Action(action) => {
+                return run_existing_action(
+                    &options,
+                    action,
+                    &harness,
+                    &target,
+                    existing,
+                    interactive,
+                );
+            }
+            // "Change everything" memang lanjut ke alur `add` biasa; Cancel
+            // tidak boleh ikut jatuh ke sana — dulu begitu, jadi pengguna yang
+            // membatalkan tetap dimintai API key.
+            ExistingChoice::Everything => {}
+            ExistingChoice::Cancel => return Err(anyhow::Error::new(Cancelled)),
         }
     }
 
@@ -343,12 +357,21 @@ fn pick_harness(
     }
 }
 
+/// Hasil pemilihan aksi untuk provider yang sudah terpasang.
+enum ExistingChoice {
+    /// Jalankan aksi khusus (ganti key/model/default).
+    Action(ExistingAction),
+    /// Tulis ulang seluruh provider lewat alur `add` biasa.
+    Everything,
+    /// Pengguna membatalkan: jangan lanjut ke alur `add`.
+    Cancel,
+}
+
 /// Aksi yang dipilih untuk provider yang sudah terpasang.
 enum ExistingAction {
     Key,
     Models,
     Default(String),
-    Everything,
 }
 
 /// Tentukan aksi untuk provider yang sudah ada.
@@ -361,17 +384,19 @@ fn pick_existing_action(
     options: &AddOptions,
     interactive: bool,
     _provider_id: &str,
-) -> Result<Option<ExistingAction>> {
+) -> Result<ExistingChoice> {
     if let Some(model) = options.default_model.as_deref().map(str::trim) {
         if !model.is_empty() {
-            return Ok(Some(ExistingAction::Default(model.to_string())));
+            return Ok(ExistingChoice::Action(ExistingAction::Default(
+                model.to_string(),
+            )));
         }
     }
     if options.key_only {
-        return Ok(Some(ExistingAction::Key));
+        return Ok(ExistingChoice::Action(ExistingAction::Key));
     }
     if options.models_only {
-        return Ok(Some(ExistingAction::Models));
+        return Ok(ExistingChoice::Action(ExistingAction::Models));
     }
 
     let changes_endpoint =
@@ -380,11 +405,11 @@ fn pick_existing_action(
 
     if !interactive {
         return Ok(if changes_endpoint || changes_models {
-            None
+            ExistingChoice::Everything
         } else if options.key.is_some() {
-            Some(ExistingAction::Key)
+            ExistingChoice::Action(ExistingAction::Key)
         } else {
-            None
+            ExistingChoice::Everything
         });
     }
 
@@ -396,18 +421,18 @@ fn pick_existing_action(
         i18n::t(Msg::Cancel).to_string(),
     ];
     let picked = ask(inquire::Select::new(i18n::t(Msg::ProviderExists), choices).prompt())?;
-    let action = if picked == i18n::t(Msg::ActionKey) {
-        ExistingAction::Key
+    let choice = if picked == i18n::t(Msg::ActionKey) {
+        ExistingChoice::Action(ExistingAction::Key)
     } else if picked == i18n::t(Msg::ActionModels) {
-        ExistingAction::Models
+        ExistingChoice::Action(ExistingAction::Models)
     } else if picked == i18n::t(Msg::ActionDefault) {
-        ExistingAction::Default(String::new())
+        ExistingChoice::Action(ExistingAction::Default(String::new()))
     } else if picked == i18n::t(Msg::ActionAll) {
-        ExistingAction::Everything
+        ExistingChoice::Everything
     } else {
-        return Ok(None);
+        ExistingChoice::Cancel
     };
-    Ok(Some(action))
+    Ok(choice)
 }
 
 /// Jalankan aksi yang tidak menulis ulang seluruh provider.
@@ -481,7 +506,6 @@ fn run_existing_action(
                 model_id,
             }
         }
-        ExistingAction::Everything => return Ok(()),
     };
 
     let action_label = action_name(&op).to_string();
@@ -629,18 +653,6 @@ fn pick_target(
         .iter()
         .find(|preset| preset.id == picked.id)
         .ok_or_else(|| anyhow!("provider '{}' vanished from the catalog", picked.id))?;
-
-    if installed.iter().any(|id| id == &preset.id) {
-        let choices = vec![
-            i18n::t(Msg::ProviderExistsEdit).to_string(),
-            i18n::t(Msg::Cancel).to_string(),
-        ];
-        let picked_action =
-            ask(inquire::Select::new(i18n::t(Msg::ProviderExists), choices).prompt())?;
-        if picked_action == i18n::t(Msg::Cancel) {
-            return Ok(None);
-        }
-    }
 
     Ok(Some(Target::Preset(Box::new(preset.clone()))))
 }
@@ -1037,4 +1049,79 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
         .build()
         .expect("failed to create tokio runtime")
         .block_on(future)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn options() -> AddOptions {
+        AddOptions {
+            harness: None,
+            provider: None,
+            name: None,
+            base_url: None,
+            api: None,
+            key: None,
+            key_mode: KeyMode::Env,
+            models: None,
+            sync: false,
+            key_only: false,
+            models_only: false,
+            default_model: None,
+            dry_run: false,
+            yes: false,
+            test: None,
+            json: false,
+        }
+    }
+
+    fn choice(options: &AddOptions) -> &'static str {
+        // `interactive: false` = jalur skrip, tidak ada prompt.
+        match pick_existing_action(options, false, "deepseek").unwrap() {
+            ExistingChoice::Action(ExistingAction::Key) => "key",
+            ExistingChoice::Action(ExistingAction::Models) => "models",
+            ExistingChoice::Action(ExistingAction::Default(_)) => "default",
+            ExistingChoice::Everything => "everything",
+            ExistingChoice::Cancel => "cancel",
+        }
+    }
+
+    #[test]
+    fn scripted_actions_pick_the_narrowest_one() {
+        // Hanya key: niatnya rotasi key, model tidak boleh ditimpa preset.
+        let mut opts = options();
+        opts.key = Some("sk-baru".into());
+        assert_eq!(choice(&opts), "key");
+
+        // Flag eksplisit menang atas tebakan.
+        opts.models_only = true;
+        assert_eq!(choice(&opts), "models");
+
+        opts.models_only = false;
+        opts.key_only = true;
+        assert_eq!(choice(&opts), "key");
+
+        opts.key_only = false;
+        opts.default_model = Some("deepseek-v4-pro".into());
+        assert_eq!(choice(&opts), "default");
+    }
+
+    #[test]
+    fn scripted_model_or_endpoint_changes_stay_a_full_upsert() {
+        let mut opts = options();
+        opts.models = Some("a,b".into());
+        assert_eq!(choice(&opts), "everything");
+
+        let mut opts = options();
+        opts.sync = true;
+        assert_eq!(choice(&opts), "everything");
+
+        let mut opts = options();
+        opts.base_url = Some("https://gw.test/v1".into());
+        assert_eq!(choice(&opts), "everything");
+
+        // Tanpa apa pun yang bisa dijadikan aksi sempit: tetap upsert.
+        assert_eq!(choice(&options()), "everything");
+    }
 }

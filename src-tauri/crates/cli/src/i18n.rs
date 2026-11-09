@@ -146,7 +146,6 @@ messages! {
         "This provider already exists. What do you want to do?",
         "Provider ini sudah terpasang. Mau diapakan?"
     ),
-    ProviderExistsEdit => ("Change key / models", "Ubah key / model"),
     ActionKey => ("Change the API key only", "Ganti API key saja"),
     ActionModels => ("Choose models (key stays)", "Pilih model (key tidak diubah)"),
     ActionDefault => ("Set the default model", "Jadikan model default"),
