@@ -147,6 +147,19 @@ messages! {
         "Provider ini sudah terpasang. Mau diapakan?"
     ),
     ProviderExistsEdit => ("Change key / models", "Ubah key / model"),
+    ActionKey => ("Change the API key only", "Ganti API key saja"),
+    ActionModels => ("Choose models (key stays)", "Pilih model (key tidak diubah)"),
+    ActionDefault => ("Set the default model", "Jadikan model default"),
+    ActionAll => ("Change everything (endpoint, name, models)", "Ubah semuanya (endpoint, nama, model)"),
+    KeyRequired => (
+        "an API key is required for '{provider}'. Pipe it with --key-stdin, or run without flags in a terminal.",
+        "butuh API key untuk '{provider}'. Kirim lewat --key-stdin, atau jalankan tanpa flag di terminal."
+    ),
+    PickDefaultModel => ("Which model becomes the default?", "Model mana yang jadi default?"),
+    NoModelsToPick => (
+        "this provider has no model list yet; add models first",
+        "provider ini belum punya daftar model; tambahkan model dulu"
+    ),
     Cancel => ("Cancel", "Batal"),
     Cancelled => ("cancelled.", "dibatalkan."),
     NeedProviderFlag => (

@@ -4,6 +4,23 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [Unreleased]
+
+### Added
+
+- CLI: `add` untuk provider yang **sudah terpasang** sekarang memisahkan tiga
+  aksi seperti di aplikasi desktop — *Change the API key only*, *Choose models
+  (key stays)*, *Set the default model* — ditambah *Change everything* dan
+  *Cancel*. Tanpa terminal, `add` dengan hanya `--key-stdin` berarti
+  mengganti key saja (dulu daftar model ikut ditimpa daftar preset), dan
+  tersedia flag eksplisit `--key-only`, `--models-only`, serta
+  `--default-model <ID>`.
+
+### Fixed
+
+- CLI: mengganti API key tidak lagi menulis ulang `models.json` (dan membuat
+  backup tambahan) ketika tidak ada `apiKey` usang yang perlu dibersihkan.
+
 ## [0.4.5]
 
 Aksi per provider dipisah jadi tiga (ganti key, pilih model, jadikan default)

@@ -703,14 +703,24 @@ impl Adapter for PiAdapter {
                             serde_json::json!({ "type": "api_key", "key": key }),
                         );
                         // apiKey lama di models.json bisa menimpa kredensial
-                        // tersimpan, jadi dibersihkan.
-                        if let Some(models) = docs.get_mut("models") {
-                            if let Some(entry) = models
-                                .object_at("providers")
-                                .get_mut(&target)
-                                .and_then(Value::as_object_mut)
-                            {
-                                entry.remove("apiKey");
+                        // tersimpan, jadi dibersihkan — tetapi hanya kalau ada,
+                        // supaya `models.json` tidak ikut ditulis (dan di-backup)
+                        // ketika tidak ada yang berubah.
+                        let has_stale = docs
+                            .get("models")
+                            .and_then(|models| models.data().get("providers"))
+                            .and_then(|providers| providers.get(&target))
+                            .and_then(|entry| entry.get("apiKey"))
+                            .is_some();
+                        if has_stale {
+                            if let Some(models) = docs.get_mut("models") {
+                                if let Some(entry) = models
+                                    .object_at("providers")
+                                    .get_mut(&target)
+                                    .and_then(Value::as_object_mut)
+                                {
+                                    entry.remove("apiKey");
+                                }
                             }
                         }
                     }

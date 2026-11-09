@@ -129,6 +129,28 @@ Preset model lists are static snapshots. In a terminal, `add` offers to sync
 the live list from the endpoint (default yes); with `--sync` it always does,
 and with `--models` it never does.
 
+Provider yang **sudah terpasang** tidak harus ditulis ulang seluruhnya. Tanpa
+flag di terminal, `add` menawarkan pilihan:
+
+```
+> This provider already exists. What do you want to do?
+  Change the API key only
+  Choose models (key stays)
+  Set the default model
+  Change everything (endpoint, name, models)
+  Cancel
+```
+
+Di mode non-interaktif aturannya eksplisit:
+
+| Yang diberikan | Yang dilakukan |
+|---|---|
+| hanya key (`--key-stdin`) | `set_key` — model, endpoint, nama tidak disentuh |
+| `--models`/`--sync` | `set_models` — key tidak disentuh |
+| `--default-model <id>` | `set_default` |
+| `--key-only` / `--models-only` | memaksa salah satu di atas walau flag lain ada |
+| `--name`/`--base-url`/`--api` | `upsert` penuh (hanya berlaku untuk provider custom; endpoint provider katalog selalu mengikuti preset) |
+
 ### `doctor [--harness <id>] [--fix] [--online]`
 
 `add` already reconciles the obvious cases while it writes — it widens a saved
@@ -194,6 +216,9 @@ Add or change a provider. Non-interactive contract:
 | `--key-stdin` | Read the API key from piped stdin, e.g. `printf '%s' "$KEY" \| hakonfig-cli add ...`. |
 | `--key-env` | Store an environment reference (`$PROVIDER_API_KEY`) instead of the inline key. |
 | `--models <ID1,ID2>` | Comma separated model ids. Default: every preset model. |
+| `--key-only` | Provider sudah ada: ganti API key saja, daftar model tidak disentuh. |
+| `--models-only` | Provider sudah ada: ganti daftar model saja, key tidak disentuh. |
+| `--default-model <ID>` | Provider sudah ada: jadikan model ini default harness, tanpa perubahan lain. |
 | `--sync` | Ask the endpoint which models it has and use that list instead of the preset list. Needs the key itself (`--key-stdin`) unless the endpoint is keyless; a failure aborts. |
 | `--test` | Test the endpoint even when non-interactive; a failure aborts. |
 | `--no-test` | Skip the connection test. |

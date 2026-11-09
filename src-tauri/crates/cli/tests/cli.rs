@@ -627,6 +627,213 @@ fn add_without_a_test_flag_skips_the_test_and_still_writes() {
     );
 }
 
+// ------------------------------------------------------- aksi provider lama
+
+fn pi_provider_fixture(root: &Path) {
+    write_file(
+        root,
+        "pi/agent/models.json",
+        r#"{"providers":{"deepseek":{"name":"DeepSeek","baseUrl":"https://api.deepseek.com","api":"openai-completions","models":[{"id":"a"},{"id":"b"}]}}}"#,
+    );
+    write_file(
+        root,
+        "pi/agent/auth.json",
+        r#"{"deepseek":{"type":"api_key","key":"lama"}}"#,
+    );
+}
+
+fn report_action(root: &Path, args: &[&str], input: Option<&str>) -> (String, Vec<String>) {
+    let output = match input {
+        Some(data) => run_stdin(root, args, data),
+        None => run(root, args),
+    };
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).expect("JSON valid");
+    let action = parsed["action"].as_str().unwrap_or_default().to_string();
+    let files = parsed["filesWritten"]
+        .as_array()
+        .unwrap_or(&Vec::new())
+        .iter()
+        .map(|item| item.as_str().unwrap_or_default().to_string())
+        .collect();
+    (action, files)
+}
+
+#[test]
+fn changing_only_the_key_does_not_rewrite_the_model_list() {
+    let root = sandbox("cli-key-only");
+    pi_provider_fixture(&root);
+
+    // Tanpa flag model: niatnya jelas mengganti key, jadi model tidak ditimpa
+    // dengan daftar preset.
+    let (action, files) = report_action(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "deepseek",
+            "--key-stdin",
+            "--no-test",
+            "--json",
+        ],
+        Some("sk-baru\n"),
+    );
+
+    assert_eq!(action, "set_key");
+    assert!(
+        files.iter().all(|path| !path.ends_with("models.json")),
+        "models.json tidak boleh ikut ditulis: {files:?}"
+    );
+
+    let auth = read_json(&auth_path(&root));
+    assert_eq!(auth["deepseek"]["key"], "sk-baru");
+    let models = read_json(&models_path(&root));
+    let ids: Vec<&str> = models["providers"]["deepseek"]["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|model| model["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(ids, vec!["a", "b"], "daftar model harus utuh");
+}
+
+#[test]
+fn changing_only_the_models_keeps_the_key() {
+    let root = sandbox("cli-models-only");
+    pi_provider_fixture(&root);
+
+    let (action, files) = report_action(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "deepseek",
+            "--models",
+            "b",
+            "--models-only",
+            "--no-test",
+            "--json",
+        ],
+        None,
+    );
+
+    assert_eq!(action, "set_models");
+    assert!(
+        files.iter().all(|path| !path.ends_with("auth.json")),
+        "auth.json tidak boleh ikut ditulis: {files:?}"
+    );
+
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["deepseek"]["models"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let auth = read_json(&auth_path(&root));
+    assert_eq!(auth["deepseek"]["key"], "lama", "key tidak boleh berubah");
+}
+
+#[test]
+fn setting_the_default_model_only_writes_the_setting() {
+    let root = sandbox("cli-default-only");
+    pi_provider_fixture(&root);
+
+    let (action, files) = report_action(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "deepseek",
+            "--default-model",
+            "b",
+            "--no-test",
+            "--json",
+        ],
+        None,
+    );
+
+    assert_eq!(action, "set_default");
+    assert_eq!(files.len(), 1, "hanya settings.json: {files:?}");
+    assert!(files[0].ends_with("settings.json"), "{files:?}");
+
+    let settings = read_json(&root.join("pi/agent/settings.json"));
+    assert_eq!(settings["defaultProvider"], "deepseek");
+    assert_eq!(settings["defaultModel"], "deepseek/b");
+    assert_eq!(
+        read_json(&auth_path(&root))["deepseek"]["key"],
+        "lama",
+        "key tidak boleh berubah"
+    );
+}
+
+#[test]
+fn changing_the_endpoint_still_does_a_full_write() {
+    let root = sandbox("cli-endpoint-change");
+    // Provider custom: endpoint-nya milik pengguna, jadi `--base-url` berlaku
+    // (untuk provider dari katalog, endpoint selalu mengikuti preset).
+    let first = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "gateway",
+            "--name",
+            "Gateway",
+            "--base-url",
+            "https://gw.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk-1\n",
+    );
+    assert!(first.status.success(), "{}", stderr(&first));
+
+    let output = run(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "gateway",
+            "--name",
+            "Gateway",
+            "--base-url",
+            "https://mirror.test/v1",
+            "--models",
+            "m1",
+            "--no-test",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let parsed: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    assert_eq!(parsed["action"], "upsert");
+
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["gateway"]["baseUrl"],
+        "https://mirror.test/v1"
+    );
+    assert_eq!(
+        read_json(&auth_path(&root))["gateway"]["key"],
+        "sk-1",
+        "upsert tanpa key tidak boleh menghapus kredensial"
+    );
+}
+
 // ------------------------------------------------------------------ doctor
 
 fn write_file(root: &Path, relative: &str, contents: &str) {

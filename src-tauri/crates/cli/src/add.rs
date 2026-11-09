@@ -30,6 +30,12 @@ pub struct AddOptions {
     pub models: Option<String>,
     /// Ambil daftar model dari endpoint, bukan dari preset.
     pub sync: bool,
+    /// Paksa ganti key saja (provider harus sudah ada).
+    pub key_only: bool,
+    /// Paksa ganti daftar model saja.
+    pub models_only: bool,
+    /// Jadikan model ini default harness, tanpa menyentuh yang lain.
+    pub default_model: Option<String>,
     pub dry_run: bool,
     pub yes: bool,
     /// None = ikut mode (uji koneksi hanya saat interaktif).
@@ -60,6 +66,8 @@ impl std::error::Error for Cancelled {}
 struct AddReport {
     harness: String,
     provider: String,
+    /// "upsert" | "set_key" | "set_models" | "set_default"
+    action: String,
     model_count: usize,
     applied: bool,
     files_written: Vec<String>,
@@ -93,6 +101,21 @@ pub fn run(options: AddOptions) -> Result<()> {
         None => return Err(anyhow::Error::new(Cancelled)),
     };
 
+    let provider_id = target_id(&target).to_string();
+    let existing = snapshot
+        .providers
+        .iter()
+        .find(|provider| provider.id == provider_id)
+        .cloned();
+
+    // Provider yang sudah ada tidak harus lewat jalur "tulis ulang semuanya":
+    // ganti key, ganti model, dan jadikan default adalah tiga aksi terpisah.
+    if let Some(existing) = existing.as_ref() {
+        if let Some(action) = pick_existing_action(&options, interactive, &provider_id)? {
+            return run_existing_action(&options, action, &harness, &target, existing, interactive);
+        }
+    }
+
     // Identitas provider custom divalidasi lebih dulu: tanpa base URL, langkah
     // key/model tidak ada artinya, jadi pesan errornya harus muncul duluan.
     if matches!(target, Target::Custom { .. }) {
@@ -114,7 +137,6 @@ pub fn run(options: AddOptions) -> Result<()> {
         _ => None,
     };
 
-    let provider_id = target_id(&target).to_string();
     let (base_url, api_name) = endpoint(&target, &options);
 
     let should_test = options.test.unwrap_or(interactive);
@@ -155,6 +177,7 @@ pub fn run(options: AddOptions) -> Result<()> {
             output::print_json(&AddReport {
                 harness: harness.clone(),
                 provider: provider_id,
+                action: "upsert".to_string(),
                 model_count,
                 applied: false,
                 files_written: Vec::new(),
@@ -184,6 +207,7 @@ pub fn run(options: AddOptions) -> Result<()> {
         output::print_json(&AddReport {
             harness,
             provider: provider_id,
+            action: "upsert".to_string(),
             model_count,
             applied: true,
             files_written: applied.files_written.clone(),
@@ -316,6 +340,228 @@ fn pick_harness(
                 ]
             )
         ),
+    }
+}
+
+/// Aksi yang dipilih untuk provider yang sudah terpasang.
+enum ExistingAction {
+    Key,
+    Models,
+    Default(String),
+    Everything,
+}
+
+/// Tentukan aksi untuk provider yang sudah ada.
+///
+/// Tanpa flag dan tanpa terminal, `add` hanya mengganti key kalau memang hanya
+/// key yang diberikan: mengganti key tidak boleh memaksa menulis ulang daftar
+/// model (itu yang membuat `--key-stdin` dulu menimpa model dengan daftar
+/// preset).
+fn pick_existing_action(
+    options: &AddOptions,
+    interactive: bool,
+    _provider_id: &str,
+) -> Result<Option<ExistingAction>> {
+    if let Some(model) = options.default_model.as_deref().map(str::trim) {
+        if !model.is_empty() {
+            return Ok(Some(ExistingAction::Default(model.to_string())));
+        }
+    }
+    if options.key_only {
+        return Ok(Some(ExistingAction::Key));
+    }
+    if options.models_only {
+        return Ok(Some(ExistingAction::Models));
+    }
+
+    let changes_endpoint =
+        options.name.is_some() || options.base_url.is_some() || options.api.is_some();
+    let changes_models = options.models.is_some() || options.sync;
+
+    if !interactive {
+        return Ok(if changes_endpoint || changes_models {
+            None
+        } else if options.key.is_some() {
+            Some(ExistingAction::Key)
+        } else {
+            None
+        });
+    }
+
+    let choices = vec![
+        i18n::t(Msg::ActionKey).to_string(),
+        i18n::t(Msg::ActionModels).to_string(),
+        i18n::t(Msg::ActionDefault).to_string(),
+        i18n::t(Msg::ActionAll).to_string(),
+        i18n::t(Msg::Cancel).to_string(),
+    ];
+    let picked = ask(inquire::Select::new(i18n::t(Msg::ProviderExists), choices).prompt())?;
+    let action = if picked == i18n::t(Msg::ActionKey) {
+        ExistingAction::Key
+    } else if picked == i18n::t(Msg::ActionModels) {
+        ExistingAction::Models
+    } else if picked == i18n::t(Msg::ActionDefault) {
+        ExistingAction::Default(String::new())
+    } else if picked == i18n::t(Msg::ActionAll) {
+        ExistingAction::Everything
+    } else {
+        return Ok(None);
+    };
+    Ok(Some(action))
+}
+
+/// Jalankan aksi yang tidak menulis ulang seluruh provider.
+fn run_existing_action(
+    options: &AddOptions,
+    action: ExistingAction,
+    harness: &str,
+    target: &Target,
+    existing: &hakonfig_core::engine::model::ProviderSummary,
+    interactive: bool,
+) -> Result<()> {
+    let provider_id = existing.id.clone();
+
+    let op = match action {
+        ExistingAction::Key => {
+            let key = match options.key.as_deref().map(str::trim) {
+                Some(value) if !value.is_empty() => value.to_string(),
+                _ if interactive => ask_key(target)?.ok_or_else(|| {
+                    anyhow!(i18n::fill(
+                        i18n::t(Msg::KeyRequired),
+                        &[("provider", provider_id.clone())]
+                    ))
+                })?,
+                _ => bail!(
+                    "{}",
+                    i18n::fill(
+                        i18n::t(Msg::KeyRequired),
+                        &[("provider", provider_id.clone())]
+                    )
+                ),
+            };
+            EditOp::SetKey {
+                provider_id: provider_id.clone(),
+                key,
+                key_mode: options.key_mode,
+            }
+        }
+        ExistingAction::Models => {
+            let models = pick_models(
+                options,
+                target,
+                harness,
+                options.key.as_deref(),
+                interactive,
+            )?;
+            EditOp::SetModels {
+                provider_id: provider_id.clone(),
+                models,
+            }
+        }
+        ExistingAction::Default(chosen) => {
+            let model_id = if !chosen.is_empty() {
+                chosen
+            } else if existing.models.is_empty() {
+                bail!("{}", i18n::t(Msg::NoModelsToPick));
+            } else {
+                let choices: Vec<Choice> = existing
+                    .models
+                    .iter()
+                    .map(|model| Choice {
+                        id: model.id.clone(),
+                        label: model.name.clone().unwrap_or_else(|| model.id.clone()),
+                    })
+                    .collect();
+                let picked =
+                    ask(inquire::Select::new(i18n::t(Msg::PickDefaultModel), choices).prompt())?;
+                picked.id
+            };
+            EditOp::SetDefault {
+                provider_id: provider_id.clone(),
+                model_id,
+            }
+        }
+        ExistingAction::Everything => return Ok(()),
+    };
+
+    let action_label = action_name(&op).to_string();
+    let preview =
+        api::preview_edit(harness.to_string(), op.clone()).map_err(|error| anyhow!(error))?;
+    if !options.json {
+        output::print_preview(&preview);
+    }
+    if options.dry_run {
+        if options.json {
+            output::print_json(&report_json(
+                harness,
+                &provider_id,
+                &action_label,
+                false,
+                Vec::new(),
+                None,
+                preview.warnings.clone(),
+            ))?;
+        } else {
+            println!("\n{}", i18n::t(Msg::DryRun));
+        }
+        return Ok(());
+    }
+
+    if interactive && !options.yes {
+        let proceed = ask(inquire::Confirm::new(i18n::t(Msg::ConfirmApply))
+            .with_default(true)
+            .with_help_message(i18n::t(Msg::ConfirmApplyHint))
+            .prompt())?;
+        if !proceed {
+            return Err(anyhow::Error::new(Cancelled));
+        }
+    }
+
+    let applied = api::apply_edit(harness.to_string(), op).map_err(|error| anyhow!(error))?;
+    if options.json {
+        output::print_json(&report_json(
+            harness,
+            &provider_id,
+            &action_label,
+            true,
+            applied.files_written.clone(),
+            applied.backup_dir.clone(),
+            applied.warnings.clone(),
+        ))?;
+    } else {
+        report(&applied, &preview.warnings);
+    }
+    Ok(())
+}
+
+fn action_name(op: &EditOp) -> &'static str {
+    match op {
+        EditOp::SetKey { .. } => "set_key",
+        EditOp::SetModels { .. } => "set_models",
+        EditOp::SetDefault { .. } => "set_default",
+        _ => "upsert",
+    }
+}
+
+fn report_json(
+    harness: &str,
+    provider: &str,
+    action: &str,
+    applied: bool,
+    files_written: Vec<String>,
+    backup_dir: Option<String>,
+    warnings: Vec<String>,
+) -> AddReport {
+    AddReport {
+        harness: harness.to_string(),
+        provider: provider.to_string(),
+        action: action.to_string(),
+        model_count: 0,
+        applied,
+        files_written,
+        backup_dir,
+        warnings,
+        notices: Vec::new(),
     }
 }
 

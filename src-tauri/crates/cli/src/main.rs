@@ -113,6 +113,16 @@ enum Command {
         /// preset list. Needs network access and, usually, the key.
         #[arg(long)]
         sync: bool,
+        /// Only replace the API key of an existing provider; models stay as they
+        /// are.
+        #[arg(long)]
+        key_only: bool,
+        /// Only replace the model list of an existing provider; the key stays.
+        #[arg(long)]
+        models_only: bool,
+        /// Only set the default model of the harness (no other change).
+        #[arg(long, value_name = "MODEL_ID")]
+        default_model: Option<String>,
         /// Test the endpoint even when non-interactive; a failure aborts.
         #[arg(long, conflicts_with = "no_test")]
         test: bool,
@@ -190,6 +200,9 @@ fn run(cli: &Cli) -> Result<()> {
             key_env,
             models,
             sync,
+            key_only,
+            models_only,
+            default_model,
             test,
             no_test,
             dry_run,
@@ -212,6 +225,9 @@ fn run(cli: &Cli) -> Result<()> {
             },
             models: models.clone(),
             sync: *sync,
+            key_only: *key_only,
+            models_only: *models_only,
+            default_model: default_model.clone(),
             dry_run: *dry_run,
             yes: *yes,
             test: if *test {

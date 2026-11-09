@@ -195,6 +195,9 @@ hakonfig-cli add --harness pi --provider groq --key-stdin --sync   # model list 
 hakonfig-cli doctor                         # config the harness will not show
 hakonfig-cli doctor --fix                   # repair what can be repaired automatically
 hakonfig-cli doctor --online                # also check the remote model catalogs
+hakonfig-cli add --harness pi --provider groq --key-stdin --key-only   # rotate the key only
+hakonfig-cli add --harness pi --provider groq --models a,b --models-only
+hakonfig-cli add --harness pi --provider groq --default-model a
 ```
 
 Rules it holds since day one:
@@ -454,7 +457,7 @@ sandbox).
 | Unit (`cli/src/i18n.rs`) | 5 | language parsing, EN/ID message parity |
 | Unit (`src/commands.rs`) | 4 | streamed install command execution, failure detection |
 | Integration (`engine/tests.rs`) | 33 | merge of unknown fields, key written to the right file, `$ENV` mode, disable/comment behaviour, remove, backup/restore, preview redaction, validation, per-adapter `stored_key`, notice detection + auto-reconcile (`enabledModels`, disable lists, built-in id) |
-| Integration (`cli/tests/cli.rs`) | 34 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, `--sync` against a loopback stub, `doctor` report/fix, language switch, JSON output |
+| Integration (`cli/tests/cli.rs`) | 38 | the real binary end-to-end: write, env mode, backup, dry-run, `--test` gate, `--sync` against a loopback stub, `doctor` report/fix, language switch, JSON output |
 | Unit (`web/diff.js`) | 20 | `lcsDiff`, context trimming, empty files, huge blocks, XSS escaping, output trimming |
 | Unit (`web/i18n.test.js`) | 6 | key parity EN/ID, empty values, placeholders, untranslated strings, no em dash |
 | Unit (`web/provider-form.test.js`) | 12 | registered-provider detection, env variable naming |
