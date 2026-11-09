@@ -54,10 +54,14 @@ jobs:
           mkdir -p tap/Formula
           cp /tmp/hakonfig-cli.rb tap/Formula/hakonfig-cli.rb
           cd tap
-          if git diff --quiet; then
+          # `git add` dulu: formula baru pada tap yang masih kosong adalah file
+          # untracked, dan `git diff` tidak melihat file untracked — dulu karena
+          # ini workflow selalu menyimpulkan "tidak berubah" lalu tidak push
+          # apa pun, sehingga tap tidak pernah berisi formula.
+          git add -A
+          if git diff --cached --quiet; then
             echo "formula tidak berubah; tidak ada yang di-push"
             exit 0
           fi
-          git add Formula/hakonfig-cli.rb
           git commit -m "hakonfig-cli ${{ inputs.tag }}"
           git push
