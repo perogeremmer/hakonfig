@@ -23,7 +23,14 @@ fn binary_for(id: &str) -> Option<String> {
 
 /// Jalankan `<bin> --version` lewat shell login agar PATH dari shell pengguna
 /// ikut terbaca (aplikasi GUI sering punya PATH minimal).
+///
+/// Probe dijalankan dengan env target: `HOME` dari [`paths::target_home`]
+/// dan `<home>/.local/bin` di depan `PATH`. Dengan begitu harness milik user
+/// lain (mis. agent dengan home sendiri di ADE/VPS, `--home /var/lib/openbot`)
+/// ditemukan di tempat yang sama seperti yang dilihat harness-nya.
 pub fn detect(id: &str) -> Option<String> {
+    use crate::engine::paths::target_home;
+
     let binary = binary_for(id)?;
     let invocation = format!("{} --version", binary);
 
@@ -36,6 +43,19 @@ pub fn detect(id: &str) -> Option<String> {
         cmd.args(["-lc", &invocation]);
         cmd
     };
+
+    let home = target_home();
+    let local_bin = home.join(".local/bin");
+    let parts: Vec<_> = std::iter::once(local_bin)
+        .chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        ))
+        .collect();
+    if let Ok(path) = std::env::join_paths(parts) {
+        command.env("PATH", path);
+    }
+    command.env("HOME", &home);
+    command.env("USERPROFILE", &home);
 
     let mut child = command
         .stdin(Stdio::null())

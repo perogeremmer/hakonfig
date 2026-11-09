@@ -3,12 +3,31 @@ use anyhow::{Context, Result};
 use std::io::Write;
 use std::path::Path;
 
+/// Konteks error tulis. `Permission denied` diberi jalan keluar siap-tempel:
+/// gejala paling umum adalah menulis ke home milik user lain (mis. agent
+/// dengan home sendiri di ADE/VPS) dari user yang berbeda.
+fn write_context(action: &str, path: &Path) -> impl Fn(std::io::Error) -> anyhow::Error {
+    let path = path.to_path_buf();
+    let action = action.to_string();
+    move |error: std::io::Error| {
+        let mut message = format!("{} {}: {}", action, path.display(), error);
+        if error.kind() == std::io::ErrorKind::PermissionDenied {
+            message.push_str(
+                "; this directory likely belongs to another user. Run hakonfig-cli \
+                 as the owner of the home, e.g. `sudo -u <user> -H hakonfig-cli ...`, \
+                 or pass --home and make sure the directory is writable",
+            );
+        }
+        anyhow::Error::msg(message)
+    }
+}
+
 /// Tulis ke file sementara di direktori yang sama, lalu `rename`.
 /// Ini mencegah file konfigurasi berakhir setengah tertulis bila proses mati.
 pub fn atomic_write(path: &Path, contents: &str, sensitive: bool) -> Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create directory {}", parent.display()))?;
+            .map_err(|error| write_context("failed to create directory in", parent)(error))?;
     }
 
     let file_name = path
@@ -18,10 +37,10 @@ pub fn atomic_write(path: &Path, contents: &str, sensitive: bool) -> Result<()> 
     let tmp = path.with_file_name(format!(".{}.hakonfig-tmp", file_name));
 
     {
-        let mut file = std::fs::File::create(&tmp)
-            .with_context(|| format!("failed to write {}", tmp.display()))?;
+        let mut file =
+            std::fs::File::create(&tmp).map_err(write_context("failed to write", &tmp))?;
         file.write_all(contents.as_bytes())
-            .with_context(|| format!("failed to write {}", tmp.display()))?;
+            .map_err(write_context("failed to write", &tmp))?;
         file.sync_all().ok();
 
         #[cfg(unix)]
@@ -32,7 +51,7 @@ pub fn atomic_write(path: &Path, contents: &str, sensitive: bool) -> Result<()> 
         }
     }
 
-    std::fs::rename(&tmp, path).with_context(|| format!("failed to replace {}", path.display()))?;
+    std::fs::rename(&tmp, path).map_err(write_context("failed to replace", path))?;
     Ok(())
 }
 

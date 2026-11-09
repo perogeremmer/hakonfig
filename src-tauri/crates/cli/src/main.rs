@@ -99,8 +99,18 @@ enum RemoveWhat {
 )]
 struct Cli {
     /// Alternate root for harness config files.
+    ///
+    /// Test layout: files resolve as <DIR>/<harness>/... Use --home to point
+    /// at a real home directory instead.
     #[arg(long, global = true, value_name = "DIR")]
     root: Option<String>,
+
+    /// HOME of the target user, e.g. an agent's dedicated home (/var/lib/openbot).
+    ///
+    /// All harness directories resolve inside it with their real layout
+    /// (<DIR>/.omp, <DIR>/.pi, ...), and version probes use its .local/bin.
+    #[arg(long, global = true, value_name = "DIR")]
+    home: Option<String>,
 
     /// Print JSON, for scripts.
     #[arg(long, global = true)]
@@ -266,10 +276,30 @@ fn main() -> ExitCode {
         }
     }
 
-    // `engine::paths` membaca HAKONFIG_ROOT, jadi --root cukup diteruskan lewat
-    // environment: satu pintu, tidak ada jalur kedua yang bisa menyimpang.
+    // `engine::paths` membaca HAKONFIG_ROOT/HAKONFIG_HOME, jadi --root dan
+    // --home cukup diteruskan lewat environment: satu pintu, tidak ada jalur
+    // kedua yang bisa menyimpang.
     if let Some(root) = &cli.root {
         std::env::set_var("HAKONFIG_ROOT", root);
+    }
+    if let Some(home) = &cli.home {
+        let target = std::path::PathBuf::from(home.trim());
+        if !target.is_dir() {
+            eprintln!(
+                "hakonfig: {}",
+                i18n::fill(t(Msg::HomeMissing), &[("path", home.trim().to_string())])
+            );
+        }
+        std::env::set_var("HAKONFIG_HOME", home.trim());
+        // Selalu konfirmasi home mana yang dipakai: kesalahan ketik di sini
+        // persis seperti jebakan --root — gagal senyap tanpa konfirmasi.
+        eprintln!(
+            "{}",
+            i18n::fill(
+                t(Msg::TargetHome),
+                &[("path", target.display().to_string())]
+            )
+        );
     }
 
     match run(&cli) {

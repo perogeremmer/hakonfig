@@ -1516,3 +1516,129 @@ fn key_stdin_rejects_an_interactive_terminal() {
     );
     assert!(!models_path(&root).exists(), "tidak boleh ada yang ditulis");
 }
+
+// ------------------------------------------------------------------ home target (ADE / VPS)
+
+/// Jalankan binary dengan `--home` eksplisit (tanpa `--root`): meniru pemakaian
+/// nyata mengelola home user lain, mis. agent ADE di `/var/lib/openbot`.
+fn run_home(home: &Path, args: &[&str]) -> Output {
+    run_both(home, None, args)
+}
+
+/// Jalankan dengan `--home` dan `--root` sekaligus: menguji urutan resolusi.
+fn run_both(home: &Path, root: Option<&Path>, args: &[&str]) -> Output {
+    let mut command = Command::new(BIN);
+    command.arg("--home").arg(home);
+    if let Some(root) = root {
+        command.arg("--root").arg(root);
+    }
+    for (name, _) in std::env::vars() {
+        if name.ends_with("_API_KEY") {
+            command.env_remove(&name);
+        }
+    }
+    command
+        .args(args)
+        .stdin(Stdio::null())
+        .output()
+        .expect("gagal menjalankan binary")
+}
+
+fn omp_models_path_home(home: &Path) -> PathBuf {
+    home.join(".omp/agent/models.yml")
+}
+
+const OMP_YAML_WITH_GROQ: &str = "providers:\n  groq:\n    baseUrl: https://api.groq.com/openai/v1\n    api: openai-completions\n    apiKey: k\n    models:\n      - id: m1\n";
+
+#[test]
+fn home_directs_reads_and_writes_to_the_target_user_home() {
+    let target = sandbox("ade-home");
+    let omp = target.join(".omp/agent");
+    std::fs::create_dir_all(&omp).unwrap();
+    std::fs::write(omp_models_path_home(&target), OMP_YAML_WITH_GROQ).unwrap();
+
+    // Baca: config di home target kebaca, bukan HOME proses.
+    let output = run_home(&target, &["show", "omp", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains(target.join(".omp/agent/models.yml").to_str().unwrap()),
+        "harus menyebut path di home target:\n{text}"
+    );
+    assert!(text.contains("\"groq\""), "provider harus kebaca:\n{text}");
+
+    // Tulis: file baru lahir di home target, bukan di HOME proses.
+    let output = run_home(
+        &target,
+        &["add", "--harness", "pi", "--provider", "groq", "--no-test"],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        target.join(".pi/agent/models.json").exists(),
+        "models.json harus lahir di home target"
+    );
+    assert!(
+        stderr(&output).contains("target home:"),
+        "harus konfirmasi home mana yang dipakai: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn explicit_home_beats_the_test_sandbox() {
+    // Jebakan klasik: orang mencoba --root <home-ade> dan gagal senyap karena
+    // layoutnya salah. --home yang disebut harus menang atas --root.
+    let root = sandbox("ade-vs-root");
+    let target = sandbox("ade-home-wins");
+
+    let output = run_both(
+        &target,
+        Some(&root),
+        &["add", "--harness", "pi", "--provider", "groq", "--no-test"],
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        target.join(".pi/agent/models.json").exists(),
+        "harus pakai layout home asli di --home"
+    );
+    assert!(
+        !models_path(&root).exists(),
+        "layout test <root>/pi tidak boleh dipakai ketika --home disebut"
+    );
+}
+
+#[test]
+fn permission_denied_names_the_fix() {
+    let target = sandbox("ade-readonly");
+    std::fs::create_dir_all(&target).unwrap();
+
+    // Hanya izin baca+eksekusi: tulis apa pun harus PermissionDenied.
+    // Test ini di-skip bila berjalan sebagai root (root mengabaikan mode).
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o555)).unwrap();
+    }
+
+    let output = run_home(
+        &target,
+        &["add", "--harness", "pi", "--provider", "groq", "--no-test"],
+    );
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    if output.status.success() {
+        eprintln!("dilewati: berjalan sebagai root, izin tidak berlaku");
+        return;
+    }
+    let text = stderr(&output);
+    assert!(
+        text.contains("sudo -u"),
+        "pesan izin harus menyebut jalan keluarnya:\n{text}"
+    );
+}

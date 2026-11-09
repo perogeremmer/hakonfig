@@ -4,6 +4,24 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [Unreleased]
+
+### Added
+
+- CLI: `--home <DIR>` / `HAKONFIG_HOME` untuk mengelola harness milik user
+  lain — mis. agent ADE dengan home sendiri di `/var/lib/openbot`. Semua
+  direktori harness di-resolve dengan layout asli di bawah home target
+  (`<home>/.omp`, `<home>/.pi`, ...), probe versi memakai `<home>/.local/bin`,
+  dan `--home` menang atas `--root`. Berbeda dari `--root` yang layout-nya
+  layout test (`<root>/<harness>`) dan gagal senyap kalau dipakai untuk home
+  nyata.
+- Error tulis `Permission denied` kini menyebut jalan keluarnya:
+  `sudo -u <user> -H hakonfig-cli ...` (gejala khas "sudah di-add tapi tidak
+  terbaca di sisi agent").
+- Dokumentasi baru di `docs/CLI.md`: "Harnesses that run as another user
+  (ADE / VPS)" — pola `sudo -u <user> -H`, peringatan root-ownership, dan
+  perbedaan `--home` vs `--root`.
+
 ## [0.5.0]
 
 Perintah CLI dipisah menurut pekerjaannya, mengikuti aplikasi desktop. Ini

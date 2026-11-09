@@ -9,8 +9,31 @@ use std::path::{Path, PathBuf};
 ///
 /// Bila `HAKONFIG_ROOT` diset, seluruh direktori harness di-resolve di bawah
 /// root tersebut, sehingga pengujian tidak pernah menyentuh config asli.
+///
+/// Perhatikan: ini layout *test* (`<root>/<harness>`), bukan layout home
+/// asli. Untuk menyebut HOME user lain (mis. agent dengan home sendiri di
+/// ADE/VPS), pakai [`explicit_home`], bukan ini.
 pub fn override_root() -> Option<PathBuf> {
     env::var_os("HAKONFIG_ROOT").map(PathBuf::from)
+}
+
+/// Home eksplisit (`HAKONFIG_HOME`, dari `--home`): HOME user lain yang
+/// menjadi target, mis. home agent di `/var/lib/openbot`. Menang atas
+/// sandbox test karena keduanya sekaligus berarti niat pengguna berbeda.
+///
+/// Layout di bawah home ini adalah layout asli harness (`<home>/.omp`), dan
+/// env XDG milik proses yang menjalankan hakonfig sengaja diabaikan — yang
+/// relevan adalah env user target, bukan runner.
+pub fn explicit_home() -> Option<PathBuf> {
+    env::var_os("HAKONFIG_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+/// HOME yang benar untuk operasi ini: eksplisit kalau ada, home proses
+/// kalau tidak.
+pub fn target_home() -> PathBuf {
+    explicit_home().unwrap_or_else(home)
 }
 
 pub fn home() -> PathBuf {
@@ -38,6 +61,9 @@ fn first_dir_with(candidates: Vec<PathBuf>, probes: &[&str]) -> PathBuf {
 
 /// `~/.pi`
 pub fn pi_dir() -> PathBuf {
+    if let Some(target) = explicit_home() {
+        return target.join(".pi");
+    }
     override_root()
         .map(|r| r.join("pi"))
         .unwrap_or_else(|| home().join(".pi"))
@@ -45,6 +71,9 @@ pub fn pi_dir() -> PathBuf {
 
 /// `~/.omp` (oh-my-pi)
 pub fn omp_dir() -> PathBuf {
+    if let Some(target) = explicit_home() {
+        return target.join(".omp");
+    }
     override_root()
         .map(|r| r.join("omp"))
         .unwrap_or_else(|| home().join(".omp"))
@@ -52,6 +81,9 @@ pub fn omp_dir() -> PathBuf {
 
 /// `~/.hermes`
 pub fn hermes_dir() -> PathBuf {
+    if let Some(target) = explicit_home() {
+        return target.join(".hermes");
+    }
     override_root()
         .map(|r| r.join("hermes"))
         .unwrap_or_else(|| home().join(".hermes"))
@@ -59,6 +91,9 @@ pub fn hermes_dir() -> PathBuf {
 
 /// Direktori config OpenCode (berisi `opencode.json`).
 pub fn opencode_config_dir() -> PathBuf {
+    if let Some(target) = explicit_home() {
+        return target.join(".config/opencode");
+    }
     if let Some(root) = override_root() {
         return root.join("opencode/config");
     }
@@ -80,6 +115,9 @@ pub fn opencode_config_dir() -> PathBuf {
 
 /// Direktori data OpenCode (berisi `auth.json`).
 pub fn opencode_data_dir() -> PathBuf {
+    if let Some(target) = explicit_home() {
+        return target.join(".local/share/opencode");
+    }
     if let Some(root) = override_root() {
         return root.join("opencode/data");
     }
@@ -119,6 +157,29 @@ mod unit_tests {
         assert_eq!(hermes_dir(), root.join("hermes"));
         assert_eq!(opencode_config_dir(), root.join("opencode/config"));
         assert_eq!(opencode_data_dir(), root.join("opencode/data"));
+    }
+
+    #[test]
+    fn explicit_home_wins_over_the_test_sandbox_and_uses_real_layout() {
+        let (_lock, root) = sandbox("paths-home");
+        let target = root.join("agent-home");
+        std::fs::create_dir_all(&target).unwrap();
+        // Sandbox HAKONFIG_ROOT sudah diset oleh sandbox(); --home (HAKONFIG_HOME)
+        // menyatakan niat berbeda dan harus menang.
+        std::env::set_var("HAKONFIG_HOME", &target);
+
+        assert_eq!(target_home(), target);
+        assert_eq!(
+            pi_dir(),
+            target.join(".pi"),
+            "layout home asli, bukan <root>/pi"
+        );
+        assert_eq!(omp_dir(), target.join(".omp"));
+        assert_eq!(hermes_dir(), target.join(".hermes"));
+        assert_eq!(opencode_config_dir(), target.join(".config/opencode"));
+        assert_eq!(opencode_data_dir(), target.join(".local/share/opencode"));
+
+        std::env::remove_var("HAKONFIG_HOME");
     }
 
     #[test]

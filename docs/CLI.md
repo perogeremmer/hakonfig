@@ -35,9 +35,46 @@ be installed by passing the tag, e.g. `install.sh v0.4.2`.
 
 | Flag | Effect |
 |---|---|
-| `--root <DIR>` | Redirect every harness directory under `DIR` (same as `HAKONFIG_ROOT`). For tests and sandboxes. |
+| `--home <DIR>` | Treat `DIR` as the HOME of the target user, e.g. an agent's dedicated home (`/var/lib/openbot`). Harness directories resolve inside it with their **real** layout (`<DIR>/.omp`, `<DIR>/.pi`, ...), and version probes use its `.local/bin`. Same as `HAKONFIG_HOME`. |
+| `--root <DIR>` | Redirect every harness directory under `DIR` as a **test** layout (`<DIR>/<harness>/...`). For tests and sandboxes — this is not `--home`. Same as `HAKONFIG_ROOT`. |
 | `--json` | Print machine-readable JSON instead of tables. Also forces non-interactive mode. |
 | `--lang <en\|id>` | UI language. Default `en`; `HAKONFIG_LANG` env var is also honoured. |
+
+`--home` wins over `--root` when both are given.
+
+## Harnesses that run as another user (ADE / VPS)
+
+Agentic setups often give every agent its own user and home (systemd services
+with `User=openbot`, home `/var/lib/openbot`). The harness then reads its
+config from **that** home, so Hakonfig must target it:
+
+```bash
+hakonfig-cli --home /var/lib/openbot show omp
+hakonfig-cli --home /var/lib/openbot add --harness omp --provider deepseek --key-stdin
+```
+
+Rules of thumb:
+
+- **`--home` is the real layout; `--root` is the test layout.** Passing
+  `--root /var/lib/openbot` silently sees an empty machine
+  (`<root>/omp/agent` does not exist there). If you meant a real home, pass
+  `--home`.
+- **Never run as root against another user's home.** Files you write would be
+  owned by root and the agent could lose access to its own keys. Run as the
+  owner instead:
+
+  ```bash
+  sudo -u openbot -H env PATH="/var/lib/openbot/.local/bin:$PATH" hakonfig-cli providers
+  ```
+
+  `sudo -u` alone does not set `HOME`; `-H` does (or use `sudo -iu openbot`).
+  `PATH` must be explicit because sudo uses a secure path. The binary must be
+  executable by that user, so install it outside a private home (`.deb`,
+  `/usr/local/bin`), not in `~/.npm-global` of the admin user.
+- Writes into a home you cannot write report the fix directly: the error
+  message names `sudo -u <user> -H hakonfig-cli ...`.
+- If the agent runs its harness **inside a container**, none of the above
+  applies: target it through `docker exec` / `kubectl exec` instead.
 
 Rules that hold everywhere:
 

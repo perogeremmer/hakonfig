@@ -358,6 +358,16 @@ messages! {
         "unknown language '{raw}'; use en or id.",
         "bahasa '{raw}' tidak dikenal; pakai en atau id."
     ),
+
+    // ---- home target (ADE / VPS)
+    TargetHome => (
+        "target home: {path}",
+        "home target: {path}"
+    ),
+    HomeMissing => (
+        "warning: home '{path}' does not exist yet; configs will be created there.",
+        "peringatan: home '{path}' belum ada; config akan dibuat di sana."
+    ),
 }
 
 /// Teks menurut bahasa aktif.
