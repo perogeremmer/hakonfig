@@ -4,7 +4,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
-## [Unreleased]
+## [0.4.7]
+
+Satu menu saja untuk provider yang sudah terpasang, dan *Cancel* benar-benar
+berhenti tanpa meminta API key lagi.
 
 ### Fixed
 
