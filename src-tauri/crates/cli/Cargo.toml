@@ -4,6 +4,8 @@ version = "0.4.2"
 description = "CLI Hakonfig: kelola config harness tanpa GUI"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/perogeremmer/hakonfig"
+homepage = "https://github.com/perogeremmer/hakonfig"
 rust-version = "1.82"
 
 [[bin]]

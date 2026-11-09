@@ -4,6 +4,8 @@ version = "0.4.2"
 description = "Hakonfig core: read/modify/write AI harness provider config, no Tauri"
 edition = "2021"
 license = "MIT"
+repository = "https://github.com/perogeremmer/hakonfig"
+homepage = "https://github.com/perogeremmer/hakonfig"
 rust-version = "1.82"
 
 [dependencies]

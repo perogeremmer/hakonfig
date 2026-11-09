@@ -1,0 +1,87 @@
+name: Publish crates.io
+
+# Utilitas manual: publish crate ke crates.io tanpa membangun ulang aplikasi
+# desktop. Dipakai ketika langkah crates di `release.yml` terlewat atau gagal
+# karena hal di sisi akun (mis. email crates.io belum diverifikasi), seperti
+# yang terjadi pada v0.4.1 dan v0.4.2.
+#
+#   gh workflow run publish-crates.yml -f tag=v0.4.2
+#
+# Idempoten: crate/versi yang sudah ada di crates.io dilewati.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag rilis yang kodenya mau di-publish (mis. v0.4.2)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: "crates.io: hakonfig-core + hakonfig-cli"
+    runs-on: ubuntu-22.04
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Token tersedia?
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::error::Secret CARGO_REGISTRY_TOKEN belum di-set."
+            exit 1
+          fi
+
+      - name: Versi crate harus sama dengan tag
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/crates/core/Cargo.toml | head -1)
+          expected="${{ inputs.tag }}"
+          expected="${expected#v}"
+          if [ "$version" != "$expected" ]; then
+            echo "::error::versi crate '$version' tidak sama dengan tag '${{ inputs.tag }}'"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+
+      - name: Publish core lalu cli
+        run: |
+          cd src-tauri
+
+          have() {
+            curl -fsS -H "User-Agent: hakonfig-release" \
+              "https://crates.io/api/v1/crates/$1/$VERSION" >/dev/null 2>&1
+          }
+
+          if have hakonfig-core; then
+            echo "hakonfig-core $VERSION sudah ada di crates.io, dilewati."
+          else
+            cargo publish -p hakonfig-core
+          fi
+
+          # crates.io perlu waktu mengindeks core sebelum cli bisa memvalidasi
+          # dependency-nya.
+          for _ in $(seq 1 30); do
+            have hakonfig-core && break
+            sleep 10
+          done
+
+          if have hakonfig-cli; then
+            echo "hakonfig-cli $VERSION sudah ada di crates.io, dilewati."
+          else
+            cargo publish -p hakonfig-cli
+          fi
+
+      - name: Verifikasi tanpa autentikasi
+        run: |
+          for crate in hakonfig-core hakonfig-cli; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" -H "User-Agent: hakonfig-release" \
+              "https://crates.io/api/v1/crates/$crate/$VERSION")
+            echo "$crate $VERSION -> HTTP $code"
+            [ "$code" = "200" ] || exit 1
+          done
