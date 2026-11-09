@@ -182,9 +182,17 @@ pub fn parse_passwd_with_uid(text: &str) -> Vec<(String, PathBuf, u32)> {
 }
 
 /// uid proses ini. Dipakai `--as-user`: tidak perlu sudo kalau sudah user itu.
+///
+/// `None` di platform tanpa uid (Windows): di sana `--as-user` tidak punya
+/// arti, dan CLI menolaknya dengan pesan yang jelas alih-alih gagal misterius.
 #[cfg(unix)]
 pub fn current_uid() -> Option<u32> {
     Some(nix_uid())
+}
+
+#[cfg(not(unix))]
+pub fn current_uid() -> Option<u32> {
+    None
 }
 
 #[cfg(unix)]

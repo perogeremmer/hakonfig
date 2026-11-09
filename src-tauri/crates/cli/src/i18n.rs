@@ -371,6 +371,10 @@ messages! {
 
     // ---- targets
     HeaderEnv => ("ENV", "ENV"),
+    AsUserUnsupported => (
+        "switching users is not supported on this platform; pass --home <dir> to target '{user}' instead.",
+        "berpindah user tidak didukung di platform ini; pakai --home <dir> untuk menargetkan '{user}'."
+    ),
     AsUserUnknown => (
         "no user '{user}' in /etc/passwd. Run `hakonfig-cli targets` to see which homes have a harness.",
         "tidak ada user '{user}' di /etc/passwd. Jalankan `hakonfig-cli targets` untuk lihat home mana yang punya harness."

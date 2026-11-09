@@ -385,7 +385,14 @@ fn switch_user(user: &str, cli: &Cli) -> ExitCode {
     std::env::set_var("HAKONFIG_HOME", &home);
 
     let home_label = home.display().to_string();
-    if hakonfig_core::engine::targets::current_uid() == Some(uid) {
+    let Some(current_uid) = hakonfig_core::engine::targets::current_uid() else {
+        eprintln!(
+            "{}",
+            i18n::fill(t(Msg::AsUserUnsupported), &[("user", user.trim().to_string())])
+        );
+        return ExitCode::FAILURE;
+    };
+    if current_uid == uid {
         // Sudah user yang benar: perilakunya sama dengan --home.
         eprintln!(
             "{}",
