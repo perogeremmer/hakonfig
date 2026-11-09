@@ -4,7 +4,10 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
-## [Unreleased]
+## [0.4.6]
+
+`hakonfig-cli add` untuk provider yang sudah terpasang sekarang memisahkan
+ganti key, pilih model, dan jadikan default — sama seperti aplikasi desktop.
 
 ### Added
 
