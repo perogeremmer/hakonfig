@@ -6,6 +6,8 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.5.1]
+
 ### Added
 
 - CLI: `--home <DIR>` / `HAKONFIG_HOME` untuk mengelola harness milik user
