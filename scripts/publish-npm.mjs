@@ -5,26 +5,29 @@
 //   node scripts/publish-npm.mjs --dry-run <...>   # rakit tanpa publish
 //
 // Struktur:
-//   hakonfig            -> shim bin.js + optionalDependencies per platform
-//   hakonfig-darwin     -> binary universal (Apple Silicon + Intel)
-//   hakonfig-linux-x64  -> binary linux x86_64
-//   hakonfig-win32-x64  -> binary windows x86_64
+//   hakonfig                              -> shim bin.js + optionalDependencies
+//   @perogeremmer/hakonfig-darwin         -> binary universal (Apple Silicon + Intel)
+//   @perogeremmer/hakonfig-linux-x64      -> binary linux x86_64
+//   @perogeremmer/hakonfig-win32-x64      -> binary windows x86_64
 //
 // Binary diambil dari argumen (di CI: hasil unduhan aset release), jadi
 // script ini tidak pernah membangun Rust sendiri.
 //
-// Urutan dan tempo di sini disengaja: package utama di-publish duluan, lalu
-// package platform satu per satu dengan jeda dan retry. npm menjalankan
-// spam detection pada akun yang mem-publish banyak package bernama pola
-// dalam waktu berdekatan (pernah menolak hakonfig-win32-x64 dengan 403);
-// mengurutkan package utama lebih dulu dan memberi jeda terbukti paling
-// aman tanpa harus pindah ke nama scoped (@hakonfig/...).
+// Kenapa package platform scoped? npm menolak nama unscoped berpola seperti
+// `hakonfig-win32-x64` dengan `403 Package name triggered spam detection`
+// (proteksi nama mirip package auto-generated dari akun baru) — sudah dicoba
+// berkali-kali, termasuk jeda dan retry berjam-jam, dan selalu ditolak.
+// Package scoped tidak terkena heuristik itu: ini pola yang dipakai esbuild
+// (`@esbuild/linux-x64`) dan swc (`@swc/core-linux-x64-gnu`). Scope diambil
+// dari username/org npm yang punya token; pindah ke org nanti cukup ganti
+// SCOPE di bawah (mis. `@hakonfig`) plus nama package di npm/hakonfig/bin.js.
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, chmodSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const REPO = "perogeremmer/hakonfig";
+const SCOPE = "@perogeremmer";
 const ROOT = new URL("..", import.meta.url).pathname;
 const SPACING_MS = 30_000; // jeda antar publish
 const RETRY_MS = 60_000; // tunggu sebelum mencoba ulang
@@ -46,21 +49,21 @@ const version = execFileSync("node", [join(ROOT, "scripts/version.mjs"), "show"]
 
 const PLATFORMS = [
   {
-    pkg: "hakonfig-darwin",
+    pkg: `${SCOPE}/hakonfig-darwin`,
     os: ["darwin"],
     cpu: ["x64", "arm64"],
     ext: "",
     bin: binaries[0],
   },
   {
-    pkg: "hakonfig-linux-x64",
+    pkg: `${SCOPE}/hakonfig-linux-x64`,
     os: ["linux"],
     cpu: ["x64"],
     ext: "",
     bin: binaries[1],
   },
   {
-    pkg: "hakonfig-win32-x64",
+    pkg: `${SCOPE}/hakonfig-win32-x64`,
     os: ["win32"],
     cpu: ["x64"],
     ext: ".exe",
@@ -102,6 +105,28 @@ async function publish(dir, name) {
   }
 }
 
+/**
+ * Tandai artefak lama yang sudah tidak dipakai sebagai deprecated, supaya
+ * yang menginstall versi itu dapat peringatan. Best-effort: kegagalan di sini
+ * tidak boleh menggagalkan rilis.
+ */
+function deprecate(spec, message) {
+  try {
+    npm(["deprecate", spec, message]);
+    console.log(`deprecated: ${spec}`);
+  } catch (error) {
+    console.log(`lewati deprecate ${spec}: ${String(error.message).split("\n")[0]}`);
+  }
+}
+
+// Package platform versi lama memakai nama unscoped, yang kini tidak dipakai
+// lagi dan hanya berisi 0.4.0 (win32-nya bahkan tidak pernah lolos publish).
+const LEGACY_PLATFORM_PACKAGES = [
+  "hakonfig-darwin",
+  "hakonfig-linux-x64",
+  "hakonfig-win32-x64",
+];
+
 function packageJson(name, extra) {
   return JSON.stringify(
     {
@@ -124,7 +149,8 @@ function packageJson(name, extra) {
 
 /** Siapkan direktori package dan kembalikan path-nya. */
 function buildPackage(name, files, extra) {
-  const dir = join(tmp, name);
+  // Nama scoped berisi "/": buat nama direktori yang datar.
+  const dir = join(tmp, name.replace("/", "__"));
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, "package.json"), packageJson(name, extra));
   for (const [src, dest] of files) {
@@ -137,8 +163,8 @@ function buildPackage(name, files, extra) {
 }
 
 // ------------------------------------------------------------------ utama
-// Package utama duluan: satu package bernama brand dari akun ini sebelum
-// rangkaian package platform, supaya npm tidak melihat pola spam.
+// Package utama tetap unscoped (`hakonfig`) supaya perintah install-nya
+// pendek; hanya package platform yang scoped.
 const mainDir = buildPackage("hakonfig", [
   [join(ROOT, "npm", "hakonfig", "bin.js"), "bin.js"],
 ], {
@@ -188,6 +214,17 @@ if (dryRun) {
     }
     await publish(dir, name);
     await sleep(SPACING_MS);
+  }
+
+  deprecate(
+    "hakonfig@0.4.0",
+    `Versi ini tidak bisa dipakai di Windows (paket binary win32 gagal publish). Pakai hakonfig@${version} atau lebih baru.`
+  );
+  for (const legacy of LEGACY_PLATFORM_PACKAGES) {
+    deprecate(
+      `${legacy}@0.4.0`,
+      `Nama package ini sudah diganti ${SCOPE}/${legacy} sejak ${version}. Pakai hakonfig@${version}.`
+    );
   }
 }
 

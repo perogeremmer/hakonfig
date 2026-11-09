@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 // Shim `hakonfig-cli` untuk package npm `hakonfig`.
 //
-// Binary asli hidup di package platform (hakonfig-darwin, hakonfig-linux-x64,
-// hakonfig-win32-x64) sebagai optionalDependencies; shim ini meneruskan
-// seluruh argumen ke binary yang cocok dengan platform saat ini.
+// Binary asli hidup di package platform (lihat PLATFORMS di bawah) sebagai
+// optionalDependencies; shim ini meneruskan seluruh argumen ke binary yang
+// cocok dengan platform saat ini.
+//
+// Package platform sengaja scoped: npm memblokir nama unscoped berpola
+// seperti `hakonfig-win32-x64` dengan spam detection.
 "use strict";
 
 const { spawnSync } = require("node:child_process");
 
+const SCOPE = "@perogeremmer";
 const PLATFORMS = {
-  darwin: { pkg: "hakonfig-darwin", ext: "" },
-  linux: { pkg: "hakonfig-linux-x64", ext: "" },
-  win32: { pkg: "hakonfig-win32-x64", ext: ".exe" },
+  darwin: { pkg: `${SCOPE}/hakonfig-darwin`, ext: "" },
+  linux: { pkg: `${SCOPE}/hakonfig-linux-x64`, ext: "" },
+  win32: { pkg: `${SCOPE}/hakonfig-win32-x64`, ext: ".exe" },
 };
 
 const target = PLATFORMS[process.platform];

@@ -1,6 +1,6 @@
 [package]
 name = "hakonfig-cli"
-version = "0.4.0"
+version = "0.4.1"
 description = "CLI Hakonfig: kelola config harness tanpa GUI"
 edition = "2021"
 license = "MIT"
@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 # `version` wajib untuk publish ke crates.io; lokal tetap memakai `path`.
-hakonfig-core = { path = "../core", version = "0.4.0" }
+hakonfig-core = { path = "../core", version = "0.4.1" }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 serde = "1"

@@ -4,6 +4,21 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/) dan
 [Semantic Versioning](https://semver.org/). Nomor versi disebarkan ke seluruh
 file oleh `scripts/version.mjs`.
 
+## [0.4.1]
+
+### Fixed
+
+- npm: paket binary platform dipindah ke scope `@perogeremmer/`
+  (`@perogeremmer/hakonfig-darwin`, `-linux-x64`, `-win32-x64`). npm menolak
+  publish nama unscoped `hakonfig-win32-x64` dengan `403 Package name
+  triggered spam detection` — proteksi terhadap nama berpola auto-generated
+  dari akun baru — sehingga `npm i -g hakonfig` di Windows gagal karena
+  optional dependency-nya tidak pernah ada. Pola scoped ini sama dengan
+  distribusi esbuild/swc. Paket utama tetap `hakonfig` (tanpa scope), jadi
+  perintah install tidak berubah.
+- npm: `hakonfig@0.4.0` serta dua paket platform unscoped ditandai
+  *deprecated* supaya pengguna versi lama dapat peringatan saat install.
+
 ## [0.4.0]
 
 ### Added
