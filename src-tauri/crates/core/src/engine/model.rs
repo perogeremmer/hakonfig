@@ -61,6 +61,13 @@ pub struct ProviderSummary {
     pub api: Option<String>,
     pub has_key: bool,
     pub key_display: Option<String>,
+    /// true bila kredensialnya tersimpan di file (bisa dihapus dari sini).
+    ///
+    /// `has_key` juga benar untuk key yang hanya ada di environment; yang itu
+    /// tidak bisa dihapus Hakonfig, jadi aksi "lupakan kredensial" harus tahu
+    /// bedanya.
+    #[serde(default)]
+    pub key_stored: bool,
     pub models: Vec<ModelSummary>,
     /// false bila provider dinonaktifkan lewat daftar disable milik harness.
     pub enabled: bool,
@@ -159,6 +166,16 @@ pub enum EditOp {
         provider_id: String,
         key: String,
         key_mode: KeyMode,
+    },
+    /// Hapus kredensial tersimpan milik satu provider.
+    ///
+    /// Dipakai untuk benar-benar membuat harness berhenti menawarkan provider:
+    /// untuk provider bawaan (mis. pi + deepseek) menghapus entri di config kita
+    /// tidak cukup, karena harness tetap mengenalinya selama kredensialnya ada.
+    /// Destruktif, jadi hanya lewat aksi eksplisit pengguna, dan file tetap
+    /// di-backup seperti penulisan lain.
+    ForgetKey {
+        provider_id: String,
     },
     /// Ganti daftar model saja: kredensial dan endpoint tidak disentuh.
     ///

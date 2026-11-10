@@ -281,6 +281,7 @@ impl Adapter for OpenCodeAdapter {
                 api: get_str(entry, "npm"),
                 has_key,
                 key_display,
+                key_stored: false,
                 models,
                 enabled: !disabled.iter().any(|d| d == id),
                 can_toggle: self.supports_toggle(),
@@ -614,6 +615,9 @@ impl Adapter for OpenCodeAdapter {
                     provider, model
                 )])
             }
+            EditOp::ForgetKey { .. } => anyhow::bail!(
+                "OPENCODE has no separate credential store: the API key lives in the provider entry, so remove the provider instead.",
+            ),
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();
                 let container = providers_key(docs.require("config")?.data());

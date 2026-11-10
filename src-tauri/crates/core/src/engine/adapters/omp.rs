@@ -157,6 +157,7 @@ impl Adapter for OmpAdapter {
                     api: get_str(entry, "api"),
                     has_key: api_key.is_some(),
                     key_display: api_key.map(|k| mask_key(&k)),
+                    key_stored: false,
                     models: shared::models_from_pi_style(entry),
                     enabled: !disabled.iter().any(|d| d == id),
                     can_toggle: self.supports_toggle(),
@@ -396,6 +397,9 @@ impl Adapter for OmpAdapter {
                 );
                 Ok(warnings)
             }
+            EditOp::ForgetKey { .. } => anyhow::bail!(
+                "Oh My Pi has no separate credential store: the API key lives in the provider entry, so remove the provider instead.",
+            ),
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();
                 let mut removed = false;

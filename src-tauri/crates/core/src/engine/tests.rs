@@ -2083,3 +2083,270 @@ fn set_models_is_rejected_for_hermes_with_a_clear_message() {
     .unwrap_err();
     assert!(error.contains("no model list"), "{error}");
 }
+
+// ------------------------------------------------- default saat toggle (pi)
+
+/// Dua provider aktif + default di salah satunya.
+fn pi_two_providers(root: &Path) {
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "deepseek": {
+      "name": "DeepSeek",
+      "baseUrl": "https://api.deepseek.com",
+      "api": "openai-completions",
+      "models": [{ "id": "deepseek-chat", "name": "DeepSeek Chat" }]
+    },
+    "myproxy": {
+      "name": "My Proxy",
+      "baseUrl": "https://proxy.example.com/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "proxy-a", "name": "Proxy A" }]
+    }
+  }
+}"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"deepseek":{"type":"api_key","key":"sk-ds"},"myproxy":{"type":"api_key","key":"sk-px"}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"defaultProvider":"deepseek","defaultModel":"deepseek/deepseek-chat"}"#,
+    );
+}
+
+#[test]
+fn pi_disable_moves_default_to_another_active_provider() {
+    let (_lock, root) = sandbox("pi-default-move");
+    pi_two_providers(&root);
+
+    let result = api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "deepseek".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = json(&root.join("pi/agent/settings.json"));
+    assert_eq!(
+        settings["defaultProvider"], "myproxy",
+        "default tidak boleh tertinggal di provider yang dinonaktifkan: {settings}"
+    );
+    assert_eq!(settings["defaultModel"], "myproxy/proxy-a");
+    assert!(
+        result
+            .warnings
+            .iter()
+            .any(|line| line.contains("Default moved to 'myproxy/proxy-a'")),
+        "perpindahan default harus terlihat: {:?}",
+        result.warnings
+    );
+}
+
+#[test]
+fn pi_disable_last_provider_clears_default() {
+    let (_lock, root) = sandbox("pi-default-clear");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"deepseek":{"name":"DeepSeek","baseUrl":"https://api.deepseek.com","api":"openai-completions","models":[{"id":"deepseek-chat"}]}}}"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"deepseek":{"type":"api_key","key":"sk-ds"}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"defaultProvider":"deepseek","defaultModel":"deepseek/deepseek-chat","theme":"dark"}"#,
+    );
+
+    let result = api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "deepseek".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert!(
+        settings.get("defaultProvider").is_none(),
+        "semua provider nonaktif: default harus dikosongkan, bukan menunjuk provider mati: {settings}"
+    );
+    assert!(settings.get("defaultModel").is_none());
+    // Key lain di settings.json tidak boleh ikut hilang.
+    assert_eq!(settings["theme"], "dark");
+    assert!(
+        result
+            .warnings
+            .iter()
+            .any(|line| line.contains("default pointing at 'deepseek' was cleared")),
+        "{:?}",
+        result.warnings
+    );
+}
+
+#[test]
+fn pi_enable_fills_a_missing_default() {
+    let (_lock, root) = sandbox("pi-default-fill");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"myproxy":{"name":"My Proxy","baseUrl":"https://proxy.example.com/v1","api":"openai-completions","models":[{"id":"proxy-a"}]}}}"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"myproxy":{"type":"api_key","key":"sk"}}"#,
+    );
+    write(&dir.join("settings.json"), r#"{"theme":"dark"}"#);
+
+    // Nonaktifkan dulu supaya provider tercatat sebagai nonaktif.
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "myproxy".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "myproxy".to_string(),
+            enabled: true,
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert_eq!(settings["defaultProvider"], "myproxy", "{settings}");
+    assert_eq!(settings["defaultModel"], "myproxy/proxy-a");
+}
+
+#[test]
+fn pi_default_pointing_at_a_disabled_provider_becomes_a_notice_with_fix() {
+    let (_lock, root) = sandbox("pi-default-notice");
+    pi_two_providers(&root);
+
+    // Config lama: provider dinonaktifkan tanpa memindahkan default.
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "deepseek".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+    // Kembalikan default ke provider yang sudah mati, seperti file hasil edit manual.
+    write(
+        &root.join("pi/agent/settings.json"),
+        r#"{"defaultProvider":"deepseek","defaultModel":"deepseek/deepseek-chat"}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "pi.default_disabled")
+        .unwrap_or_else(|| panic!("notice harus muncul: {notices:?}"));
+    assert_eq!(notice.provider, "deepseek");
+    assert!(notice.fix.is_some(), "harus bisa dibereskan otomatis");
+
+    let fixed =
+        api::fix_notice("pi".into(), "pi.default_disabled".into(), "deepseek".into()).unwrap();
+    assert!(!fixed.files_written.is_empty());
+
+    let settings = json(&root.join("pi/agent/settings.json"));
+    assert_eq!(settings["defaultProvider"], "myproxy", "{settings}");
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    assert!(!notices.iter().any(|n| n.code == "pi.default_disabled"));
+}
+
+// ------------------------------------------------------ kredensial (forget)
+
+#[test]
+fn pi_forget_key_removes_the_stored_credential_but_keeps_the_provider() {
+    let (_lock, root) = sandbox("pi-forget-key");
+    pi_two_providers(&root);
+
+    let result = api::apply_edit(
+        "pi".into(),
+        EditOp::ForgetKey {
+            provider_id: "deepseek".to_string(),
+        },
+    )
+    .unwrap();
+
+    let auth = json(&root.join("pi/agent/auth.json"));
+    assert!(
+        auth.get("deepseek").is_none(),
+        "kredensial harus hilang dari auth.json: {auth}"
+    );
+    assert_eq!(
+        auth["myproxy"]["key"], "sk-px",
+        "provider lain tidak disentuh"
+    );
+    // Provider tetap ada di models.json: yang dihapus hanya kredensialnya.
+    let models = read_json_value(&root.join("pi/agent/models.json"));
+    assert!(models["providers"].get("deepseek").is_some());
+    // File sensitif di-backup, jadi nilainya bisa dipulihkan.
+    assert!(result.backup_dir.is_some());
+    assert!(
+        result
+            .warnings
+            .iter()
+            .any(|line| line.contains("Stored credential for 'deepseek' removed")),
+        "{:?}",
+        result.warnings
+    );
+}
+
+#[test]
+fn pi_forget_key_says_so_when_the_credential_lives_in_the_environment() {
+    let (_lock, root) = sandbox("pi-forget-env");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"deepseek":{"name":"DeepSeek","baseUrl":"https://api.deepseek.com","api":"openai-completions","apiKey":"$DEEPSEEK_API_KEY","models":[{"id":"deepseek-chat"}]}}}"#,
+    );
+    write(&dir.join("auth.json"), "{}");
+
+    let error = api::apply_edit(
+        "pi".into(),
+        EditOp::ForgetKey {
+            provider_id: "deepseek".to_string(),
+        },
+    )
+    .unwrap_err();
+    assert!(
+        error.contains("environment variable"),
+        "pesan harus menunjuk env var, bukan gagal tanpa penjelasan: {error}"
+    );
+}
+
+#[test]
+fn forget_key_is_rejected_where_the_key_lives_in_the_provider_entry() {
+    let (_lock, root) = sandbox("omp-forget-key");
+    let dir = root.join("omp");
+    write(
+        &dir.join("models.yml"),
+        "providers:\n  groq:\n    apiKey: gsk-abc\n    baseUrl: https://api.groq.com/openai/v1\n    models:\n      - id: m1\n",
+    );
+
+    let error = api::apply_edit(
+        "omp".into(),
+        EditOp::ForgetKey {
+            provider_id: "groq".to_string(),
+        },
+    )
+    .unwrap_err();
+    assert!(
+        error.to_lowercase().contains("credential"),
+        "harness yang menyimpan key di entri provider harus menolak dengan jelas: {error}"
+    );
+}

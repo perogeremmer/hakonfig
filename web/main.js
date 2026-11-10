@@ -1039,6 +1039,16 @@ function wiringHarness(container) {
       if (!provider) return;
       openMenu(button, [
         { label: t("provider.changeKey"), icon: "key", onSelect: () => openKeyModal(provider) },
+        ...(provider.keyStored
+          ? [
+              {
+                label: t("provider.forgetKey"),
+                icon: "trash",
+                danger: true,
+                onSelect: () => askForgetKey(provider),
+              },
+            ]
+          : []),
         {
           label: t("provider.changeModels"),
           icon: "list",
@@ -1192,6 +1202,8 @@ function summaryFor(op) {
       ];
     case "set_default":
       return [t("review.setDefault", { provider: op.providerId, model: op.modelId })];
+    case "forget_key":
+      return [t("review.forgetKey", { name })];
     default:
       return [];
   }
@@ -1316,8 +1328,16 @@ async function toggleProvider(providerId) {
 
   const next = !(provider.enabled !== false);
   try {
-    await api.apply(state.activeId, { kind: "set_enabled", providerId, enabled: next });
+    const result = await api.apply(state.activeId, {
+      kind: "set_enabled",
+      providerId,
+      enabled: next,
+    });
+    // Perubahan default dan penjelasan "provider ini juga bawaan harness" hanya
+    // ada di warnings; menyembunyikannya membuat tombol ini tampak tidak bekerja.
+    const detail = (result.warnings ?? []).join("\n");
     toast(next ? t("toast.providerEnabled", { name: provider.name }) : t("toast.providerDisabled", { name: provider.name }), {
+      detail: detail || undefined,
       action: {
         label: t("toast.undo"),
         onClick: async () => {
@@ -1330,9 +1350,43 @@ async function toggleProvider(providerId) {
         },
       },
     });
+    offerNoticeFix(state.activeId, result.notices ?? []);
     await refreshAll();
   } catch (error) {
     toast(t("toast.toggleFailed"), { variant: "err", detail: String(error) });
+  }
+}
+
+/**
+ * Hapus kredensial tersimpan satu provider.
+ *
+ * Satu-satunya cara membuat harness berhenti menawarkan provider bawaan: selama
+ * kredensialnya ada, pi tetap mengenalinya walau entri kita di models.json sudah
+ * dinonaktifkan. Destruktif, jadi selalu lewat konfirmasi, dan file di-backup.
+ */
+async function askForgetKey(provider) {
+  const ok = await confirmDialog({
+    title: t("forget.title", { name: provider.name || provider.id }),
+    body: t("forget.body"),
+    bullets: [t("forget.keepsProvider"), t("forget.backup"), t("forget.env")],
+    confirmLabel: t("forget.confirm"),
+    danger: true,
+  });
+  if (!ok) return;
+
+  try {
+    const result = await api.apply(state.activeId, {
+      kind: "forget_key",
+      providerId: provider.id,
+    });
+    const detail = (result.warnings ?? []).join("\n");
+    toast(t("forget.done", { name: provider.name || provider.id }), {
+      detail: detail || undefined,
+    });
+    if (result.backupDir) toast(t("toast.backupSaved"), { variant: "info", detail: result.backupDir });
+    await refreshAll();
+  } catch (error) {
+    toast(t("forget.failed"), { variant: "err", detail: String(error) });
   }
 }
 

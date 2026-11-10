@@ -195,6 +195,7 @@ fn op_provider(op: &EditOp) -> Option<ProviderRef<'_>> {
             Some(draft.base_url.trim()),
         )),
         EditOp::Remove { provider_id }
+        | EditOp::ForgetKey { provider_id }
         | EditOp::SetEnabled { provider_id, .. }
         | EditOp::SetDefault { provider_id, .. }
         | EditOp::SetKey { provider_id, .. }
