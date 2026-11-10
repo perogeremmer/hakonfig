@@ -29,6 +29,15 @@ pub fn list_harnesses() -> Vec<HarnessInfo> {
     core_api::list_harnesses()
 }
 
+/// Dugaan dukungan thinking untuk model yang baru di-sync dari endpoint.
+#[tauri::command]
+pub fn reasoning_hints(
+    provider_id: String,
+    model_ids: Vec<String>,
+) -> Result<Vec<hakonfig_core::engine::reasoning::ReasoningHint>, String> {
+    core_api::reasoning_hints(provider_id, model_ids)
+}
+
 /// Temuan yang membuat config tidak terlihat harness (mis. provider yang masih
 /// punya kredensial padahal sudah dinonaktifkan).
 ///

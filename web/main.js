@@ -138,6 +138,8 @@ const api = {
   presets: () => invoke("list_presets"),
   read: (harnessId) => invoke("read_harness", { harnessId }),
   notices: (harnessId) => invoke("list_notices", { harnessId }),
+  reasoningHints: (providerId, modelIds) =>
+    invoke("reasoning_hints", { providerId, modelIds }),
   preview: (harnessId, op) => invoke("preview_edit", { harnessId, op }),
   apply: (harnessId, op) => invoke("apply_edit", { harnessId, op }),
   backups: (harnessId) => invoke("list_backups", { harnessId }),
@@ -1047,7 +1049,9 @@ function renderNotices() {
           notice.fix
             ? `<button data-action data-notice-fix data-code="${esc(notice.code)}" data-provider="${esc(
                 notice.provider,
-              )}" class="hk-btn hk-btn-secondary hk-btn-sm shrink-0">${esc(notice.fix)}</button>`
+              )}" data-destructive="${notice.destructive ? "true" : "false"}" class="hk-btn ${
+                notice.destructive ? "hk-btn-danger" : "hk-btn-secondary"
+              } hk-btn-sm shrink-0">${esc(notice.fix)}</button>`
             : ""
         }
       </li>`,
@@ -1066,6 +1070,18 @@ function renderNotices() {
 function wiringHarness(container) {
   $$("[data-notice-fix]", container).forEach((button) => {
     button.addEventListener("click", async () => {
+      // Aksi destruktif (menghapus kredensial) tidak bisa dibuat ulang oleh
+      // aplikasi, jadi selalu lewat konfirmasi eksplisit.
+      if (button.dataset.destructive === "true") {
+        const ok = await confirmDialog({
+          title: t("forget.title", { name: button.dataset.provider }),
+          body: t("forget.body"),
+          bullets: [t("forget.keepsProvider"), t("forget.backup"), t("forget.env")],
+          confirmLabel: t("forget.confirm"),
+          danger: true,
+        });
+        if (!ok) return;
+      }
       button.disabled = true;
       try {
         const result = await api.fixNotice(state.activeId, button.dataset.code, button.dataset.provider);
@@ -1558,6 +1574,24 @@ function openKeyModal(provider) {
       keyMode: selected,
     }, harnessId);
   });
+}
+
+/**
+ * Dugaan reasoning untuk sekumpulan id model.
+ *
+ * Gagal di sini tidak boleh menghentikan sync: lebih baik semua non-reasoning
+ * (dan pengguna mencentang manual) daripada sync batal.
+ */
+async function loadReasoningHints(providerId, modelIds) {
+  const out = new Map();
+  if (!modelIds.length) return out;
+  try {
+    const hints = await api.reasoningHints(providerId, modelIds);
+    for (const hint of hints) out.set(hint.id, hint);
+  } catch (error) {
+    console.warn("reasoning hints:", error);
+  }
+  return out;
 }
 
 /** Nyalakan/matikan model milik satu provider (tanpa menyentuh key). */
@@ -2249,6 +2283,13 @@ function renderProviderForm(mode, provider) {
               <button data-action data-add-model class="hk-btn hk-btn-secondary hk-btn-sm">
                 ${icon("plus", "h-3.5 w-3.5")}${esc(t("advanced.addModel"))}
               </button>
+              <button data-action data-reasoning-detected class="hk-btn hk-btn-secondary hk-btn-sm"
+                title="${esc(t("advanced.reasoningDetectedHint"))}">
+                ${icon("brain", "h-3.5 w-3.5")}${esc(t("advanced.reasoningDetected"))}
+              </button>
+              <button data-action data-reasoning-all class="hk-btn hk-btn-ghost hk-btn-sm">
+                ${icon("brain", "h-3.5 w-3.5")}${esc(t("advanced.reasoningAll"))}
+              </button>
             </div>
           </div>
           <div data-search-host class="mb-2 hidden rounded-[14px] border border-brand/30 bg-brand-soft/40 p-2.5">
@@ -2392,6 +2433,30 @@ function renderProviderForm(mode, provider) {
   };
   wire();
 
+  // Tandai reasoning untuk semua model tanpa mencentang satu per satu.
+  // "terdeteksi" memakai katalog harness/preset/pola id; "semua" memaksa.
+  const applyReasoning = async (mode) => {
+    const list = readModels().filter((model) => model.id);
+    if (!list.length) return toast(t("toast.needModelId"), { variant: "err" });
+
+    if (mode === "all") {
+      rerender(list.map((model) => ({ ...model, reasoning: true })));
+      toast(t("advanced.reasoningAllDone", { count: list.length }));
+      return;
+    }
+
+    const hints = await loadReasoningHints(providerKeyId(), list.map((model) => model.id));
+    const next = list.map((model) => ({
+      ...model,
+      reasoning: hints.get(model.id)?.reasoning === true,
+    }));
+    rerender(next);
+    const detected = next.filter((model) => model.reasoning).length;
+    toast(t("advanced.reasoningDetectedDone", { detected, total: next.length }));
+  };
+  $("[data-reasoning-all]", overlay)?.addEventListener("click", () => applyReasoning("all"));
+  $("[data-reasoning-detected]", overlay)?.addEventListener("click", () => applyReasoning("detected"));
+
   // Tarik daftar model langsung dari endpoint provider.
   $("[data-sync-models]", overlay).addEventListener("click", async () => {
     const key = typedKey();
@@ -2404,14 +2469,20 @@ function renderProviderForm(mode, provider) {
       endpointModels = found;
       const list = readModels().filter((model) => model.id);
       const known = new Set(list.map((model) => model.id));
-      for (const model of found) {
-        if (known.has(model.id)) continue;
+      const fresh = found.filter((model) => !known.has(model.id));
+      // `/models` tidak memberi tahu dukungan thinking. Tanyakan ke katalog
+      // harness / preset / pola id supaya model baru tidak masuk sebagai
+      // non-reasoning semua dan harus dicentang satu per satu.
+      const hints = await loadReasoningHints(providerKeyId(), fresh.map((model) => model.id));
+      for (const model of fresh) {
+        const hint = hints.get(model.id);
         list.push({
           id: model.id,
           name: prettyModel(model.id),
           contextWindow: model.contextWindow ?? "",
           maxTokens: "",
-          reasoning: false,
+          reasoning: hint?.reasoning === true,
+          reasoningSource: hint?.source ?? null,
           vision: false,
         });
       }

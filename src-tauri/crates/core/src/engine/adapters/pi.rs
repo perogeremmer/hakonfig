@@ -220,6 +220,31 @@ impl PiAdapter {
     /// punya kredensial). Gejalanya sangat membingungkan — "Hakonfig bilang
     /// default-nya opencode-go, pi memakai deepseek" — jadi lebih baik
     /// dilaporkan dan bisa diperbaiki sekali klik.
+    fn reasoning_notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        providers
+            .iter()
+            .filter_map(|reference| {
+                let missing = Self::reasoning_missing(docs, reference.id);
+                if missing.is_empty() {
+                    return None;
+                }
+                let sample = missing.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+                Some(Notice {
+                    code: "pi.reasoning_missing".to_string(),
+                    harness: "pi".to_string(),
+                    provider: reference.id.to_string(),
+                    message: format!(
+                        "{} model of '{}' support thinking according to pi's catalog but are stored without reasoning, so pi never sends thinking parameters and no thinking levels appear ({sample}).",
+                        missing.len(),
+                        reference.id
+                    ),
+                    fix: Some("Mark them as reasoning".to_string()),
+                    destructive: false,
+                })
+            })
+            .collect()
+    }
+
     fn default_format_notices(&self, docs: &Docs) -> Vec<Notice> {
         let Some(settings) = docs.get("settings") else {
             return Vec::new();
@@ -252,7 +277,112 @@ impl PiAdapter {
                 model.trim_start_matches(&format!("{provider}/"))
             ),
             fix: Some("Write the bare model id".to_string()),
+            destructive: false,
         }]
+    }
+
+    /// Hapus kredensial tersimpan satu provider (auth.json / apiKey literal).
+    ///
+    /// Dipakai dua jalur: aksi eksplisit "lupakan kredensial", dan perbaikan
+    /// notice "provider ini masih punya kredensial padahal sudah dinonaktifkan".
+    /// Referensi `$ENV` tidak dihapus karena nilainya di shell pengguna.
+    fn forget_credential(docs: &mut Docs, target: &str) -> Result<Vec<String>> {
+        let mut warnings = Vec::new();
+        let mut removed = false;
+
+        if let Some(auth) = docs.get_mut("auth") {
+            if auth.data().get(target).is_some() {
+                auth.root_object().remove(target);
+                removed = true;
+            }
+        }
+        if let Some(models) = docs.get_mut("models") {
+            if let Some(entry) = models
+                .object_at("providers")
+                .get_mut(target)
+                .and_then(Value::as_object_mut)
+            {
+                let inline = entry
+                    .get("apiKey")
+                    .and_then(Value::as_str)
+                    .map(|value| !value.trim_start().starts_with('$'))
+                    .unwrap_or(false);
+                if inline {
+                    entry.remove("apiKey");
+                    removed = true;
+                }
+            }
+        }
+
+        if !removed {
+            anyhow::bail!(
+                "No stored credential for '{}'. It may use an environment variable.",
+                target
+            );
+        }
+
+        warnings.push(format!(
+            "Stored credential for '{}' removed (auth.json / models.json). The value is still in the backup file.",
+            target
+        ));
+
+        let env_name = format!(
+            "{}_API_KEY",
+            target.to_ascii_uppercase().replace(['-', '.'], "_")
+        );
+        if std::env::var_os(&env_name).is_some() {
+            warnings.push(format!(
+                "{env_name} is still set in your environment, so pi keeps offering '{target}'. Unset it to finish disabling the provider."
+            ));
+        }
+        Ok(warnings)
+    }
+
+    /// Model yang menurut katalog pi mendukung thinking, tetapi di config
+    /// ditandai bukan reasoning.
+    ///
+    /// Ini penyebab paling umum "variant thinking-nya tidak ada": tanpa
+    /// `reasoning: true`, pi tidak pernah mengirim parameter thinking, dan
+    /// `thinkingLevelMap` pun tidak ditulis. Sumbernya hanya katalog (bukan
+    /// pola id) supaya yang dilaporkan benar-benar data, bukan tebakan.
+    fn reasoning_missing(docs: &Docs, provider: &str) -> Vec<String> {
+        let Some(models) = docs.get("models") else {
+            return Vec::new();
+        };
+        let Some(entry) = models
+            .data()
+            .get("providers")
+            .and_then(|map| map.get(provider))
+        else {
+            return Vec::new();
+        };
+        let Some(list) = entry.get("models").and_then(Value::as_array) else {
+            return Vec::new();
+        };
+
+        let ids: Vec<String> = list
+            .iter()
+            .filter(|model| {
+                !model
+                    .get("reasoning")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+            })
+            .filter_map(|model| get_str(model, "id"))
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty())
+            .collect();
+        if ids.is_empty() {
+            return Vec::new();
+        }
+
+        crate::engine::reasoning::hints(provider, &ids)
+            .into_iter()
+            .filter(|hint| {
+                hint.reasoning && hint.source == crate::engine::reasoning::HintSource::Catalog
+            })
+            .map(|hint| hint.id)
+            .collect()
     }
 
     /// Notice: model ber-reasoning tanpa variant thinking lengkap.
@@ -301,6 +431,7 @@ impl PiAdapter {
                     reference.id
                 ),
                 fix: Some("Add the standard thinking variants".to_string()),
+                destructive: false,
             });
         }
         notices
@@ -355,6 +486,7 @@ impl PiAdapter {
                 }
                 .to_string(),
             ),
+            destructive: false,
         }]
     }
 
@@ -443,6 +575,7 @@ impl PiAdapter {
                     "Add '{}' to enabledModels",
                     glob::provider_wide_pattern(provider)
                 )),
+                destructive: false,
             });
         }
         notices
@@ -766,7 +899,13 @@ impl PiAdapter {
                 harness: self.id().to_string(),
                 provider: provider.clone(),
                 message,
-                fix: None,
+                // Aplikasi hanya bisa menghapus kredensial yang tersimpan di
+                // file. Kalau sumbernya env, jangan janjikan tombol yang tidak
+                // bisa menepati.
+                fix: in_auth(provider).then(|| "Forget the stored credential".to_string()),
+                // Menghapus API key tidak bisa dibuat ulang oleh aplikasi, jadi
+                // `doctor --fix` tidak boleh melakukannya sendiri.
+                destructive: true,
             });
         }
 
@@ -790,6 +929,7 @@ impl PiAdapter {
                         "the stored pi.dev catalog for '{provider}' is empty or has no timestamp, so pi falls back to the list shipped with the installed version. The last catalog request for it never succeeded."
                     ),
                     fix: None,
+                    destructive: false,
                 });
             }
         }
@@ -1133,66 +1273,7 @@ impl Adapter for PiAdapter {
                 if target.is_empty() {
                     anyhow::bail!("Provider is required.");
                 }
-
-                let mut warnings = Vec::new();
-                let mut removed = false;
-
-                // Kredensial tersimpan.
-                if let Some(auth) = docs.get_mut("auth") {
-                    if auth.data().get(&target).is_some() {
-                        auth.root_object().remove(&target);
-                        removed = true;
-                    }
-                }
-                // apiKey literal di models.json menang atas auth.json, jadi ikut
-                // dibersihkan kalau ada. Referensi `$ENV` dibiarkan: nilainya di
-                // shell pengguna, bukan di file ini, dan menghapus referensinya
-                // tidak mengubah apa pun bagi harness.
-                let mut drop_key = false;
-                if let Some(models) = docs.get_mut("models") {
-                    if let Some(entry) = models
-                        .object_at("providers")
-                        .get_mut(&target)
-                        .and_then(Value::as_object_mut)
-                    {
-                        let inline = entry
-                            .get("apiKey")
-                            .and_then(Value::as_str)
-                            .map(|value| !value.trim_start().starts_with('$'))
-                            .unwrap_or(false);
-                        if inline {
-                            entry.remove("apiKey");
-                            drop_key = true;
-                            removed = true;
-                        }
-                    }
-                }
-                let _ = drop_key;
-
-                if !removed {
-                    anyhow::bail!(
-                        "No stored credential for '{}'. It may use an environment variable.",
-                        target
-                    );
-                }
-
-                warnings.push(format!(
-                    "Stored credential for '{}' removed (auth.json / models.json). The value is still in the backup file.",
-                    target
-                ));
-
-                // Env var tidak bisa dihapus dari sini, dan itu justru yang
-                // membuat provider tetap hidup di harness.
-                let env_name = format!(
-                    "{}_API_KEY",
-                    target.to_ascii_uppercase().replace(['-', '.'], "_")
-                );
-                if std::env::var_os(&env_name).is_some() {
-                    warnings.push(format!(
-                        "{env_name} is still set in your environment, so pi keeps offering '{target}'. Unset it to finish disabling the provider."
-                    ));
-                }
-                Ok(warnings)
+                Self::forget_credential(docs, &target)
             }
             EditOp::SetModels {
                 provider_id,
@@ -1428,6 +1509,7 @@ impl Adapter for PiAdapter {
         notices.extend(self.default_notices(docs, providers));
         notices.extend(self.thinking_notices(docs, providers));
         notices.extend(self.default_format_notices(docs));
+        notices.extend(self.reasoning_notices(docs, providers));
         notices.extend(self.catalog_notices(docs));
         notices
     }
@@ -1481,6 +1563,72 @@ impl Adapter for PiAdapter {
                 root.insert("defaultModel".to_string(), Value::String(bare.clone()));
                 Ok(Some(format!(
                     "settings.json: defaultModel now '{bare}' (pi expects the model id without the provider prefix)."
+                )))
+            }
+            // Notice "masih punya kredensial": satu-satunya jalan keluar yang
+            // bisa dikerjakan aplikasi adalah menghapus kredensial tersimpan.
+            // Kalau kredensialnya hanya di environment, aksinya tidak
+            // ditawarkan (notice.fix = None) karena aplikasi tidak bisa
+            // menyentuh shell pengguna.
+            "catalog.credential-without-provider" => {
+                Ok(Self::forget_credential(docs, &notice.provider)?
+                    .into_iter()
+                    .next())
+            }
+            "pi.reasoning_missing" => {
+                let target = notice.provider.clone();
+                let ids = Self::reasoning_missing(docs, &target);
+                if ids.is_empty() {
+                    anyhow::bail!("No model of '{target}' is missing reasoning.");
+                }
+                let mut hints: std::collections::BTreeMap<String, Value> =
+                    std::collections::BTreeMap::new();
+                for hint in crate::engine::reasoning::hints(&target, &ids) {
+                    if hint.reasoning {
+                        hints.insert(hint.id, hint.thinking_level_map.unwrap_or(Value::Null));
+                    }
+                }
+                let models = docs.require_mut("models")?;
+                let Some(list) = models
+                    .object_at("providers")
+                    .get_mut(&target)
+                    .and_then(|entry| entry.get_mut("models"))
+                    .and_then(Value::as_array_mut)
+                else {
+                    anyhow::bail!("Provider '{target}' has no models to update.");
+                };
+
+                let mut updated = 0;
+                let mut written: Vec<Value> = std::mem::take(list);
+                for model in &mut written {
+                    let Some(id) = get_str(model, "id").map(|id| id.trim().to_string()) else {
+                        continue;
+                    };
+                    if !hints.contains_key(&id) {
+                        continue;
+                    }
+                    let Some(object) = model.as_object_mut() else {
+                        continue;
+                    };
+                    object.insert("reasoning".to_string(), Value::Bool(true));
+                    updated += 1;
+                    let existing_map = object
+                        .get("thinkingLevelMap")
+                        .map(Value::is_object)
+                        .unwrap_or(false);
+                    if !existing_map {
+                        let catalogue_map = hints.get(&id).cloned().unwrap_or(Value::Null);
+                        let map = match catalogue_map {
+                            Value::Object(_) => catalogue_map,
+                            _ => thinking_level_map(),
+                        };
+                        object.insert("thinkingLevelMap".to_string(), map);
+                    }
+                }
+                fill_thinking_levels(&mut written);
+                *list = written;
+                Ok(Some(format!(
+                    "reasoning written for {updated} model(s) of '{target}'."
                 )))
             }
             "pi.thinking_map" => {

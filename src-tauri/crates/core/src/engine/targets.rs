@@ -275,6 +275,7 @@ pub fn cross_home_notices(
                         current = current_home.display(),
                     ),
                     fix: None,
+                    destructive: false,
                 });
             }
         }
@@ -319,6 +320,7 @@ pub fn ownership_notices(
                     path.display(),
                 ),
                 fix: None,
+                destructive: false,
             })
         })
         .collect()

@@ -19,6 +19,7 @@ use crate::engine::model::{
     ApplyResult, BackupInfo, CatalogTarget, EditOp, FileDiff, HarnessInfo, HarnessSnapshot, Notice,
     PreviewResult, ProviderPreset, TestResult,
 };
+use crate::engine::reasoning;
 use crate::engine::targets;
 pub use crate::engine::targets::TargetInfo;
 use crate::engine::{paths, preset, version, write};
@@ -304,6 +305,7 @@ pub fn list_notices(harness_id: Option<String>) -> Result<Vec<Notice>, String> {
                         provider: String::new(),
                         message: format!("{:#}", error),
                         fix: None,
+                        destructive: false,
                     });
                     continue;
                 }
@@ -318,6 +320,7 @@ pub fn list_notices(harness_id: Option<String>) -> Result<Vec<Notice>, String> {
                         provider: String::new(),
                         message: format!("config could not be read: {:#}", error),
                         fix: None,
+                        destructive: false,
                     });
                     continue;
                 }
@@ -332,6 +335,7 @@ pub fn list_notices(harness_id: Option<String>) -> Result<Vec<Notice>, String> {
                         provider: String::new(),
                         message: format!("config could not be read: {:#}", error),
                         fix: None,
+                        destructive: false,
                     });
                     continue;
                 }
@@ -528,6 +532,7 @@ async fn probe_one(
             target.provider, last_error
         ),
         fix: None,
+        destructive: false,
     })
 }
 
@@ -765,6 +770,17 @@ fn resolve_env_key(raw: &str) -> String {
 }
 
 /// Ambil daftar model langsung dari endpoint provider (`GET /models`).
+/// Dugaan reasoning untuk daftar model, dari katalog harness / preset / pola id.
+///
+/// Dipakai setelah sync endpoint: `/models` tidak memberi tahu dukungan
+/// thinking, jadi tanpa ini setiap model masuk sebagai non-reasoning.
+pub fn reasoning_hints(
+    provider_id: String,
+    model_ids: Vec<String>,
+) -> Result<Vec<reasoning::ReasoningHint>, String> {
+    Ok(reasoning::hints(&provider_id, &model_ids))
+}
+
 pub async fn fetch_models(
     base_url: String,
     api: String,

@@ -217,6 +217,7 @@ impl OpenCodeAdapter {
                     provider.id
                 ),
                 fix: Some(format!("Remove '{}' from disabled_providers", provider.id)),
+                destructive: false,
             })
             .collect()
     }

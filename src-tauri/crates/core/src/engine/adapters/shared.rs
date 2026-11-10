@@ -298,6 +298,7 @@ pub fn builtin_id_notices(
                 provider.id, provider.id
             ),
             fix: None,
+            destructive: false,
         })
         .collect()
 }

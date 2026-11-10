@@ -1664,10 +1664,12 @@ fn credential_without_a_provider_entry_is_reported() {
         .find(|notice| notice.code == "catalog.credential-without-provider")
         .expect("kredensial tanpa provider harus dilaporkan");
     assert_eq!(notice.provider, "xai");
-    assert!(notice.message.contains("Could not refresh xai"));
+    // Pesan kini menyebut sumber kredensialnya (auth.json / env var) dan
+    // menjelaskan bahwa menghapus entri config tidak cukup.
+    assert!(notice.message.contains("auth.json"));
     assert!(
-        notice.fix.is_none(),
-        "tidak ada perbaikan otomatis untuk ini"
+        notice.fix.is_some(),
+        "kredensial tersimpan bisa dihapus, jadi aksinya harus tersedia"
     );
 }
 
@@ -3073,4 +3075,102 @@ fn disabling_an_unrelated_provider_keeps_a_healthy_default() {
         "default yang sehat tidak boleh disentuh: {settings}"
     );
     assert_eq!(settings["defaultModel"], "k1");
+}
+
+// ------------------------------------------- reasoning massal + aksi notice
+
+#[test]
+fn a_credential_notice_offers_the_action_that_can_actually_be_done() {
+    let (_lock, root) = sandbox("pi-notice-credential-action");
+    let dir = root.join("pi/agent");
+    write(&dir.join("models.json"), r#"{"providers":{}}"#);
+    write(
+        &dir.join("auth.json"),
+        r#"{"xai":{"type":"api_key","key":"xai-key"},"soulparking":{"type":"api_key","key":"s"}}"#,
+    );
+    write(&dir.join("settings.json"), "{}");
+
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    let xai = notices
+        .iter()
+        .find(|notice| notice.provider == "xai")
+        .unwrap_or_else(|| panic!("notice xai harus muncul: {notices:?}"));
+    assert!(
+        xai.fix.is_some(),
+        "kredensial tersimpan bisa dihapus, jadi harus ada aksi"
+    );
+
+    api::fix_notice("pi".into(), xai.code.clone(), "xai".into()).unwrap();
+
+    let auth = json(&dir.join("auth.json"));
+    assert!(
+        auth.get("xai").is_none(),
+        "kredensial xai harus hilang: {auth}"
+    );
+    assert!(
+        auth.get("soulparking").is_some(),
+        "provider lain tidak disentuh"
+    );
+}
+
+#[test]
+fn models_that_the_catalog_says_support_thinking_are_reported_and_fixed() {
+    let (_lock, root) = sandbox("pi-reasoning-massal");
+    let dir = root.join("pi/agent");
+    // Katalog pi (models-store.json) adalah sumber kebenaran di mesin ini.
+    write(
+        &dir.join("models-store.json"),
+        r#"{
+  "myproxy": {
+    "models": [
+      { "id": "thinker", "reasoning": true },
+      { "id": "plain", "reasoning": false }
+    ]
+  }
+}"#,
+    );
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "myproxy": {
+      "name": "My Proxy",
+      "baseUrl": "https://p.example/v1",
+      "api": "openai-completions",
+      "apiKey": "k",
+      "models": [
+        { "id": "thinker" },
+        { "id": "plain" }
+      ]
+    }
+  }
+}"#,
+    );
+    write(&dir.join("auth.json"), "{}");
+    write(&dir.join("settings.json"), "{}");
+
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "pi.reasoning_missing")
+        .unwrap_or_else(|| panic!("notice reasoning harus muncul: {notices:?}"));
+    assert_eq!(notice.provider, "myproxy");
+    assert!(
+        notice.message.contains("1 model"),
+        "hanya model yang katalognya reasoning: {}",
+        notice.message
+    );
+
+    api::fix_notice("pi".into(), "pi.reasoning_missing".into(), "myproxy".into()).unwrap();
+
+    let models = read_json_value(&dir.join("models.json"));
+    let list = models["providers"]["myproxy"]["models"].as_array().unwrap();
+    let thinker = list.iter().find(|m| m["id"] == "thinker").unwrap();
+    assert_eq!(thinker["reasoning"], true);
+    assert_full_thinking_map(&thinker["thinkingLevelMap"], "model yang diperbaiki");
+    let plain = list.iter().find(|m| m["id"] == "plain").unwrap();
+    assert!(
+        plain.get("reasoning").is_none(),
+        "model yang katalognya bukan reasoning tidak boleh ikut ditandai: {plain}"
+    );
 }

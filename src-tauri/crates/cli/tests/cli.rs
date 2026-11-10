@@ -1183,7 +1183,10 @@ fn doctor_reports_a_credential_that_refreshes_without_a_provider() {
         .expect("harus melaporkan kredensial tanpa provider");
 
     assert_eq!(notice["provider"], "xai");
-    assert!(notice["fix"].is_null(), "tidak bisa diperbaiki otomatis");
+    // GUI menawarkan "Forget the stored credential"; doctor sengaja tidak
+    // menjalankannya sendiri karena API key tidak bisa dibuat ulang.
+    assert!(!notice["fix"].is_null(), "GUI butuh label aksinya");
+    assert_eq!(notice["destructive"], true);
     assert!(
         output.status.success(),
         "notice manual tidak menggagalkan doctor: {}",

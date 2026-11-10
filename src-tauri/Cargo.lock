@@ -1388,7 +1388,7 @@ dependencies = [
 
 [[package]]
 name = "hakonfig"
-version = "0.6.9"
+version = "0.7.0"
 dependencies = [
  "hakonfig-core",
  "serde",
@@ -1399,7 +1399,7 @@ dependencies = [
 
 [[package]]
 name = "hakonfig-cli"
-version = "0.6.9"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1412,7 +1412,7 @@ dependencies = [
 
 [[package]]
 name = "hakonfig-core"
-version = "0.6.9"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "chrono",

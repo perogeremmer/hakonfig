@@ -6,6 +6,33 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.7.0]
+
+### Added
+
+- Reasoning massal: endpoint `/models` tidak pernah memberi tahu dukungan
+  thinking, jadi hasil sync dulu masuk sebagai `reasoning: false` semua. Sekarang
+  model baru ditebak dari tiga sumber berurutan: katalog pi
+  (`<agent dir>/models-store.json`, termasuk `thinkingLevelMap` aslinya), preset
+  bawaan, lalu pola id model (`gpt-5*`, `o3*`, `claude-*-5*`, `deepseek-v4*`,
+  `glm-*`, `kimi-k*`, `grok-*`, `qwen3*`, `gemini-*`, `minimax-m*`, ...).
+  Sumbernya ikut dilaporkan supaya "terdeteksi" bisa dibedakan dari "perkiraan".
+- Form model: tombol **Tandai terdeteksi** dan **Tandai semua** untuk menandai
+  reasoning sekaligus, tanpa mencentang satu per satu.
+- Command Tauri `reasoning_hints` untuk deteksi di atas.
+- pi: notice `pi.reasoning_missing` + perbaikan otomatis untuk config lama:
+  model yang menurut katalog pi mendukung thinking tetapi tersimpan tanpa
+  `reasoning`. Perbaikan sekaligus menulis `thinkingLevelMap` (map katalog kalau
+  ada, kalau tidak map standar).
+
+### Changed
+
+- Notice `catalog.credential-without-provider` sekarang punya aksi: **Forget the
+  stored credential**. Sebelumnya kartu "Perlu diketahui" hanya memberi tahu
+  tanpa jalan keluar, padahal kredensial di `auth.json` bisa dihapus dari sini
+  (dengan backup). Kalau kredensialnya hanya di environment, aksinya tidak
+  ditawarkan karena aplikasi tidak bisa menyentuh shell pengguna.
+
 ## [0.6.9]
 
 ### Fixed

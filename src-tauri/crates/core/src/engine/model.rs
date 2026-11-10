@@ -251,6 +251,11 @@ pub struct Notice {
     pub message: String,
     /// Label aksi perbaikan otomatis; `None` = hanya bisa dibereskan manual.
     pub fix: Option<String>,
+    /// Aksi ini menghapus sesuatu yang tidak bisa dibuat ulang aplikasi
+    /// (kredensial), jadi `doctor --fix` tidak boleh menjalankannya sendiri —
+    /// hanya lewat konfirmasi eksplisit di GUI.
+    #[serde(default)]
+    pub destructive: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

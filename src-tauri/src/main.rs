@@ -27,6 +27,7 @@ fn main() {
             commands::fetch_models,
             commands::open_external,
             commands::list_notices,
+            commands::reasoning_hints,
             ui_scale::ui_scale_info,
             ui_scale::set_ui_scale,
         ])

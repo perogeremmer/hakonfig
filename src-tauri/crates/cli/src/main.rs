@@ -895,6 +895,14 @@ fn targets_cmd(json: bool) -> Result<()> {
     Ok(())
 }
 
+/// Notice yang boleh dibereskan `doctor --fix` tanpa bertanya.
+///
+/// Aksi destruktif (menghapus kredensial) sengaja dikecualikan: API key tidak
+/// bisa dibuat ulang oleh aplikasi, jadi itu hanya lewat konfirmasi di GUI.
+fn needs_auto_fix(notice: &hakonfig_core::engine::model::Notice) -> bool {
+    notice.fix.is_some() && !notice.destructive
+}
+
 fn doctor(harness: Option<&str>, fix: bool, online: bool, json: bool) -> Result<()> {
     let requested = match harness {
         Some(id) => Some(pick_harness_id(id)?),
@@ -910,7 +918,7 @@ fn doctor(harness: Option<&str>, fix: bool, online: bool, json: bool) -> Result<
 
     if fix {
         let mut fixed = Vec::new();
-        for notice in notices.iter().filter(|notice| notice.fix.is_some()) {
+        for notice in notices.iter().filter(|notice| needs_auto_fix(notice)) {
             match api::fix_notice(
                 notice.harness.clone(),
                 notice.code.clone(),
@@ -958,7 +966,7 @@ fn doctor(harness: Option<&str>, fix: bool, online: bool, json: bool) -> Result<
                     .collect::<Vec<_>>(),
                 "remaining": notices,
             }))?;
-            return if notices.iter().any(|notice| notice.fix.is_some()) {
+            return if notices.iter().any(needs_auto_fix) {
                 Err(anyhow!(t(Msg::DoctorRemaining)))
             } else {
                 Ok(())
@@ -977,7 +985,7 @@ fn doctor(harness: Option<&str>, fix: bool, online: bool, json: bool) -> Result<
     } else if json {
         notices.extend(catalog_notices);
         output::print_json(&notices)?;
-        return if notices.iter().any(|notice| notice.fix.is_some()) {
+        return if notices.iter().any(needs_auto_fix) {
             Err(anyhow!(t(Msg::DoctorRemaining)))
         } else {
             Ok(())
@@ -1018,7 +1026,12 @@ fn doctor(harness: Option<&str>, fix: bool, online: bool, json: bool) -> Result<
         rows,
     );
 
-    let fixable = notices.iter().filter(|notice| notice.fix.is_some()).count();
+    // Aksi destruktif (hapus kredensial) tidak dihitung: `doctor --fix`
+    // memang tidak akan menjalankannya.
+    let fixable = notices
+        .iter()
+        .filter(|notice| needs_auto_fix(notice))
+        .count();
     if fixable == 0 {
         return Ok(());
     }
