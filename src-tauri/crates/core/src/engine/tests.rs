@@ -2588,3 +2588,158 @@ fn pi_models_without_thinking_variants_are_reported_and_fixed() {
     let notices = api::list_notices(Some("pi".into())).unwrap();
     assert!(!notices.iter().any(|n| n.code == "pi.thinking_map"));
 }
+
+#[test]
+fn pi_toggle_heals_a_default_that_already_pointed_at_a_parked_provider() {
+    let (_lock, root) = sandbox("pi-default-heal");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "myproxy": {
+      "name": "My Proxy",
+      "baseUrl": "https://proxy.example.com/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "proxy-a" }]
+    },
+    "otherproxy": {
+      "name": "Other Proxy",
+      "baseUrl": "https://other.example.com/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "other-a" }]
+    }
+  }
+}
+// hakonfig:disabled opencode-go
+// { "name": "OpenCode Go", "baseUrl": "https://opencode.ai/inference/go/openai/v1" }
+// hakonfig:end
+"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"myproxy":{"type":"api_key","key":"a"},"otherproxy":{"type":"api_key","key":"b"}}"#,
+    );
+    // Keadaan hasil versi lama: default menunjuk provider yang sudah diparkir.
+    write(
+        &dir.join("settings.json"),
+        r#"{"defaultProvider":"opencode-go","defaultModel":"opencode-go/deepseek-v4.1-flash"}"#,
+    );
+
+    // Toggle provider yang **bukan** default: tetap harus membereskan default mati.
+    let result = api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "otherproxy".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert_eq!(
+        settings["defaultProvider"], "myproxy",
+        "default yang menunjuk provider non-aktif harus dipindah: {settings}"
+    );
+    assert_eq!(settings["defaultModel"], "myproxy/proxy-a");
+    assert!(
+        result
+            .warnings
+            .iter()
+            .any(|line| line.contains("no longer enabled")),
+        "alasan perpindahan harus jelas: {:?}",
+        result.warnings
+    );
+}
+
+#[test]
+fn pi_enable_heals_a_parked_default_into_the_re_enabled_provider() {
+    let (_lock, root) = sandbox("pi-default-heal-enable");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "myproxy": {
+      "name": "My Proxy",
+      "baseUrl": "https://proxy.example.com/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "proxy-a" }]
+    }
+  }
+}
+// hakonfig:disabled otherproxy
+// { "name": "Other Proxy", "baseUrl": "https://other.example.com/v1", "api": "openai-completions", "models": [ { "id": "other-a" } ] }
+// hakonfig:end
+"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"myproxy":{"type":"api_key","key":"a"},"otherproxy":{"type":"api_key","key":"b"}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"defaultProvider":"otherproxy","defaultModel":"otherproxy/other-a"}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "otherproxy".to_string(),
+            enabled: true,
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert_eq!(settings["defaultProvider"], "otherproxy");
+    assert_eq!(settings["defaultModel"], "otherproxy/other-a");
+}
+
+#[test]
+fn pi_disabling_everything_clears_a_stale_default_too() {
+    let (_lock, root) = sandbox("pi-default-heal-all");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "myproxy": {
+      "name": "My Proxy",
+      "baseUrl": "https://proxy.example.com/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "proxy-a" }]
+    }
+  }
+}
+// hakonfig:disabled opencode-go
+// { "name": "OpenCode Go", "baseUrl": "https://opencode.ai/inference/go/openai/v1" }
+// hakonfig:end
+"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"myproxy":{"type":"api_key","key":"a"}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"defaultProvider":"opencode-go","defaultModel":"opencode-go/deepseek-v4.1-flash","theme":"dark"}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "myproxy".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert!(
+        settings.get("defaultProvider").is_none(),
+        "provider terakhir dimatikan: default mati harus dibuang, bukan dipindah: {settings}"
+    );
+    assert!(settings.get("defaultModel").is_none());
+    assert_eq!(settings["theme"], "dark");
+}

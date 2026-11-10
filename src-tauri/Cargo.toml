@@ -1,6 +1,6 @@
 [package]
 name = "hakonfig"
-version = "0.6.3"
+version = "0.6.4"
 description = "Kelola konfigurasi provider AI coding harness"
 edition = "2021"
 license = "MIT"

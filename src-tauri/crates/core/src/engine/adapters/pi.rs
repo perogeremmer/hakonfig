@@ -90,20 +90,33 @@ impl PiAdapter {
                 .map(|(id, models)| (id, models[0].clone()))
         };
 
+        // Default bisa menunjuk provider yang sudah diparkir **sebelum** toggle
+        // ini (dimatikan versi lama, atau diedit manual). Tanpa pemeriksaan ini
+        // default mati itu tidak pernah dibereskan, dan harness tetap memakainya
+        // selama kredensialnya ada.
+        let parked = docs
+            .get("models")
+            .map(|models| models.parked_ids())
+            .unwrap_or_default();
+        let current_is_parked = current
+            .as_deref()
+            .map(|id| parked.iter().any(|parked| parked == id))
+            .unwrap_or(false);
+
         let mut messages = Vec::new();
-        let replacement = if enabled {
-            // Default yang kosong diisi supaya harness punya titik awal lagi.
-            if current.is_some() {
-                None
-            } else {
-                let active = Self::active_models(docs);
+        let replacement = if current_is_parked || (enabled && current.is_none()) {
+            // Provider yang baru dinyalakan lebih masuk akal jadi default
+            // daripada provider lain yang kebetulan aktif.
+            let active = Self::active_models(docs);
+            let preferred = if enabled {
                 active
                     .get(touched)
                     .filter(|models| !models.is_empty())
                     .map(|models| (touched.to_string(), models[0].clone()))
-            }
-        } else if current.as_deref() == Some(touched) {
-            first_active()
+            } else {
+                None
+            };
+            preferred.or_else(first_active)
         } else {
             None
         };
@@ -122,17 +135,22 @@ impl PiAdapter {
                         "defaultModel".to_string(),
                         Value::String(format!("{provider}/{model}")),
                     );
-                    messages.push(if enabled {
+                    let reason = if enabled && !current_is_parked {
                         format!("Default set to '{provider}/{model}' for the re-enabled provider.")
-                    } else {
+                    } else if !enabled && current.as_deref() == Some(touched) {
                         format!(
                             "Default moved to '{provider}/{model}' because '{touched}' was disabled."
                         )
-                    });
+                    } else {
+                        format!(
+                            "Default moved to '{provider}/{model}' because it pointed at a provider that is no longer enabled."
+                        )
+                    };
+                    messages.push(reason);
                     scope_for = Some((provider, model));
                 }
                 None => {
-                    if !enabled && current.as_deref() == Some(touched) {
+                    if !enabled && (current.is_some() || current_is_parked) {
                         root.remove("defaultProvider");
                         root.remove("defaultModel");
                         // "Default kosong" bukan berarti "tidak ada model":
@@ -254,6 +272,11 @@ impl PiAdapter {
             return Vec::new();
         }
 
+        // Kalau tidak ada provider aktif sama sekali, "pindahkan" bukan janji
+        // yang bisa ditepati: yang benar adalah mengosongkan default.
+        let has_active = Self::active_models(docs)
+            .values()
+            .any(|models| !models.is_empty());
         vec![Notice {
             code: "pi.default_disabled".to_string(),
             harness: "pi".to_string(),
@@ -261,7 +284,14 @@ impl PiAdapter {
             message: format!(
                 "settings.json still uses '{current}' as the default provider, but it is disabled in models.json. pi will silently fall back to another model."
             ),
-            fix: Some("Move the default to an active provider".to_string()),
+            fix: Some(
+                if has_active {
+                    "Move the default to an active provider"
+                } else {
+                    "Clear the default"
+                }
+                .to_string(),
+            ),
         }]
     }
 

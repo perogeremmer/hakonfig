@@ -6,6 +6,19 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.4]
+
+### Fixed
+
+- pi: default yang sudah menunjuk provider non-aktif sekarang dibereskan pada
+  setiap toggle, bukan hanya ketika provider itu yang sedang dimatikan. Ini
+  kasus nyata: semua provider dimatikan (models.json bersih), tetapi
+  `settings.json` masih menyimpan `defaultProvider`/`defaultModel` dari provider
+  yang diparkir versi lama, sehingga pi tetap memakai model itu.
+- pi: label perbaikan pada notice `pi.default_disabled` sekarang "Clear the
+  default" kalau tidak ada provider aktif lagi, bukan menjanjikan pemindahan
+  yang tidak mungkin dilakukan.
+
 ## [0.6.3]
 
 ### Changed
