@@ -2,6 +2,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod ui_scale;
+
+use tauri::Manager;
 
 fn main() {
     tauri::Builder::default()
@@ -23,7 +26,20 @@ fn main() {
             commands::uninstall_harness,
             commands::fetch_models,
             commands::open_external,
+            ui_scale::ui_scale_info,
+            ui_scale::set_ui_scale,
         ])
+        .setup(|app| {
+            // Sebelum jendela dipakai: pastikan muat di layar, lalu terapkan
+            // zoom terakhir supaya tidak ada satu frame UI kecil saat dibuka.
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = ui_scale::fit_to_monitor(&window) {
+                    eprintln!("hakonfig: gagal menyesuaikan jendela: {error}");
+                }
+                ui_scale::restore_zoom(&window);
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("failed to start Hakonfig");
 }
