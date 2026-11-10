@@ -6,6 +6,23 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.9]
+
+### Fixed
+
+- pi: `defaultModel` sekarang ditulis sebagai **id model saja**, bukan
+  `provider/model`. pi membaca key itu apa adanya lalu mencari
+  `getModel(defaultProvider, defaultModel)`; dengan prefiks provider modelnya
+  tidak pernah ketemu, default diabaikan, dan pi memilih provider lain — biasanya
+  provider bawaan yang punya kredensial. Gejalanya persis seperti yang terlihat:
+  Hakonfig menampilkan default `opencode-go/deepseek-v4-pro`, tetapi pi mulai di
+  `deepseek/deepseek-v4-pro`.
+- pi: notice `pi.default_model_prefixed` + perbaikan otomatis untuk config lama
+  yang sudah terlanjur ditulis dengan format itu. Perbaikan juga terjadi otomatis
+  pada toggle berikutnya.
+- pi: menonaktifkan provider yang **bukan** default tidak lagi menghapus default
+  yang sehat (regresi dari perbaikan self-healing 0.6.4).
+
 ## [0.6.8]
 
 ### Added

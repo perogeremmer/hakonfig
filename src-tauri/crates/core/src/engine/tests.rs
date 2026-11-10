@@ -89,7 +89,10 @@ fn change_default_model_per_harness() {
     .unwrap();
     let settings = json(&pi_dir.join("settings.json"));
     assert_eq!(settings["defaultProvider"], "groq");
-    assert_eq!(settings["defaultModel"], "groq/llama-3.3-70b-versatile");
+    assert_eq!(
+        settings["defaultModel"], "llama-3.3-70b-versatile",
+        "pi menyimpan id model saja, bukan provider/model"
+    );
     assert_eq!(settings["theme"], "dark", "setelan lain tidak boleh hilang");
     assert_eq!(snapshot("pi").default_provider.as_deref(), Some("groq"));
 
@@ -1176,7 +1179,7 @@ fn default_pi_write_also_updates_enabled_models() {
 
     let settings = json(&dir.join("settings.json"));
     assert_eq!(settings["defaultProvider"], "deepseek");
-    assert_eq!(settings["defaultModel"], "deepseek/deepseek-flash");
+    assert_eq!(settings["defaultModel"], "deepseek-flash");
 
     let scope: Vec<&str> = settings["enabledModels"]
         .as_array()
@@ -1225,7 +1228,7 @@ fn default_pi_without_scope_does_not_create_enabled_models() {
     .unwrap();
 
     let settings = json(&dir.join("settings.json"));
-    assert_eq!(settings["defaultModel"], "groq/m1");
+    assert_eq!(settings["defaultModel"], "m1");
     assert!(
         settings.get("enabledModels").is_none(),
         "jangan mengarang scope bila user belum punya"
@@ -2139,7 +2142,7 @@ fn pi_disable_moves_default_to_another_active_provider() {
         settings["defaultProvider"], "myproxy",
         "default tidak boleh tertinggal di provider yang dinonaktifkan: {settings}"
     );
-    assert_eq!(settings["defaultModel"], "myproxy/proxy-a");
+    assert_eq!(settings["defaultModel"], "proxy-a");
     assert!(
         result
             .warnings
@@ -2231,7 +2234,7 @@ fn pi_enable_fills_a_missing_default() {
 
     let settings = json(&dir.join("settings.json"));
     assert_eq!(settings["defaultProvider"], "myproxy", "{settings}");
-    assert_eq!(settings["defaultModel"], "myproxy/proxy-a");
+    assert_eq!(settings["defaultModel"], "proxy-a");
 }
 
 #[test]
@@ -2643,7 +2646,7 @@ fn pi_toggle_heals_a_default_that_already_pointed_at_a_parked_provider() {
         settings["defaultProvider"], "myproxy",
         "default yang menunjuk provider non-aktif harus dipindah: {settings}"
     );
-    assert_eq!(settings["defaultModel"], "myproxy/proxy-a");
+    assert_eq!(settings["defaultModel"], "proxy-a");
     assert!(
         result
             .warnings
@@ -2695,7 +2698,7 @@ fn pi_enable_heals_a_parked_default_into_the_re_enabled_provider() {
 
     let settings = json(&dir.join("settings.json"));
     assert_eq!(settings["defaultProvider"], "otherproxy");
-    assert_eq!(settings["defaultModel"], "otherproxy/other-a");
+    assert_eq!(settings["defaultModel"], "other-a");
 }
 
 #[test]
@@ -2929,4 +2932,145 @@ fn pi_reports_a_disabled_provider_that_still_has_credentials() {
         "harus ada jalan keluar yang jelas: {}",
         notice.message
     );
+}
+
+// ---------------------- format defaultModel pi (penyebab "Hakonfig vs pi beda")
+
+#[test]
+fn pi_reports_and_fixes_a_default_model_written_with_the_provider_prefix() {
+    let (_lock, root) = sandbox("pi-default-format");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "opencode-go": {
+      "name": "OpenCode Go",
+      "baseUrl": "https://opencode.ai/inference/go/openai/v1",
+      "api": "openai-completions",
+      "apiKey": "$OPENCODE_GO_API_KEY",
+      "models": [{ "id": "deepseek-v4-pro" }]
+    }
+  }
+}"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"deepseek":{"type":"api_key","key":"sk"}}"#,
+    );
+    // Format lama Hakonfig: provider/model.
+    write(
+        &dir.join("settings.json"),
+        r#"{"defaultProvider":"opencode-go","defaultModel":"opencode-go/deepseek-v4-pro"}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "pi.default_model_prefixed")
+        .unwrap_or_else(|| panic!("notice format default harus muncul: {notices:?}"));
+    assert_eq!(notice.provider, "opencode-go");
+    assert!(
+        notice.message.contains("bare model id"),
+        "pesan harus menjelaskan format yang benar: {}",
+        notice.message
+    );
+
+    api::fix_notice(
+        "pi".into(),
+        "pi.default_model_prefixed".into(),
+        "opencode-go".into(),
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert_eq!(
+        settings["defaultModel"], "deepseek-v4-pro",
+        "pi membaca id model saja: {settings}"
+    );
+    assert_eq!(settings["defaultProvider"], "opencode-go");
+
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    assert!(!notices
+        .iter()
+        .any(|n| n.code == "pi.default_model_prefixed"));
+}
+
+#[test]
+fn pi_set_default_writes_the_bare_model_id_that_pi_reads() {
+    let (_lock, root) = sandbox("pi-default-bare");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"myproxy":{"name":"My","baseUrl":"https://p.example/v1","api":"openai-completions","models":[{"id":"m1"}]}}}"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"myproxy":{"type":"api_key","key":"k"}}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetDefault {
+            provider_id: "myproxy".to_string(),
+            model_id: "m1".to_string(),
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert_eq!(settings["defaultProvider"], "myproxy");
+    assert_eq!(
+        settings["defaultModel"], "m1",
+        "harus id model saja, bukan myproxy/m1: {settings}"
+    );
+}
+
+#[test]
+fn disabling_an_unrelated_provider_keeps_a_healthy_default() {
+    let (_lock, root) = sandbox("pi-default-untouched");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "keepme": {
+      "name": "Keep Me",
+      "baseUrl": "https://keep.example/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "k1" }]
+    },
+    "other": {
+      "name": "Other",
+      "baseUrl": "https://other.example/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "o1" }]
+    }
+  }
+}"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"keepme":{"type":"api_key","key":"a"},"other":{"type":"api_key","key":"b"}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"defaultProvider":"keepme","defaultModel":"k1"}"#,
+    );
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetEnabled {
+            provider_id: "other".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = json(&dir.join("settings.json"));
+    assert_eq!(
+        settings["defaultProvider"], "keepme",
+        "default yang sehat tidak boleh disentuh: {settings}"
+    );
+    assert_eq!(settings["defaultModel"], "k1");
 }

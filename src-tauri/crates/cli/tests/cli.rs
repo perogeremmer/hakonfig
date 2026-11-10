@@ -766,7 +766,10 @@ fn setting_the_default_model_only_writes_the_setting() {
 
     let settings = read_json(&root.join("pi/agent/settings.json"));
     assert_eq!(settings["defaultProvider"], "deepseek");
-    assert_eq!(settings["defaultModel"], "deepseek/b");
+    assert_eq!(
+        settings["defaultModel"], "b",
+        "pi membaca id model saja; 'deepseek/b' tidak akan pernah cocok"
+    );
     assert_eq!(
         read_json(&auth_path(&root))["deepseek"]["key"],
         "lama",

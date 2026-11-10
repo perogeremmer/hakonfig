@@ -131,10 +131,8 @@ impl PiAdapter {
                         "defaultProvider".to_string(),
                         Value::String(provider.clone()),
                     );
-                    root.insert(
-                        "defaultModel".to_string(),
-                        Value::String(format!("{provider}/{model}")),
-                    );
+                    // id model saja; lihat catatan di SetDefault.
+                    root.insert("defaultModel".to_string(), Value::String(model.clone()));
                     let reason = if enabled && !current_is_parked {
                         format!("Default set to '{provider}/{model}' for the re-enabled provider.")
                     } else if !enabled && current.as_deref() == Some(touched) {
@@ -150,16 +148,38 @@ impl PiAdapter {
                     scope_for = Some((provider, model));
                 }
                 None => {
-                    if !enabled && (current.is_some() || current_is_parked) {
+                    // Hanya provider yang benar-benar mati yang boleh mengubah
+                    // default: menonaktifkan provider lain tidak boleh menyentuh
+                    // default yang masih sehat.
+                    let default_is_dead =
+                        !enabled && (current.as_deref() == Some(touched) || current_is_parked);
+                    if default_is_dead {
                         root.remove("defaultProvider");
                         root.remove("defaultModel");
-                        // "Default kosong" bukan berarti "tidak ada model":
-                        // pi memilih sendiri dari provider yang masih punya
-                        // kredensial, termasuk provider bawaan. Lebih baik
-                        // dikatakan sekarang daripada ditebak pengguna nanti.
                         messages.push(format!(
                             "No provider is active any more, so the default pointing at '{touched}' was cleared. pi will choose its own model, and a provider that still has credentials (including a built-in one) can be picked."
                         ));
+                    } else if let Some(provider) = current.clone() {
+                        // Default sehat, tetapi modelnya mungkin ditulis versi
+                        // lama sebagai "provider/model" — pi tidak bisa
+                        // membacanya, jadi perbaiki di sini juga.
+                        let stored = root
+                            .get("defaultModel")
+                            .and_then(Value::as_str)
+                            .map(str::to_string);
+                        if let Some(stored) = stored {
+                            let prefix = format!("{provider}/");
+                            if let Some(bare) = stored.strip_prefix(&prefix) {
+                                let bare = bare.to_string();
+                                root.insert(
+                                    "defaultModel".to_string(),
+                                    Value::String(bare.clone()),
+                                );
+                                messages.push(format!(
+                                    "settings.json: defaultModel '{stored}' became '{bare}' (pi expects the model id without the provider prefix)."
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -190,6 +210,49 @@ impl PiAdapter {
             )),
             _ => None,
         }
+    }
+
+    /// Notice: `defaultModel` ditulis sebagai `provider/model`.
+    ///
+    /// Versi Hakonfig sebelum 0.6.9 menulis prefiks itu. pi membaca key ini
+    /// sebagai id model saja, jadi default-nya tidak pernah cocok: pi
+    /// mengabaikannya dan memilih provider lain (biasanya provider bawaan yang
+    /// punya kredensial). Gejalanya sangat membingungkan — "Hakonfig bilang
+    /// default-nya opencode-go, pi memakai deepseek" — jadi lebih baik
+    /// dilaporkan dan bisa diperbaiki sekali klik.
+    fn default_format_notices(&self, docs: &Docs) -> Vec<Notice> {
+        let Some(settings) = docs.get("settings") else {
+            return Vec::new();
+        };
+        let provider = settings
+            .data()
+            .get("defaultProvider")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or_default();
+        let Some(model) = settings
+            .data()
+            .get("defaultModel")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Vec::new();
+        };
+        if provider.is_empty() || !model.starts_with(&format!("{provider}/")) {
+            return Vec::new();
+        }
+
+        vec![Notice {
+            code: "pi.default_model_prefixed".to_string(),
+            harness: "pi".to_string(),
+            provider: provider.to_string(),
+            message: format!(
+                "settings.json stores defaultModel as '{model}', but pi expects the bare model id ('{}'). pi cannot find that model, ignores the saved default, and starts with another provider instead.",
+                model.trim_start_matches(&format!("{provider}/"))
+            ),
+            fix: Some("Write the bare model id".to_string()),
+        }]
     }
 
     /// Notice: model ber-reasoning tanpa variant thinking lengkap.
@@ -866,6 +929,17 @@ impl Adapter for PiAdapter {
 
         let default_provider = settings.and_then(|doc| get_str(doc.data(), "defaultProvider"));
         let default_model = settings.and_then(|doc| get_str(doc.data(), "defaultModel"));
+        // File menyimpan id model saja (itu yang dibaca pi), tetapi untuk
+        // ditampilkan id itu tidak berarti apa-apa tanpa providernya. Jadi
+        // tampilan memakai "provider/model" — hanya untuk dibaca.
+        let default_model = match (&default_provider, default_model) {
+            (Some(provider), Some(model))
+                if !model.starts_with(&format!("{provider}/")) && !provider.trim().is_empty() =>
+            {
+                Some(format!("{provider}/{model}"))
+            }
+            (_, model) => model,
+        };
 
         let files: Vec<ConfigFileInfo> = self
             .specs()
@@ -1254,8 +1328,12 @@ impl Adapter for PiAdapter {
                     "defaultProvider".to_string(),
                     Value::String(provider.clone()),
                 );
+                // `settings.json` menyimpan id model SAJA. pi membaca key ini apa
+                // adanya lalu memanggil getModel(defaultProvider, defaultModel);
+                // kalau kita menulis "provider/model" di sini, pi tidak menemukan
+                // modelnya, mengabaikan default, dan jatuh ke provider lain.
                 let reference = format!("{}/{}", provider, model);
-                root.insert("defaultModel".to_string(), Value::String(reference.clone()));
+                root.insert("defaultModel".to_string(), Value::String(model.clone()));
 
                 // Pi memakai model PERTAMA dari scope `enabledModels` bila scope
                 // tidak kosong, dan hanya jatuh ke defaultModel kalau scope kosong
@@ -1349,6 +1427,7 @@ impl Adapter for PiAdapter {
         notices.extend(self.scope_notices(docs, providers));
         notices.extend(self.default_notices(docs, providers));
         notices.extend(self.thinking_notices(docs, providers));
+        notices.extend(self.default_format_notices(docs));
         notices.extend(self.catalog_notices(docs));
         notices
     }
@@ -1382,6 +1461,28 @@ impl Adapter for PiAdapter {
             "pi.default_disabled" => Ok(Self::sync_default(docs, &notice.provider, false)?
                 .into_iter()
                 .next()),
+            "pi.default_model_prefixed" => {
+                let provider = notice.provider.clone();
+                let settings = docs.require_mut("settings")?;
+                let root = settings.root_object();
+                let Some(model) = root
+                    .get("defaultModel")
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                else {
+                    anyhow::bail!("settings.json has no defaultModel to fix.");
+                };
+                let bare = model
+                    .trim_start_matches(&format!("{provider}/"))
+                    .to_string();
+                if bare == model {
+                    anyhow::bail!("defaultModel is already a bare model id.");
+                }
+                root.insert("defaultModel".to_string(), Value::String(bare.clone()));
+                Ok(Some(format!(
+                    "settings.json: defaultModel now '{bare}' (pi expects the model id without the provider prefix)."
+                )))
+            }
             "pi.thinking_map" => {
                 let target = notice.provider.clone();
                 let models = docs.require_mut("models")?;
