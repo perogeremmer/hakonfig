@@ -98,6 +98,22 @@ async function publish(dir) {
       return;
     } catch (error) {
       const output = String(error.stderr || error.message);
+
+      // npm bisa menahan publish sebagai "staged" (mis. karena 2FA akun
+      // diaktifkan). Versi yang tertahan memblokir publish ulang dengan 409,
+      // dan mengulanginya tidak akan pernah berhasil: yang perlu dilakukan
+      // adalah menyetujui/membatalkannya di npmjs.com.
+      if (/previously staged version/i.test(output)) {
+        const staged = output.match(/staged version "([^"]+)"/)?.[1] ?? version;
+        throw new Error(
+          `${PACKAGE_NAME}@${staged} tertahan sebagai **staged publish** di npm, bukan terbit. ` +
+            `Versi itu memblokir publish ulang (409). Buka npmjs.com -> package ` +
+            `${PACKAGE_NAME} -> Staged publishes, setujui atau batalkan versi ` +
+            `${staged}, lalu jalankan ulang job ini. Aset desktop, crates.io, dan ` +
+            `Homebrew tidak terpengaruh.`
+        );
+      }
+
       if (attempt === RETRIES) throw error;
       console.error(
         `percobaan ${attempt}/${RETRIES} gagal; mencoba ulang ` +
