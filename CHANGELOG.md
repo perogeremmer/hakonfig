@@ -6,6 +6,15 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.7]
+
+### Fixed
+
+- Oh My Pi: `doctor` tidak lagi melaporkan provider yang sengaja dinonaktifkan
+  sebagai masalah. Notice `omp.disabled` beserta tombol "Remove from
+  disabledProviders" dihapus: itu keadaan normal hasil tombol toggle, dan
+  `doctor --fix` malah menyalakan kembali provider yang dipilih untuk dimatikan.
+
 ## [0.6.6]
 
 ### Fixed

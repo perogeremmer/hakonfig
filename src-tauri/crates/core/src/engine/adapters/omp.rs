@@ -154,24 +154,6 @@ impl OmpAdapter {
             "config.yml: '{provider}' removed from disabledProviders so its models show up."
         )))
     }
-
-    fn disabled_notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
-        let disabled = Self::disabled_providers(docs);
-        providers
-            .iter()
-            .filter(|provider| disabled.iter().any(|entry| entry == provider.id))
-            .map(|provider| Notice {
-                provider: provider.id.to_string(),
-                code: "omp.disabled".to_string(),
-                harness: "omp".to_string(),
-                message: format!(
-                    "provider '{}' is listed in disabledProviders in config.yml, so omp hides its models even though they are in models.yml.",
-                    provider.id
-                ),
-                fix: Some(format!("Remove '{}' from disabledProviders", provider.id)),
-            })
-            .collect()
-    }
 }
 
 impl Adapter for OmpAdapter {
@@ -547,18 +529,16 @@ impl Adapter for OmpAdapter {
         shared::BUILTIN_PROVIDERS
     }
 
-    fn notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
-        let mut notices =
-            shared::builtin_id_notices(self.id(), self.builtin_providers(), providers);
-        notices.extend(self.disabled_notices(docs, providers));
-        notices
+    fn notices(&self, _docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        // Provider yang ada di `disabledProviders` tidak dilaporkan sebagai
+        // masalah: itu memang cara omp menyembunyikan provider, dan tombol
+        // toggle di aplikasi menulis daftar yang sama. Melaporkannya hanya
+        // membuat `doctor --fix` membatalkan pilihan pengguna sendiri.
+        shared::builtin_id_notices(self.id(), self.builtin_providers(), providers)
     }
 
-    fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
-        match notice.code.as_str() {
-            "omp.disabled" => Self::re_enable(docs, &notice.provider),
-            other => anyhow::bail!("omp has no automatic fix for '{other}'"),
-        }
+    fn fix_notice(&self, _docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
+        anyhow::bail!("omp has no automatic fix for '{}'", notice.code)
     }
 
     fn stored_key(&self, docs: &Docs, provider_id: &str) -> Option<String> {

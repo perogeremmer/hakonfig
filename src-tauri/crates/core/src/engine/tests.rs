@@ -1407,7 +1407,10 @@ fn pi_without_enabled_models_has_no_scope_notice() {
 }
 
 #[test]
-fn disabled_provider_is_reported_and_re_enabled_by_fix() {
+fn a_deliberately_disabled_provider_is_not_reported_as_a_problem() {
+    // Provider yang ada di `disabledProviders` adalah pilihan pengguna (dan
+    // persis yang ditulis tombol toggle kita). Melaporkannya sebagai masalah
+    // membuat `doctor --fix` menyalakannya kembali tanpa diminta.
     let (_lock, root) = sandbox("notices_omp_disabled");
     let dir = root.join("omp/agent");
     write(
@@ -1420,24 +1423,23 @@ fn disabled_provider_is_reported_and_re_enabled_by_fix() {
     );
 
     let notices = api::list_notices(Some("omp".to_string())).unwrap();
-    let disabled = notices
-        .iter()
-        .find(|notice| notice.code == "omp.disabled")
-        .expect("harus ada notice provider dinonaktifkan");
-    assert_eq!(disabled.provider, "gateway");
-
-    let result = api::fix_notice("omp".into(), "omp.disabled".into(), "gateway".into()).unwrap();
-    assert!(result.backup_dir.is_some());
-    assert!(result.notices.is_empty(), "{:?}", result.notices);
-
-    let settings = yaml(&dir.join("config.yml"));
     assert!(
-        settings["disabledProviders"]
-            .as_array()
-            .map(|items| items.is_empty())
-            .unwrap_or(true),
-        "{settings:?}"
+        !notices
+            .iter()
+            .any(|notice| notice.code == "omp.disabled" || notice.provider == "gateway"),
+        "provider yang sengaja dimatikan tidak boleh dilaporkan: {notices:?}"
     );
+
+    // Fix yang membatalkan disable juga tidak boleh ditawarkan.
+    let error = api::fix_notice("omp".into(), "omp.disabled".into(), "gateway".into()).unwrap_err();
+    assert!(
+        error.contains("no 'omp.disabled' notice"),
+        "fix harus ditolak karena notice-nya tidak ada: {error}"
+    );
+
+    // Dan statusnya tetap seperti yang dipilih pengguna.
+    let settings = yaml(&dir.join("config.yml"));
+    assert_eq!(settings["disabledProviders"][0], "gateway");
     assert_eq!(settings["theme"], "dark");
 }
 
