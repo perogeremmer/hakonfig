@@ -29,6 +29,18 @@ pub fn list_harnesses() -> Vec<HarnessInfo> {
     core_api::list_harnesses()
 }
 
+/// Temuan yang membuat config tidak terlihat harness (mis. provider yang masih
+/// punya kredensial padahal sudah dinonaktifkan).
+///
+/// GUI membutuhkannya di luar alur `apply_edit`: penjelasan seperti itu harus
+/// terbaca saat membuka harness, bukan hanya setelah menekan tombol.
+#[tauri::command]
+pub fn list_notices(
+    harness_id: Option<String>,
+) -> Result<Vec<hakonfig_core::engine::model::Notice>, String> {
+    core_api::list_notices(harness_id)
+}
+
 /// Home user lain (ADE / VPS) yang punya harness terpasang.
 ///
 /// GUI tidak mengelola home itu (file milik user lain), tetapi harus

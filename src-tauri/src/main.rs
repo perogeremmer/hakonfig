@@ -26,6 +26,7 @@ fn main() {
             commands::uninstall_harness,
             commands::fetch_models,
             commands::open_external,
+            commands::list_notices,
             ui_scale::ui_scale_info,
             ui_scale::set_ui_scale,
         ])

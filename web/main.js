@@ -137,6 +137,7 @@ const api = {
   targets: () => invoke("list_targets"),
   presets: () => invoke("list_presets"),
   read: (harnessId) => invoke("read_harness", { harnessId }),
+  notices: (harnessId) => invoke("list_notices", { harnessId }),
   preview: (harnessId, op) => invoke("preview_edit", { harnessId, op }),
   apply: (harnessId, op) => invoke("apply_edit", { harnessId, op }),
   backups: (harnessId) => invoke("list_backups", { harnessId }),
@@ -298,6 +299,7 @@ const state = {
   targets: [], // home user lain (ADE/VPS) yang punya harness terpasang
   versions: {},
   snapshot: null,
+  notices: [], // temuan aktif untuk harness yang sedang dibuka
   form: null,
   activeId: null,
   loadError: null,
@@ -1010,9 +1012,12 @@ function renderHarness() {
          )}</span></button>
        </div>`;
 
+  const noticesBlock = renderNotices();
+
   container.innerHTML = `
     <div class="mx-auto max-w-[60rem]">
       ${warnings}
+      ${noticesBlock}
       <div class="mb-4 space-y-3">
         ${defaultCard}
         ${filesDisclosure}
@@ -1027,7 +1032,51 @@ function renderHarness() {
   wiringHarness(container);
 }
 
+/** Daftar temuan untuk harness ini: pesan + tombol perbaikan kalau ada. */
+function renderNotices() {
+  const notices = state.notices ?? [];
+  if (notices.length === 0) return "";
+
+  const rows = notices
+    .map(
+      (notice) => `
+      <li class="flex flex-col gap-1.5 border-b border-line px-4 py-3 last:border-0 sm:flex-row sm:items-start sm:gap-3">
+        <span class="mt-0.5 shrink-0 text-warn-text">${icon("alert", "h-4 w-4")}</span>
+        <p class="selectable min-w-0 flex-1 text-base leading-relaxed text-ink">${esc(notice.message)}</p>
+        ${
+          notice.fix
+            ? `<button data-action data-notice-fix data-code="${esc(notice.code)}" data-provider="${esc(
+                notice.provider,
+              )}" class="hk-btn hk-btn-secondary hk-btn-sm shrink-0">${esc(notice.fix)}</button>`
+            : ""
+        }
+      </li>`,
+    )
+    .join("");
+
+  return `<div class="mb-4 hk-card overflow-hidden">
+    <div class="flex items-center gap-2 border-b border-line bg-surface-muted px-4 py-2.5">
+      ${icon("info", "h-4 w-4 text-ink-muted")}
+      <p class="text-base font-semibold text-ink">${esc(t("harness.noticesTitle"))}</p>
+    </div>
+    <ul>${rows}</ul>
+  </div>`;
+}
+
 function wiringHarness(container) {
+  $$("[data-notice-fix]", container).forEach((button) => {
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        const result = await api.fixNotice(state.activeId, button.dataset.code, button.dataset.provider);
+        toast(t("toast.noticeFixed"), { detail: result.filesWritten.join("\n") });
+        await refreshAll();
+      } catch (error) {
+        button.disabled = false;
+        toast(t("toast.noticeFixFailed"), { variant: "err", detail: String(error) });
+      }
+    });
+  });
   $$("[data-toggle]", container).forEach((button) => {
     button.addEventListener("click", () => toggleProvider(button.dataset.toggle));
   });
@@ -1154,6 +1203,7 @@ async function loadVersions() {
 
 async function loadSnapshot(harnessId) {
   state.snapshot = null;
+  state.notices = [];
   renderHarness();
   try {
     state.snapshot = await api.read(harnessId);
@@ -1162,6 +1212,7 @@ async function loadSnapshot(harnessId) {
     state.snapshot = null;
     state.loadError = String(error);
   }
+  await loadNotices(harnessId);
   if (state.view === "harness" && state.activeId === harnessId) {
     renderHarnessHeader();
     renderHarness();
@@ -1178,6 +1229,24 @@ async function selectHarness(harnessId) {
 async function refreshAll() {
   await loadHarnesses();
   if (state.view === "harness" && state.activeId) await loadSnapshot(state.activeId);
+}
+
+/**
+ * Ambil temuan untuk satu harness.
+ *
+ * Sebelumnya GUI hanya menampilkan notice yang punya tombol perbaikan, sehingga
+ * penjelasan seperti "provider ini masih punya kredensial jadi pi tetap
+ * memakainya" tidak pernah terlihat di aplikasi — hanya di `doctor`.
+ */
+async function loadNotices(harnessId) {
+  try {
+    const all = await api.notices(harnessId);
+    // Id bentrok dan notice bawaan lain tetap berguna, tapi yang paling sering
+    // dimengerti pengguna adalah pesan yang menyebut providernya.
+    state.notices = all;
+  } catch {
+    state.notices = [];
+  }
 }
 
 // ============================================================================

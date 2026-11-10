@@ -6,6 +6,18 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.8]
+
+### Added
+
+- GUI: kartu "Perlu diketahui" di halaman harness, berisi semua temuan untuk
+  harness itu — termasuk yang tidak punya perbaikan otomatis. Sebelumnya GUI
+  hanya menampilkan notice yang punya tombol fix, sehingga penjelasan seperti
+  "provider ini masih punya kredensial, jadi pi tetap memakainya" tidak pernah
+  terlihat di aplikasi dan hanya muncul di `doctor`.
+- Command Tauri `list_notices` supaya GUI bisa membaca temuan tanpa menunggu
+  ada perubahan config.
+
 ## [0.6.7]
 
 ### Fixed

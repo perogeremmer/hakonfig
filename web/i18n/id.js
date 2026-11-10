@@ -33,6 +33,7 @@ export default {
   "harness.settings": "Pengaturan",
   "harness.addProvider": "Tambah provider",
   "harness.more": "Lainnya",
+  "harness.noticesTitle": "Perlu diketahui",
   "harness.defaultTitle": "Model default",
   "harness.defaultHint": "Dipakai saat kamu menjalankan {name}.",
   "harness.changeDefault": "Ganti",

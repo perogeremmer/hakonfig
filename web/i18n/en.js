@@ -37,6 +37,7 @@ export default {
   "harness.settings": "Settings",
   "harness.addProvider": "Add provider",
   "harness.more": "More",
+  "harness.noticesTitle": "Worth knowing",
   "harness.defaultTitle": "Default model",
   "harness.defaultHint": "Used when you start {name}.",
   "harness.changeDefault": "Change",
