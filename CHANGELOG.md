@@ -6,6 +6,8 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.3]
+
 ### Changed
 
 - pi: pesan saat default dikosongkan (semua provider nonaktif) sekarang menyebut
