@@ -134,7 +134,10 @@ async function verifyPublic(atVersion) {
   // Registry perlu waktu mengindeks versi baru setelah publish. Dua menit
   // (10 x 15 detik) pernah tidak cukup, jadi jendelanya dilonggarkan sambil
   // tetap gagal keras kalau versinya benar-benar tidak publik.
-  const attempts = 24;
+  // 0.6.9 sempat butuh lebih dari 6 menit sebelum packument menampilkan
+  // versinya, padahal publish sudah sukses. Sepuluh menit masih wajar; yang
+  // tidak boleh terjadi adalah gagal padahal versinya publik (atau sebaliknya).
+  const attempts = 40;
   const interval = 15_000;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     const status = await checkPublished(atVersion);
