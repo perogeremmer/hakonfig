@@ -468,10 +468,14 @@ function confirmDialog({
       resolve(false);
     });
     $("[data-confirm]", overlay).addEventListener("click", () => {
+      // `close()` memanggil `onClose` -> `resolve(false)`. Promise hanya
+      // memakai resolusi pertama, jadi resolve(true) HARUS lebih dulu; kalau
+      // dibalik, setiap konfirmasi dibaca sebagai "batal" dan tombolnya seolah
+      // tidak berfungsi (bug yang membuat "Forget key" diam saja).
       const dontAsk = $("[data-dont-ask]", overlay);
       if (dontAsk?.checked) savePrefs({ confirmDelete: false });
-      close();
       resolve(true);
+      close();
     });
   });
 }

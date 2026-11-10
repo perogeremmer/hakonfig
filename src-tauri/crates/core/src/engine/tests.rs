@@ -3174,3 +3174,54 @@ fn models_that_the_catalog_says_support_thinking_are_reported_and_fixed() {
         "model yang katalognya bukan reasoning tidak boleh ikut ditandai: {plain}"
     );
 }
+#[test]
+fn gui_forget_key_payload_deserialises_and_applies() {
+    let raw = r#"{"kind":"forget_key","providerId":"deepseek"}"#;
+    let op: crate::engine::model::EditOp =
+        serde_json::from_str(raw).expect("payload GUI harus valid");
+    match &op {
+        crate::engine::model::EditOp::ForgetKey { provider_id } => {
+            assert_eq!(provider_id, "deepseek")
+        }
+        other => panic!("variant salah: {other:?}"),
+    }
+}
+
+#[test]
+fn forget_key_works_on_a_provider_that_is_already_disabled() {
+    // Kasus nyata: provider dinonaktifkan (blok komentar) lalu pengguna menekan
+    // "Forget key". Entri config-nya tidak aktif, jadi jalur ini tidak boleh
+    // bergantung pada `providers.<id>` yang sudah hilang.
+    let (_lock, root) = sandbox("pi-forget-parked");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {}
+}
+// hakonfig:disabled deepseek
+// { "name": "DeepSeek", "baseUrl": "https://api.deepseek.com", "api": "openai-completions" }
+// hakonfig:end
+"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"deepseek":{"type":"api_key","key":"sk-ds"}}"#,
+    );
+    write(&dir.join("settings.json"), "{}");
+
+    let result = api::apply_edit(
+        "pi".into(),
+        EditOp::ForgetKey {
+            provider_id: "deepseek".to_string(),
+        },
+    )
+    .expect("forget key pada provider nonaktif harus bekerja");
+
+    let auth = json(&dir.join("auth.json"));
+    assert!(
+        auth.get("deepseek").is_none(),
+        "kredensial harus hilang: {auth}"
+    );
+    assert!(result.backup_dir.is_some(), "harus ada backup");
+}

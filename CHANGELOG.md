@@ -6,6 +6,18 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.7.1]
+
+### Fixed
+
+- GUI: **semua dialog konfirmasi menganggap "Ya" sebagai "Batal"**. `openModal`
+  memanggil `onClose` di dalam `close()`, dan `confirmDialog` memakai
+  `onClose: () => resolve(false)`. Handler tombol konfirmasi memanggil `close()`
+  lebih dulu, jadi promise sudah terlanjur resolve `false` — tombol seperti
+  "Forget key", "Hapus provider", dan konfirmasi lain seolah tidak berfungsi:
+  dialog muncul, dikonfirmasi, lalu tidak terjadi apa-apa. Sekarang `resolve`
+  dipanggil sebelum `close()`, dan `web/confirm.test.js` menjaga urutannya.
+
 ## [0.7.0]
 
 ### Added
