@@ -59,6 +59,157 @@ impl PiAdapter {
         }
     }
 
+    /// Jaga `defaultProvider`/`defaultModel` tetap menunjuk provider yang aktif.
+    ///
+    /// pi memilih model awal dari default ini. Kalau default menunjuk provider
+    /// yang dinonaktifkan, pi diam-diam jatuh ke model lain dan pengguna tidak
+    /// tahu kenapa; kalau semua provider nonaktif, default yang tertinggal cuma
+    /// janji kosong di config. Jadi default ikut dipindah (atau dikosongkan)
+    /// setiap kali toggle mengubah kumpulan provider aktif.
+    fn sync_default(docs: &mut Docs, touched: &str, enabled: bool) -> Result<Vec<String>> {
+        let Some(exists) = docs.get("settings").map(|doc| doc.exists) else {
+            return Ok(Vec::new());
+        };
+        if !exists {
+            return Ok(Vec::new());
+        }
+
+        let current = docs
+            .get("settings")
+            .and_then(|doc| doc.data().get("defaultProvider"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        // Provider aktif sesudah edit, beserta model pertamanya.
+        let first_active = || {
+            Self::active_models(docs)
+                .into_iter()
+                .find(|(_, models)| !models.is_empty())
+                .map(|(id, models)| (id, models[0].clone()))
+        };
+
+        let mut messages = Vec::new();
+        let replacement = if enabled {
+            // Default yang kosong diisi supaya harness punya titik awal lagi.
+            if current.is_some() {
+                None
+            } else {
+                let active = Self::active_models(docs);
+                active
+                    .get(touched)
+                    .filter(|models| !models.is_empty())
+                    .map(|models| (touched.to_string(), models[0].clone()))
+            }
+        } else if current.as_deref() == Some(touched) {
+            first_active()
+        } else {
+            None
+        };
+
+        let mut scope_for: Option<(String, String)> = None;
+        {
+            let settings = docs.require_mut("settings")?;
+            let root = settings.root_object();
+            match replacement {
+                Some((provider, model)) => {
+                    root.insert(
+                        "defaultProvider".to_string(),
+                        Value::String(provider.clone()),
+                    );
+                    root.insert(
+                        "defaultModel".to_string(),
+                        Value::String(format!("{provider}/{model}")),
+                    );
+                    messages.push(if enabled {
+                        format!("Default set to '{provider}/{model}' for the re-enabled provider.")
+                    } else {
+                        format!(
+                            "Default moved to '{provider}/{model}' because '{touched}' was disabled."
+                        )
+                    });
+                    scope_for = Some((provider, model));
+                }
+                None => {
+                    if !enabled && current.as_deref() == Some(touched) {
+                        root.remove("defaultProvider");
+                        root.remove("defaultModel");
+                        messages.push(format!(
+                            "No provider is active any more, so the default pointing at '{touched}' was cleared. pi will choose its own model."
+                        ));
+                    }
+                }
+            }
+        }
+
+        // Default baru harus terlihat oleh scope `enabledModels`, kalau pengguna
+        // memakai scope.
+        if let Some((provider, model)) = scope_for {
+            if let Some(summary) = Self::reconcile_scope(docs, &provider, Ensure::Models(&[model]))?
+            {
+                messages.push(summary);
+            }
+        }
+
+        Ok(messages)
+    }
+
+    /// Peringatan bahwa provider ini juga dikenali pi secara bawaan.
+    ///
+    /// Katalog pi berisi puluhan provider (deepseek, openai, anthropic, groq,
+    /// ...). Menonaktifkan entri kita hanya menghapus *konfigurasi* kita;
+    /// provider bawaannya tetap ada selama kredensialnya ada, dan itu keputusan
+    /// pi, bukan sesuatu yang bisa kita tulis ke models.json.
+    fn builtin_warning(provider: &str) -> Option<String> {
+        match crate::engine::version::knows_provider("pi", provider) {
+            Some(true) => Some(format!(
+                "pi also knows '{provider}' as a built-in provider, so it stays in pi's model list as long as a credential exists (auth.json or an environment variable). Hakonfig only removed its own entry in models.json."
+            )),
+            _ => None,
+        }
+    }
+
+    /// Notice: default menunjuk provider yang dinonaktifkan.
+    ///
+    /// Bisa terjadi kalau config diedit di luar Hakonfig (atau versi lama
+    /// menonaktifkan provider tanpa memindahkan default).
+    fn default_notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        let Some(settings) = docs.get("settings") else {
+            return Vec::new();
+        };
+        let Some(current) = settings
+            .data()
+            .get("defaultProvider")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Vec::new();
+        };
+        let parked = docs
+            .get("models")
+            .map(|models| models.parked_ids())
+            .unwrap_or_default();
+        if !parked.iter().any(|id| id == current) {
+            return Vec::new();
+        }
+        // Hanya laporkan kalau provider itu memang yang sedang diminta.
+        if !providers.is_empty() && !providers.iter().any(|entry| entry.id == current) {
+            return Vec::new();
+        }
+
+        vec![Notice {
+            code: "pi.default_disabled".to_string(),
+            harness: "pi".to_string(),
+            provider: current.to_string(),
+            message: format!(
+                "settings.json still uses '{current}' as the default provider, but it is disabled in models.json. pi will silently fall back to another model."
+            ),
+            fix: Some("Move the default to an active provider".to_string()),
+        }]
+    }
+
     /// Referensi model yang ditulis untuk satu provider: `id/model`.
     fn model_references(models: &crate::engine::doc::Doc, provider: &str) -> Vec<String> {
         let parked = models.parked_value(provider);
@@ -526,11 +677,16 @@ impl Adapter for PiAdapter {
                     .and_then(|doc| doc.data().get(id))
                     .and_then(|credential| get_str(credential, "key"));
 
-                let (has_key, key_display) = match (stored_key, config_key) {
-                    (Some(key), _) => (true, Some(mask_key(&key))),
-                    (None, Some(key)) => (true, Some(mask_key(&key))),
+                let inline_key = config_key
+                    .as_deref()
+                    .filter(|value| !value.trim_start().starts_with('$'));
+                let (has_key, key_display) = match (&stored_key, &config_key) {
+                    (Some(key), _) => (true, Some(mask_key(key))),
+                    (None, Some(key)) => (true, Some(mask_key(key))),
                     (None, None) => (false, None),
                 };
+                // Yang bisa dihapus: entri auth.json atau apiKey literal.
+                let key_stored = stored_key.is_some() || inline_key.is_some();
 
                 providers.push(ProviderSummary {
                     id: id.clone(),
@@ -539,6 +695,7 @@ impl Adapter for PiAdapter {
                     api: get_str(entry, "api"),
                     has_key,
                     key_display,
+                    key_stored,
                     models: shared::models_from_pi_style(entry),
                     enabled: true,
                     can_toggle: self.supports_toggle(),
@@ -555,11 +712,15 @@ impl Adapter for PiAdapter {
                 .and_then(|doc| doc.data().get(&id))
                 .and_then(|credential| get_str(credential, "key"));
             let config_key = get_str(&entry, "apiKey");
-            let (has_key, key_display) = match (stored_key, config_key) {
-                (Some(key), _) => (true, Some(mask_key(&key))),
-                (None, Some(key)) => (true, Some(mask_key(&key))),
+            let inline_key = config_key
+                .as_deref()
+                .filter(|value| !value.trim_start().starts_with('$'));
+            let (has_key, key_display) = match (&stored_key, &config_key) {
+                (Some(key), _) => (true, Some(mask_key(key))),
+                (None, Some(key)) => (true, Some(mask_key(key))),
                 (None, None) => (false, None),
             };
+            let key_stored = stored_key.is_some() || inline_key.is_some();
 
             providers.push(ProviderSummary {
                 id: id.clone(),
@@ -568,6 +729,8 @@ impl Adapter for PiAdapter {
                 api: get_str(&entry, "api"),
                 has_key,
                 key_display,
+                // Provider nonaktif: kredensialnya masih tersimpan.
+                key_stored,
                 models: shared::models_from_pi_style(&entry),
                 enabled: false,
                 can_toggle: true,
@@ -762,6 +925,72 @@ impl Adapter for PiAdapter {
 
                 Ok(warnings)
             }
+            EditOp::ForgetKey { provider_id } => {
+                let target = provider_id.trim().to_string();
+                if target.is_empty() {
+                    anyhow::bail!("Provider is required.");
+                }
+
+                let mut warnings = Vec::new();
+                let mut removed = false;
+
+                // Kredensial tersimpan.
+                if let Some(auth) = docs.get_mut("auth") {
+                    if auth.data().get(&target).is_some() {
+                        auth.root_object().remove(&target);
+                        removed = true;
+                    }
+                }
+                // apiKey literal di models.json menang atas auth.json, jadi ikut
+                // dibersihkan kalau ada. Referensi `$ENV` dibiarkan: nilainya di
+                // shell pengguna, bukan di file ini, dan menghapus referensinya
+                // tidak mengubah apa pun bagi harness.
+                let mut drop_key = false;
+                if let Some(models) = docs.get_mut("models") {
+                    if let Some(entry) = models
+                        .object_at("providers")
+                        .get_mut(&target)
+                        .and_then(Value::as_object_mut)
+                    {
+                        let inline = entry
+                            .get("apiKey")
+                            .and_then(Value::as_str)
+                            .map(|value| !value.trim_start().starts_with('$'))
+                            .unwrap_or(false);
+                        if inline {
+                            entry.remove("apiKey");
+                            drop_key = true;
+                            removed = true;
+                        }
+                    }
+                }
+                let _ = drop_key;
+
+                if !removed {
+                    anyhow::bail!(
+                        "No stored credential for '{}'. It may use an environment variable.",
+                        target
+                    );
+                }
+
+                warnings.push(format!(
+                    "Stored credential for '{}' removed (auth.json / models.json). The value is still in the backup file.",
+                    target
+                ));
+
+                // Env var tidak bisa dihapus dari sini, dan itu justru yang
+                // membuat provider tetap hidup di harness.
+                let env_name = format!(
+                    "{}_API_KEY",
+                    target.to_ascii_uppercase().replace(['-', '.'], "_")
+                );
+                if std::env::var_os(&env_name).is_some() {
+                    warnings.push(format!(
+                        "{env_name} is still set in your environment, so pi keeps offering '{target}'. Unset it to finish disabling the provider."
+                    ));
+                }
+                Ok(warnings)
+            }
             EditOp::SetModels {
                 provider_id,
                 models,
@@ -826,6 +1055,9 @@ impl Adapter for PiAdapter {
                     if let Some(summary) = Self::reconcile_scope(docs, &target, Ensure::Provider)? {
                         warnings.push(summary);
                     }
+                    // Provider hidup lagi tapi default kosong: isi supaya harness
+                    // punya titik awal tanpa harus memilih ulang.
+                    warnings.extend(Self::sync_default(docs, &target, true)?);
                     Ok(warnings)
                 } else {
                     let Some(entry) = existing else {
@@ -851,6 +1083,13 @@ impl Adapter for PiAdapter {
                     // dicocokkan, jadi polanya di scope ikut dibuang.
                     if let Some(summary) = Self::reconcile_scope(docs, &target, Ensure::Nothing)? {
                         warnings.push(summary);
+                    }
+                    // Default yang menunjuk provider ini tidak boleh tertinggal.
+                    warnings.extend(Self::sync_default(docs, &target, false)?);
+                    // Kalau pi sendiri mengenal provider ini, entri kita bukan
+                    // satu-satunya sumber: katakan apa adanya.
+                    if let Some(warning) = Self::builtin_warning(&target) {
+                        warnings.push(warning);
                     }
                     Ok(warnings)
                 }
@@ -963,6 +1202,7 @@ impl Adapter for PiAdapter {
         let mut notices =
             shared::builtin_id_notices(self.id(), self.builtin_providers(), providers);
         notices.extend(self.scope_notices(docs, providers));
+        notices.extend(self.default_notices(docs, providers));
         notices.extend(self.catalog_notices(docs));
         notices
     }
@@ -993,6 +1233,9 @@ impl Adapter for PiAdapter {
     fn fix_notice(&self, docs: &mut Docs, notice: &Notice) -> Result<Option<String>> {
         match notice.code.as_str() {
             "pi.scope" => Self::reconcile_scope(docs, &notice.provider, Ensure::Provider),
+            "pi.default_disabled" => Ok(Self::sync_default(docs, &notice.provider, false)?
+                .into_iter()
+                .next()),
             other => anyhow::bail!("pi has no automatic fix for '{other}'"),
         }
     }

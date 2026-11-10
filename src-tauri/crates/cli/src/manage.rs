@@ -763,6 +763,7 @@ fn apply(harness: &str, op: EditOp, json: bool, interactive: bool) -> Result<()>
         EditOp::SetModels { .. } => "set_models",
         EditOp::SetDefault { .. } => "set_default",
         EditOp::SetEnabled { .. } => "set_enabled",
+        EditOp::ForgetKey { .. } => "forget_key",
         EditOp::Remove { .. } => "remove",
         _ => "upsert",
     };
@@ -771,6 +772,7 @@ fn apply(harness: &str, op: EditOp, json: bool, interactive: bool) -> Result<()>
         | EditOp::SetModels { provider_id, .. }
         | EditOp::SetDefault { provider_id, .. }
         | EditOp::SetEnabled { provider_id, .. }
+        | EditOp::ForgetKey { provider_id }
         | EditOp::Remove { provider_id } => provider_id.clone(),
         EditOp::Upsert(draft) => draft.id.clone(),
     };

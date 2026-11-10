@@ -6,6 +6,32 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.1]
+
+### Fixed
+
+- GUI: menonaktifkan provider yang sedang menjadi default sekarang ikut
+  memindahkan `defaultProvider`/`defaultModel` ke provider aktif lain; kalau
+  semua provider nonaktif, default dikosongkan. Sebelumnya default tetap
+  menunjuk provider mati dan harness diam-diam memakai model lain.
+- GUI: hasil `set_enabled` menampilkan peringatan dari engine (perpindahan
+  default, provider bawaan) dan notice yang bisa diperbaiki sekali klik.
+  Sebelumnya tombol toggle hanya bilang "dinonaktifkan" walau harness masih
+  menampilkan provider itu.
+- pi: notice `pi.default_disabled` (dengan perbaikan otomatis) untuk config lama
+  yang default-nya menunjuk provider yang sudah dinonaktifkan.
+
+### Added
+
+- GUI: aksi "Lupakan kredensial tersimpan" di menu provider. Untuk provider
+  bawaan pi (deepseek, openai, anthropic, ...) menghapus entri di `models.json`
+  tidak cukup: pi tetap mengenalinya selama kredensialnya ada. Aksi ini
+  menghapus entri kredensial (dengan backup) dan memberi tahu kalau API key
+  masih hidup di environment shell.
+- pi: saat provider dinonaktifkan, engine melaporkan kalau provider itu juga
+  dikenali pi secara bawaan (probe `pi auth check --provider ... --json`),
+  supaya tidak terlihat seperti config yang tidak tersimpan.
+
 ## [0.6.0]
 
 ### Added

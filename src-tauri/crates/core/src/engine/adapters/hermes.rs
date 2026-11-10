@@ -105,6 +105,8 @@ impl Adapter for HermesAdapter {
                     api: get_str(entry, "api_mode"),
                     has_key: stored.is_some(),
                     key_display,
+                    // Kredensial hidup di entri provider; tidak ada aksi hapus terpisah.
+                    key_stored: false,
                     models: Vec::new(),
                     enabled: true,
                     can_toggle: self.supports_toggle(),
@@ -133,6 +135,7 @@ impl Adapter for HermesAdapter {
                 api: get_str(&entry, "api_mode"),
                 has_key: stored.is_some(),
                 key_display,
+                key_stored: false,
                 models: Vec::new(),
                 enabled: false,
                 can_toggle: true,
@@ -365,6 +368,9 @@ impl Adapter for HermesAdapter {
                     provider, model
                 )])
             }
+            EditOp::ForgetKey { .. } => anyhow::bail!(
+                "HERMES has no separate credential store: the API key lives in the provider entry, so remove the provider instead.",
+            ),
             EditOp::Remove { provider_id } => {
                 let target = provider_id.trim().to_string();
                 let key_env = docs
