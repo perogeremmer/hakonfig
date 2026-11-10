@@ -6,6 +6,17 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.6]
+
+### Fixed
+
+- pi: `doctor` sekarang melaporkan provider yang **dinonaktifkan di models.json
+  tetapi masih punya kredensial**. Sebelumnya provider yang diparkir dianggap
+  "sudah dikonfigurasi", jadi kasus paling membingungkan — semua provider mati,
+  config bersih, tetapi pi tetap memakainya karena provider itu bawaan pi dan
+  kredensialnya (auth.json / `*_API_KEY`) masih ada — tidak pernah disebut.
+  Pesannya kini menyebut sumber kredensialnya dan apa yang harus dihapus.
+
 ## [0.6.5]
 
 ### Fixed

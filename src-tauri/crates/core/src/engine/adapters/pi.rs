@@ -617,23 +617,6 @@ impl PiAdapter {
         ids
     }
 
-    /// Provider yang tersimpan di `models.json`, termasuk yang diparkir.
-    fn configured_providers(docs: &Docs) -> Vec<String> {
-        let Some(models) = docs.get("models") else {
-            return Vec::new();
-        };
-        let mut ids: Vec<String> = models
-            .data()
-            .get("providers")
-            .and_then(Value::as_object)
-            .map(|map| map.keys().cloned().collect())
-            .unwrap_or_default();
-        ids.extend(models.parked_ids());
-        ids.sort();
-        ids.dedup();
-        ids
-    }
-
     /// Cache katalog pi.dev (`models-store.json`), dibaca langsung karena
     /// file itu milik pi dan tidak pernah ditulis Hakonfig.
     fn catalog_cache() -> serde_json::Map<String, Value> {
@@ -649,22 +632,79 @@ impl PiAdapter {
     /// provider di config, dan cache katalog yang tersimpan kosong.
     fn catalog_notices(&self, docs: &Docs) -> Vec<Notice> {
         let credentialed = Self::credentialed_providers(docs);
-        let configured = Self::configured_providers(docs);
         let cache = Self::catalog_cache();
         let mut notices = Vec::new();
 
+        // Provider yang diparkir tetap bisa dipakai pi: kredensialnya tidak ikut
+        // terhapus, dan provider bawaan tidak butuh entri di models.json. Itu
+        // persis kombinasi yang membuat "sudah dinonaktifkan tapi pi tetap
+        // memakainya" terlihat seperti bug penulisan config.
+        let parked = docs
+            .get("models")
+            .map(|models| models.parked_ids())
+            .unwrap_or_default();
+        // Provider yang tidak aktif (diparkir) tetap bisa dipakai pi: kredensialnya
+        // tidak ikut terhapus, dan provider bawaan tidak butuh entri di
+        // models.json. Itu kombinasi yang membuat "sudah dinonaktifkan tapi pi
+        // tetap memakainya" terlihat seperti bug penulisan config.
+        let active: Vec<String> = docs
+            .get("models")
+            .and_then(|models| models.data().get("providers"))
+            .and_then(Value::as_object)
+            .map(|map| map.keys().cloned().collect())
+            .unwrap_or_default();
+        let in_auth = |provider: &str| {
+            docs.get("auth")
+                .and_then(|doc| doc.data().get(provider))
+                .is_some()
+        };
+
         for provider in &credentialed {
-            if !configured.iter().any(|id| id == provider) {
-                notices.push(Notice {
-                    code: "catalog.credential-without-provider".to_string(),
-                    harness: self.id().to_string(),
-                    provider: provider.clone(),
-                    message: format!(
-                        "pi has a credential for '{provider}', so it refreshes that provider's catalog from pi.dev, but there is no '{provider}' entry in models.json — only the built-in catalog is usable, and a failed refresh shows up as \"Could not refresh {provider}; showing cached models\"."
-                    ),
-                    fix: None,
-                });
+            if active.iter().any(|id| id == provider) {
+                continue;
             }
+            let parked_here = parked.iter().any(|id| id == provider);
+            let env_var = Self::env_api_keys()
+                .iter()
+                .find(|(id, _)| id == provider)
+                .map(|(_, variable)| *variable)
+                .unwrap_or("(environment)");
+            let env_set = std::env::var(env_var)
+                .map(|value| !value.trim().is_empty())
+                .unwrap_or(false);
+
+            // Sumber kredensial yang masih hidup, disebut apa adanya supaya
+            // pengguna tahu apa yang harus dihapus.
+            let mut sources = Vec::new();
+            if in_auth(provider) {
+                sources.push("auth.json".to_string());
+            }
+            if env_set {
+                sources.push(env_var.to_string());
+            }
+            let sources = if sources.is_empty() {
+                "a credential".to_string()
+            } else {
+                sources.join(" + ")
+            };
+
+            let message = if parked_here {
+                format!(
+                    "'{provider}' is disabled in models.json, but pi still has {sources}. pi ships '{provider}' as a built-in provider, so it stays usable (and can be the model a new session starts with) without any entry of ours. Hakonfig cannot hide it by editing config: remove the credential to make pi drop it."
+                )
+            } else {
+                format!(
+                    "pi still has {sources} for '{provider}' but no '{provider}' entry in models.json, so pi keeps offering it from its built-in catalog — including as the model a new session starts with. Hakonfig cannot hide it by editing config: remove the credential to make pi drop it. Its catalog refresh may also show \"Could not refresh {provider}; showing cached models\"."
+                )
+            };
+
+            notices.push(Notice {
+                code: "catalog.credential-without-provider".to_string(),
+                harness: self.id().to_string(),
+                provider: provider.clone(),
+                message,
+                fix: None,
+            });
         }
 
         for (provider, entry) in &cache {

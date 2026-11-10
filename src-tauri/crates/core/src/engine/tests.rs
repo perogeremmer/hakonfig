@@ -2878,3 +2878,53 @@ fn hermes_disable_clears_a_default_pointing_at_the_disabled_provider() {
     );
     assert!(config["model"].get("default").is_none());
 }
+
+#[test]
+fn pi_reports_a_disabled_provider_that_still_has_credentials() {
+    let (_lock, root) = sandbox("pi-parked-with-credential");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {}
+}
+// hakonfig:disabled deepseek
+// { "name": "DeepSeek", "baseUrl": "https://api.deepseek.com", "api": "openai-completions" }
+// hakonfig:end
+"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"deepseek":{"type":"api_key","key":"sk-ds"}}"#,
+    );
+    write(
+        &dir.join("settings.json"),
+        r#"{"theme":"dark","defaultThinkingLevel":"medium"}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    let notice = notices
+        .iter()
+        .find(|notice| {
+            notice.code == "catalog.credential-without-provider" && notice.provider == "deepseek"
+        })
+        .unwrap_or_else(|| panic!("notice kredensial harus muncul: {notices:?}"));
+
+    // Pesannya harus menjelaskan kenapa provider mati tetap dipakai pi.
+    assert!(
+        notice.message.contains("disabled in models.json"),
+        "{}",
+        notice.message
+    );
+    assert!(
+        notice.message.contains("built-in provider"),
+        "{}",
+        notice.message
+    );
+    assert!(notice.message.contains("auth.json"), "{}", notice.message);
+    assert!(
+        notice.message.contains("remove the credential"),
+        "harus ada jalan keluar yang jelas: {}",
+        notice.message
+    );
+}
