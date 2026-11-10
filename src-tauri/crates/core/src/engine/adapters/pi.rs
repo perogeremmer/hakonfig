@@ -170,6 +170,57 @@ impl PiAdapter {
         }
     }
 
+    /// Notice: model ber-reasoning tanpa variant thinking lengkap.
+    ///
+    /// pi tanpa `thinkingLevelMap` hanya menawarkan level sampai `high`, jadi
+    /// `max` tidak pernah muncul. Model yang didaftarkan lewat Hakonfig sekarang
+    /// selalu mendapat map itu; notice ini menangkap config lama.
+    fn thinking_notices(&self, docs: &Docs, providers: &[shared::ProviderRef<'_>]) -> Vec<Notice> {
+        let Some(models) = docs.get("models") else {
+            return Vec::new();
+        };
+        let Some(catalog) = models.data().get("providers").and_then(Value::as_object) else {
+            return Vec::new();
+        };
+
+        let mut notices = Vec::new();
+        for reference in providers {
+            let Some(entry) = catalog.get(reference.id) else {
+                continue;
+            };
+            let Some(list) = entry.get("models").and_then(Value::as_array) else {
+                continue;
+            };
+            let missing = list
+                .iter()
+                .filter(|model| {
+                    model
+                        .get("reasoning")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false)
+                        && !model
+                            .get("thinkingLevelMap")
+                            .map(Value::is_object)
+                            .unwrap_or(false)
+                })
+                .count();
+            if missing == 0 {
+                continue;
+            }
+            notices.push(Notice {
+                code: "pi.thinking_map".to_string(),
+                harness: "pi".to_string(),
+                provider: reference.id.to_string(),
+                message: format!(
+                    "{missing} reasoning model of '{}' have no thinkingLevelMap, so pi only offers levels up to high and never 'max'.",
+                    reference.id
+                ),
+                fix: Some("Add the standard thinking variants".to_string()),
+            });
+        }
+        notices
+    }
+
     /// Notice: default menunjuk provider yang dinonaktifkan.
     ///
     /// Bisa terjadi kalau config diedit di luar Hakonfig (atau versi lama
@@ -798,7 +849,11 @@ impl Adapter for PiAdapter {
                 };
 
                 let models = docs.require_mut("models")?;
-                let entry = shared::pi_style_entry(draft, existing_entry.as_ref(), api_key_field);
+                let mut entry =
+                    shared::pi_style_entry(draft, existing_entry.as_ref(), api_key_field);
+                if let Some(list) = entry.get_mut("models").and_then(Value::as_array_mut) {
+                    fill_thinking_levels(list);
+                }
                 models
                     .object_at("providers")
                     .insert(draft.id.trim().to_string(), entry);
@@ -1008,12 +1063,28 @@ impl Adapter for PiAdapter {
                 else {
                     anyhow::bail!("Provider '{}' not found in models.json.", target);
                 };
-                entry.insert(
-                    "models".to_string(),
-                    Value::Array(models.iter().map(model_to_value).collect()),
-                );
+                // Merge per id, bukan rebuild: field yang tidak diurus form
+                // (mis. thinkingLevelMap buatan pengguna) harus bertahan.
+                let previous: Vec<Value> = entry
+                    .get("models")
+                    .and_then(Value::as_array)
+                    .cloned()
+                    .unwrap_or_default();
+                let mut written: Vec<Value> = models
+                    .iter()
+                    .map(|model| {
+                        let id = model.id.trim();
+                        let existing = previous.iter().find(|candidate| {
+                            candidate.get("id").and_then(Value::as_str) == Some(id)
+                        });
+                        shared::model_value_from_draft(model, existing)
+                    })
+                    .collect();
+                fill_thinking_levels(&mut written);
+                entry.insert("models".to_string(), Value::Array(written));
 
-                let written: Vec<String> = models.iter().map(|model| model.id.clone()).collect();
+                let written_ids: Vec<String> =
+                    models.iter().map(|model| model.id.clone()).collect();
                 let mut warnings = vec![format!(
                     "{} model ditulis untuk '{}'.",
                     models.len(),
@@ -1022,7 +1093,7 @@ impl Adapter for PiAdapter {
                 // Daftar model berubah: scope ikut menyesuaikan, tanpa melebar
                 // ke model yang tidak dipilih.
                 if let Some(summary) =
-                    Self::reconcile_scope(docs, &target, Ensure::Models(&written))?
+                    Self::reconcile_scope(docs, &target, Ensure::Models(&written_ids))?
                 {
                     warnings.push(summary);
                 }
@@ -1203,6 +1274,7 @@ impl Adapter for PiAdapter {
             shared::builtin_id_notices(self.id(), self.builtin_providers(), providers);
         notices.extend(self.scope_notices(docs, providers));
         notices.extend(self.default_notices(docs, providers));
+        notices.extend(self.thinking_notices(docs, providers));
         notices.extend(self.catalog_notices(docs));
         notices
     }
@@ -1236,6 +1308,27 @@ impl Adapter for PiAdapter {
             "pi.default_disabled" => Ok(Self::sync_default(docs, &notice.provider, false)?
                 .into_iter()
                 .next()),
+            "pi.thinking_map" => {
+                let target = notice.provider.clone();
+                let models = docs.require_mut("models")?;
+                let Some(list) = models
+                    .object_at("providers")
+                    .get_mut(&target)
+                    .and_then(|entry| entry.get_mut("models"))
+                    .and_then(Value::as_array_mut)
+                else {
+                    anyhow::bail!("Provider '{}' has no models to update.", target);
+                };
+                let before = list.len();
+                fill_thinking_levels(list);
+                let filled = list
+                    .iter()
+                    .filter(|model| model.get("thinkingLevelMap").is_some())
+                    .count();
+                Ok(Some(format!(
+                    "Thinking variants written for {filled}/{before} models of '{target}'."
+                )))
+            }
             other => anyhow::bail!("pi has no automatic fix for '{other}'"),
         }
     }
@@ -1265,25 +1358,52 @@ impl Adapter for PiAdapter {
 }
 
 /// Satu entri model untuk `models.json`.
-fn model_to_value(model: &crate::engine::model::ModelDraft) -> Value {
-    let mut object = serde_json::Map::new();
-    object.insert("id".to_string(), Value::String(model.id.trim().to_string()));
-    if let Some(name) = model
-        .name
-        .as_deref()
-        .map(str::trim)
-        .filter(|n| !n.is_empty())
-    {
-        object.insert("name".to_string(), Value::String(name.to_string()));
+/// Variant thinking yang selalu ditulis untuk model ber-reasoning.
+///
+/// Tanpa map, pi hanya menyediakan level sampai `high`; `xhigh` dan `max` baru
+/// ada kalau dipetakan (schema: "xhigh and max are unsupported"). Nilai provider
+/// yang dipakai adalah nama levelnya sendiri, kecuali `off` yang pi kirim sebagai
+/// "none" — persis default pi, tapi ditulis eksplisit supaya kelihatan.
+///
+/// `minimal` dan `xhigh` di-null-kan: pi mengartikan null sebagai "level ini
+/// tidak didukung", dan dua level itu bukan bagian dari variant yang kita janjikan
+/// (none, low, medium, high, max).
+fn thinking_level_map() -> Value {
+    serde_json::json!({
+        "off": "none",
+        "minimal": null,
+        "low": "low",
+        "medium": "medium",
+        "high": "high",
+        "xhigh": null,
+        "max": "max"
+    })
+}
+
+/// Tambahkan map thinking ke setiap model yang ditandai `reasoning`.
+///
+/// Map yang sudah ada tidak ditimpa: pengguna (atau pi sendiri) bisa punya
+/// pemetaan yang lebih tepat untuk providernya, dan menimpanya hanya karena kita
+/// menulis ulang daftar model akan menghapus kerja itu.
+fn fill_thinking_levels(models: &mut [Value]) {
+    for model in models {
+        let reasoning = model
+            .get("reasoning")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        if !reasoning {
+            continue;
+        }
+        let Some(object) = model.as_object_mut() else {
+            continue;
+        };
+        let has_map = object
+            .get("thinkingLevelMap")
+            .map(Value::is_object)
+            .unwrap_or(false);
+        if has_map {
+            continue;
+        }
+        object.insert("thinkingLevelMap".to_string(), thinking_level_map());
     }
-    if let Some(window) = model.context_window.filter(|value| *value > 0) {
-        object.insert("contextWindow".to_string(), Value::from(window));
-    }
-    if let Some(max) = model.max_tokens.filter(|value| *value > 0) {
-        object.insert("maxTokens".to_string(), Value::from(max));
-    }
-    if model.reasoning {
-        object.insert("reasoning".to_string(), Value::Bool(true));
-    }
-    Value::Object(object)
 }

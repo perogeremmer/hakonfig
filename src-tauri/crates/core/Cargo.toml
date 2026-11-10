@@ -1,6 +1,6 @@
 [package]
 name = "hakonfig-core"
-version = "0.6.1"
+version = "0.6.2"
 description = "Hakonfig core: read/modify/write AI harness provider config, no Tauri"
 edition = "2021"
 license = "MIT"

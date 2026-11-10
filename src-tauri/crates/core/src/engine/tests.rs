@@ -2350,3 +2350,238 @@ fn forget_key_is_rejected_where_the_key_lives_in_the_provider_entry() {
         "harness yang menyimpan key di entri provider harus menolak dengan jelas: {error}"
     );
 }
+
+// ------------------------------------------- variant thinking pada model (pi)
+
+/// Map thinking yang dijanjikan: none/low/medium/high/max.
+fn assert_full_thinking_map(map: &Value, context: &str) {
+    assert_eq!(map["off"], "none", "{context}");
+    assert_eq!(map["low"], "low", "{context}");
+    assert_eq!(map["medium"], "medium", "{context}");
+    assert_eq!(map["high"], "high", "{context}");
+    assert_eq!(map["max"], "max", "{context}");
+    // Level di luar variant sengaja ditandai tidak didukung.
+    assert!(map["minimal"].is_null(), "{context}");
+    assert!(map["xhigh"].is_null(), "{context}");
+}
+
+#[test]
+fn pi_upsert_writes_thinking_variants_for_reasoning_models() {
+    let (_lock, root) = sandbox("pi-thinking-upsert");
+    let dir = root.join("pi/agent");
+    write(&dir.join("models.json"), r#"{"providers":{}}"#);
+    write(&dir.join("auth.json"), "{}");
+
+    let mut provider = draft("myproxy", Some("sk-1"), KeyMode::Inline);
+    provider.models = vec![
+        ModelDraft {
+            id: "thinker".to_string(),
+            name: Some("Thinker".to_string()),
+            context_window: Some(128000),
+            max_tokens: Some(8192),
+            reasoning: true,
+        },
+        ModelDraft {
+            id: "plain".to_string(),
+            name: Some("Plain".to_string()),
+            context_window: Some(128000),
+            max_tokens: Some(8192),
+            reasoning: false,
+        },
+    ];
+
+    api::apply_edit("pi".into(), EditOp::Upsert(provider)).unwrap();
+
+    let models = read_json_value(&dir.join("models.json"));
+    let list = models["providers"]["myproxy"]["models"].as_array().unwrap();
+    let thinker = list.iter().find(|m| m["id"] == "thinker").unwrap();
+    assert_full_thinking_map(&thinker["thinkingLevelMap"], "model reasoning");
+    assert_eq!(thinker["reasoning"], true);
+
+    let plain = list.iter().find(|m| m["id"] == "plain").unwrap();
+    assert!(
+        plain.get("thinkingLevelMap").is_none(),
+        "model tanpa reasoning tidak boleh mengaku punya level thinking: {plain}"
+    );
+}
+
+#[test]
+fn pi_upsert_keeps_a_handwritten_thinking_map() {
+    let (_lock, root) = sandbox("pi-thinking-keep");
+    let dir = root.join("pi/agent");
+    // Map buatan pengguna: hanya medium dan high yang dipetakan, sisanya null.
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "myproxy": {
+      "name": "My Proxy",
+      "baseUrl": "https://proxy.example.com/v1",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "thinker",
+          "reasoning": true,
+          "thinkingLevelMap": { "medium": "medium", "high": "high" }
+        }
+      ]
+    }
+  }
+}"#,
+    );
+    write(&dir.join("auth.json"), "{}");
+
+    let mut provider = draft("myproxy", None, KeyMode::Inline);
+    provider.models = vec![ModelDraft {
+        id: "thinker".to_string(),
+        name: Some("Thinker Box".to_string()),
+        context_window: Some(64000),
+        max_tokens: Some(4096),
+        reasoning: true,
+    }];
+    api::apply_edit("pi".into(), EditOp::Upsert(provider)).unwrap();
+
+    let models = read_json_value(&dir.join("models.json"));
+    let thinker = &models["providers"]["myproxy"]["models"][0];
+    assert_eq!(
+        thinker["thinkingLevelMap"]["medium"], "medium",
+        "map pengguna tidak boleh ditimpa: {thinker}"
+    );
+    assert!(
+        thinker["thinkingLevelMap"].get("max").is_none(),
+        "map yang sudah ada dipakai apa adanya: {thinker}"
+    );
+    assert_eq!(thinker["name"], "Thinker Box");
+}
+
+#[test]
+fn pi_set_models_adds_thinking_variants_and_keeps_unknown_fields() {
+    let (_lock, root) = sandbox("pi-thinking-set-models");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "myproxy": {
+      "name": "My Proxy",
+      "baseUrl": "https://proxy.example.com/v1",
+      "api": "openai-completions",
+      "models": [
+        { "id": "thinker", "reasoning": true, "cost": { "input": 1.5 } }
+      ]
+    }
+  }
+}"#,
+    );
+    write(&dir.join("auth.json"), "{}");
+
+    api::apply_edit(
+        "pi".into(),
+        EditOp::SetModels {
+            provider_id: "myproxy".to_string(),
+            models: vec![
+                ModelDraft {
+                    id: "thinker".to_string(),
+                    name: Some("Thinker".to_string()),
+                    context_window: Some(128000),
+                    max_tokens: Some(8192),
+                    reasoning: true,
+                },
+                ModelDraft {
+                    id: "fresh".to_string(),
+                    name: Some("Fresh".to_string()),
+                    context_window: None,
+                    max_tokens: None,
+                    reasoning: true,
+                },
+            ],
+        },
+    )
+    .unwrap();
+
+    let models = read_json_value(&dir.join("models.json"));
+    let list = models["providers"]["myproxy"]["models"].as_array().unwrap();
+
+    let thinker = list.iter().find(|m| m["id"] == "thinker").unwrap();
+    assert_full_thinking_map(&thinker["thinkingLevelMap"], "model lama");
+    assert_eq!(
+        thinker["cost"]["input"], 1.5,
+        "field di luar form harus bertahan: {thinker}"
+    );
+
+    let fresh = list.iter().find(|m| m["id"] == "fresh").unwrap();
+    assert_full_thinking_map(&fresh["thinkingLevelMap"], "model baru");
+}
+
+#[test]
+fn omp_models_do_not_get_pi_only_thinking_keys() {
+    let (_lock, root) = sandbox("omp-no-thinking-map");
+    let dir = root.join("omp");
+    write(&dir.join("models.yml"), "providers: {}\n");
+
+    let mut provider = draft("myproxy", Some("sk-1"), KeyMode::Inline);
+    provider.models = vec![ModelDraft {
+        id: "thinker".to_string(),
+        name: Some("Thinker".to_string()),
+        context_window: Some(128000),
+        max_tokens: Some(8192),
+        reasoning: true,
+    }];
+    api::apply_edit("omp".into(), EditOp::Upsert(provider)).unwrap();
+
+    let raw = std::fs::read_to_string(dir.join("models.yml")).unwrap();
+    assert!(
+        !raw.contains("thinkingLevelMap"),
+        "map thinking hanya milik pi: {raw}"
+    );
+}
+
+#[test]
+fn pi_models_without_thinking_variants_are_reported_and_fixed() {
+    let (_lock, root) = sandbox("pi-thinking-notice");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "myproxy": {
+      "name": "My Proxy",
+      "baseUrl": "https://proxy.example.com/v1",
+      "api": "openai-completions",
+      "models": [
+        { "id": "thinker", "reasoning": true },
+        { "id": "plain" }
+      ]
+    }
+  }
+}"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"myproxy":{"type":"api_key","key":"sk"}}"#,
+    );
+
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    let notice = notices
+        .iter()
+        .find(|notice| notice.code == "pi.thinking_map")
+        .unwrap_or_else(|| panic!("notice thinking harus muncul: {notices:?}"));
+    assert_eq!(notice.provider, "myproxy");
+    assert!(
+        notice.message.contains("1 reasoning model"),
+        "hanya model reasoning yang dihitung: {}",
+        notice.message
+    );
+
+    api::fix_notice("pi".into(), "pi.thinking_map".into(), "myproxy".into()).unwrap();
+
+    let models = read_json_value(&dir.join("models.json"));
+    let list = models["providers"]["myproxy"]["models"].as_array().unwrap();
+    let thinker = list.iter().find(|m| m["id"] == "thinker").unwrap();
+    assert_full_thinking_map(&thinker["thinkingLevelMap"], "hasil fix");
+    let plain = list.iter().find(|m| m["id"] == "plain").unwrap();
+    assert!(plain.get("thinkingLevelMap").is_none());
+
+    let notices = api::list_notices(Some("pi".into())).unwrap();
+    assert!(!notices.iter().any(|n| n.code == "pi.thinking_map"));
+}
