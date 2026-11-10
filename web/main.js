@@ -152,12 +152,25 @@ const api = {
   models: (baseUrl, apiName, key, harnessId = null, providerId = null) =>
     invoke("fetch_models", { baseUrl, api: apiName, key, harnessId, providerId }),
   fixNotice: (harnessId, code, provider) => invoke("fix_notice", { harnessId, code, provider }),
+  uiScaleInfo: () => invoke("ui_scale_info"),
+  setUiScale: (preference, devicePixelRatio) =>
+    invoke("set_ui_scale", { preference, devicePixelRatio }),
 };
 
 // ------------------------------------------------------------------ preferensi
 
 const PREFS_KEY = "hakonfig.prefs";
-const DEFAULT_PREFS = { lang: "en", theme: "light", confirmDelete: true, onboarded: false };
+const DEFAULT_PREFS = {
+  lang: "en",
+  theme: "light",
+  confirmDelete: true,
+  onboarded: false,
+  // "auto" membiarkan skala mengikuti monitor; angka = pilihan pengguna.
+  uiScale: "auto",
+};
+
+/** Pilihan skala yang ditawarkan di Settings (dan dipakai Ctrl +/-). */
+const SCALE_STEPS = [0.9, 1, 1.1, 1.25, 1.5];
 
 function loadPrefs() {
   try {
@@ -182,6 +195,99 @@ function applyTheme() {
   document.documentElement.classList.toggle("dark", dark);
 }
 
+// ------------------------------------------------------------------- skala UI
+
+/**
+ * Terapkan skala UI lewat zoom webview.
+ *
+ * Zoom dipakai (bukan ukuran font) karena seluruh tampilan memakai nilai px
+ * hardcoded: hanya zoom yang ikut membesarkan tombol, padding, dan ikon
+ * sekaligus. Perhitungannya di Rust (`hakonfig_core::engine::ui_scale`) supaya
+ * bisa diuji; di sini kita hanya mengirim preferensi + devicePixelRatio.
+ */
+async function applyUiScale() {
+  if (!invoke) return;
+  const pref = state.prefs.uiScale;
+  const preference = typeof pref === "number" && Number.isFinite(pref) ? pref : null;
+  try {
+    state.uiScale = await api.setUiScale(preference, window.devicePixelRatio || 1);
+  } catch (error) {
+    // Gagal menyesuaikan skala tidak boleh memblokir aplikasi.
+    state.uiScale = null;
+    console.warn("ui scale:", error);
+  }
+  syncScalePanel();
+  return state.uiScale;
+}
+
+/** Satu langkah naik/turun dari posisi sekarang; berhenti di ujung. */
+function stepUiScale(direction) {
+  const current = state.uiScale?.zoom ?? 1;
+  const next =
+    direction > 0
+      ? SCALE_STEPS.find((step) => step > current + 0.001)
+      : [...SCALE_STEPS].reverse().find((step) => step < current - 0.001);
+  if (next === undefined) return;
+  savePrefs({ uiScale: next });
+  applyUiScale().then(() => toast(t("settings.scaleSet", { percent: Math.round(next * 100) })));
+}
+
+/** Label singkat untuk status skala, dipakai panel Settings. */
+function scaleStatus() {
+  const info = state.uiScale;
+  if (!info) return "";
+  const percent = Math.round(info.zoom * 100);
+  const auto = state.prefs.uiScale === "auto";
+  const reason = !auto
+    ? t("settings.scaleManual")
+    : info.reason === "patchesWebkit"
+      ? t("settings.scalePatched")
+      : info.reason === "clamped"
+        ? t("settings.scaleClamped")
+        : t("settings.scaleNormal");
+  return `${percent}% · ${reason}`;
+}
+
+/**
+ * Segarkan panel Settings yang sedang terbuka.
+ *
+ * Tanpa ini, Ctrl +/- mengubah layar tetapi panel masih menampilkan angka lama:
+ * dua sumber kebenaran di satu layar adalah cara termurah membuat pengguna ragu.
+ */
+function syncScalePanel() {
+  const root = document.querySelector("[data-scale-root]");
+  if (!root) return;
+  root.querySelectorAll("[data-scale]").forEach((button) => {
+    const value = button.dataset.scale === "auto" ? "auto" : Number(button.dataset.scale);
+    const active = state.prefs.uiScale === value;
+    button.classList.toggle("hk-btn-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  const status = root.querySelector("[data-scale-status]");
+  if (status) status.textContent = scaleStatus();
+  const diag = root.querySelector("[data-scale-diag]");
+  if (diag) diag.textContent = scaleDiagnostics();
+}
+
+/**
+ * Angka mentah untuk diagnosa HiDPI.
+ *
+ * Tanpa ini, laporan "kecil di laptop saya" tidak bisa dipastikan penyebabnya:
+ * skala monitor, devicePixelRatio, dan ukuran jendela harus terlihat bersamaan.
+ */
+function scaleDiagnostics() {
+  const info = state.uiScale;
+  const dpr = window.devicePixelRatio || 1;
+  const viewport = `${Math.round(window.innerWidth)}x${Math.round(window.innerHeight)}`;
+  if (!info) return `webview ${dpr}x · viewport ${viewport} css px`;
+  return [
+    `monitor ${info.monitorKnown ? info.monitorScale.toFixed(2) : "?"}x`,
+    `webview ${dpr}x`,
+    `viewport ${viewport} css px`,
+    `zoom ${info.zoom.toFixed(2)}`,
+  ].join(" · ");
+}
+
 // ---------------------------------------------------------------------- state
 
 const state = {
@@ -196,6 +302,7 @@ const state = {
   activeId: null,
   loadError: null,
   prefs: loadPrefs(),
+  uiScale: null, // hasil ui_scale_info dari Rust (zoom + alasan)
   busy: false,
   onboarding: null, // { step, harnesses, installed, providers, models }
 };
@@ -218,8 +325,8 @@ function toast(message, { variant = "ok", detail = "", action = null, timeout } 
       ${icon(tone.name, "h-3.5 w-3.5")}
     </span>
     <div class="min-w-0 flex-1">
-      <p class="text-[13px] font-semibold leading-snug text-ink">${esc(message)}</p>
-      ${detail ? `<p class="mt-1 line-clamp-2 break-all font-mono text-[11px] leading-relaxed text-ink-secondary">${esc(detail)}</p>` : ""}
+      <p class="text-base font-semibold leading-snug text-ink">${esc(message)}</p>
+      ${detail ? `<p class="mt-1 line-clamp-2 break-all font-mono text-xs leading-relaxed text-ink-secondary">${esc(detail)}</p>` : ""}
     </div>
     ${
       action
@@ -252,8 +359,8 @@ function openModal({ title, subtitle = "", body, footer = "", size = "md", onClo
     <div class="hk-modal hk-modal-${size}" role="dialog" aria-modal="true">
       <div class="flex items-start justify-between gap-4 border-b border-line px-6 py-5">
         <div class="min-w-0">
-          <h2 class="text-[18px] font-bold leading-snug text-ink">${esc(title)}</h2>
-          ${subtitle ? `<p class="mt-1 text-[13px] leading-relaxed text-ink-secondary">${esc(subtitle)}</p>` : ""}
+          <h2 class="text-2xl font-bold leading-snug text-ink">${esc(title)}</h2>
+          ${subtitle ? `<p class="mt-1 text-base leading-relaxed text-ink-secondary">${esc(subtitle)}</p>` : ""}
         </div>
         <button data-action data-close class="hk-btn hk-btn-icon shrink-0" aria-label="${esc(t("action.close", {}))}">
           ${icon("x")}
@@ -321,13 +428,13 @@ function confirmDialog({
       title,
       size: "sm",
       body: `
-        <p class="selectable text-[15px] leading-relaxed text-ink">${esc(body)}</p>
+        <p class="selectable text-lg leading-relaxed text-ink">${esc(body)}</p>
         ${
           bullets.length
             ? `<ul class="mt-3 space-y-2">
                  ${bullets
                    .map(
-                     (line) => `<li class="flex gap-2 text-[13px] leading-relaxed text-ink-secondary">
+                     (line) => `<li class="flex gap-2 text-base leading-relaxed text-ink-secondary">
                         <span class="mt-0.5 shrink-0 text-ok-text">${icon("check", "h-4 w-4")}</span>
                         <span class="selectable">${esc(line)}</span>
                       </li>`,
@@ -340,7 +447,7 @@ function confirmDialog({
           allowDontAsk
             ? `<label class="mt-4 flex cursor-pointer items-center gap-2.5 rounded-lg bg-surface-muted px-3 py-2.5">
                  <input data-dont-ask type="checkbox" class="hk-check" />
-                 <span class="text-[13px] text-ink">${esc(t("delete.dontAsk"))}</span>
+                 <span class="text-base text-ink">${esc(t("delete.dontAsk"))}</span>
                </label>`
             : ""
         }`,
@@ -436,19 +543,19 @@ function harnessTile(harness) {
 
   return `
     <div data-harness="${esc(harness.id)}" role="button" tabindex="0"
-      class="hk-card group flex min-h-[148px] cursor-pointer flex-col gap-3 p-5 transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md">
+      class="hk-card group flex min-h-[9.25rem] cursor-pointer flex-col gap-3 p-5 transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md">
       <div class="flex items-start justify-between gap-2">
         ${logo(harness.id, 44)}
 
       </div>
       <div class="min-w-0">
-        <p class="truncate text-[15px] font-semibold text-ink">${esc(harness.name)}</p>
-        <p class="truncate text-[13px] text-ink-secondary">${esc(detail)}</p>
+        <p class="truncate text-lg font-semibold text-ink">${esc(harness.name)}</p>
+        <p class="truncate text-base text-ink-secondary">${esc(detail)}</p>
       </div>
       <div class="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1.5">
         ${chip(status.tone, status.label, status.iconName)}
         ${harness.experimental ? chip("neutral", t("status.experimental")) : ""}
-        ${version ? `<span class="font-mono text-[12px] text-ink-muted">v${esc(version)}</span>` : ""}
+        ${version ? `<span class="font-mono text-sm text-ink-muted">v${esc(version)}</span>` : ""}
       </div>
     </div>`;
 }
@@ -462,14 +569,14 @@ function webTile(entry) {
   const url = entry.launchUrl ?? entry.docsUrl ?? "";
 
   return `
-    <div class="hk-card flex min-h-[148px] flex-col gap-3 p-5">
+    <div class="hk-card flex min-h-[9.25rem] flex-col gap-3 p-5">
       <div class="flex items-start justify-between gap-2">
         ${logo(entry.id, 44)}
         ${chip("info", t("web.badge"), "book")}
       </div>
       <div class="min-w-0">
-        <p class="truncate text-[15px] font-semibold text-ink">${esc(entry.name)}</p>
-        <p class="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-ink-secondary">${esc(
+        <p class="truncate text-lg font-semibold text-ink">${esc(entry.name)}</p>
+        <p class="mt-0.5 line-clamp-2 text-base leading-relaxed text-ink-secondary">${esc(
           getLang() === "id" ? (entry.descriptionId ?? entry.description ?? "") : (entry.description ?? ""),
         )}</p>
       </div>
@@ -492,14 +599,14 @@ function catalogTile(entry) {
   const hasInstall = Boolean(entry.installCommand) && !hasBinary;
 
   return `
-    <div class="hk-card flex min-h-[148px] flex-col gap-3 p-5">
+    <div class="hk-card flex min-h-[9.25rem] flex-col gap-3 p-5">
       <div class="flex items-start justify-between gap-2">
         ${logo(entry.id, 44)}
         ${hasBinary ? chip("ok", t("home.installed"), "check") : ""}
       </div>
       <div class="min-w-0">
-        <p class="truncate text-[15px] font-semibold text-ink">${esc(entry.name)}</p>
-        <p class="mt-0.5 line-clamp-2 text-[13px] leading-relaxed text-ink-secondary">${esc(
+        <p class="truncate text-lg font-semibold text-ink">${esc(entry.name)}</p>
+        <p class="mt-0.5 line-clamp-2 text-base leading-relaxed text-ink-secondary">${esc(
           getLang() === "id" ? (entry.descriptionId ?? entry.description ?? "") : (entry.description ?? ""),
         )}</p>
       </div>
@@ -511,7 +618,7 @@ function catalogTile(entry) {
                </button>`
             : hasBinary
               ? ""
-              : `<span class="text-[12px] leading-relaxed text-ink-muted">${esc(t("install.manualHint"))}</span>`
+              : `<span class="text-sm leading-relaxed text-ink-muted">${esc(t("install.manualHint"))}</span>`
         }
         <div class="flex items-center justify-between gap-2">
           ${
@@ -542,8 +649,8 @@ function providerCard(provider) {
           class="hk-switch mt-1" aria-label="${esc(provider.name)}"></button>
       </div>
       <div class="min-w-0">
-        <p class="truncate text-[15px] font-semibold text-ink" title="${esc(provider.name)}">${esc(provider.name)}</p>
-        <p class="truncate text-[13px] text-ink-secondary">
+        <p class="truncate text-lg font-semibold text-ink" title="${esc(provider.name)}">${esc(provider.name)}</p>
+        <p class="truncate text-base text-ink-secondary">
           ${provider.models.length ? esc(pluralModels(provider.models.length)) : esc(t("status.noModels"))}
         </p>
       </div>
@@ -574,12 +681,12 @@ const LOGO_SVG = `<svg viewBox="191 167 601 690" fill="none" class="h-6 w-auto" 
 
 function renderHomeHeader() {
   $("#topbar").innerHTML = `
-    <div class="mx-auto flex w-full max-w-[1008px] items-center justify-between gap-3 px-6 py-3.5">
+    <div class="mx-auto flex w-full max-w-[63rem] items-center justify-between gap-3 px-6 py-3.5">
       <div class="flex min-w-0 items-center gap-3">
         <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-muted text-ink shadow-xs">${LOGO_SVG}</div>
         <div class="min-w-0">
-          <p class="text-[15px] font-bold leading-tight text-ink">Hakonfig</p>
-          <p class="text-[12px] leading-tight text-ink-secondary">${esc(t("app.tagline"))}</p>
+          <p class="text-lg font-bold leading-tight text-ink">Hakonfig</p>
+          <p class="text-sm leading-tight text-ink-secondary">${esc(t("app.tagline"))}</p>
         </div>
       </div>
       <button data-action data-settings class="hk-btn hk-btn-icon" aria-label="${esc(t("harness.settings"))}">
@@ -600,15 +707,15 @@ function renderHarnessHeader() {
     : t("status.noProviders");
 
   $("#topbar").innerHTML = `
-    <div class="mx-auto flex w-full max-w-[1008px] flex-wrap items-center justify-between gap-3 px-6 py-3">
+    <div class="mx-auto flex w-full max-w-[63rem] flex-wrap items-center justify-between gap-3 px-6 py-3">
       <div class="flex min-w-0 flex-1 items-center gap-3">
         <button data-action data-home class="hk-btn hk-btn-icon" aria-label="${esc(t("action.cancel"))}">
           ${icon("arrowLeft")}
         </button>
         ${logo(state.activeId ?? "", 40)}
         <div class="min-w-0">
-          <p class="truncate text-[15px] font-bold leading-tight text-ink">${esc(harness?.name ?? "…")}</p>
-          <p class="truncate text-[12px] leading-tight text-ink-secondary">${esc(subtitle)}</p>
+          <p class="truncate text-lg font-bold leading-tight text-ink">${esc(harness?.name ?? "…")}</p>
+          <p class="truncate text-sm leading-tight text-ink-secondary">${esc(subtitle)}</p>
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-2">
@@ -668,8 +775,8 @@ function renderHome() {
   const container = $("#content");
 
   if (state.loadError) {
-    container.innerHTML = `<div class="mx-auto max-w-[960px]">
-      <div class="rounded-[14px] border border-line bg-danger-bg px-4 py-3 text-[13px] text-danger-text">${esc(state.loadError)}</div>
+    container.innerHTML = `<div class="mx-auto max-w-[60rem]">
+      <div class="rounded-[14px] border border-line bg-danger-bg px-4 py-3 text-base text-danger-text">${esc(state.loadError)}</div>
     </div>`;
     return;
   }
@@ -690,11 +797,11 @@ function renderHome() {
     catalogReady.length === 0 &&
     webOnly.length === 0
   ) {
-    container.innerHTML = `<div class="mx-auto max-w-[960px]">
+    container.innerHTML = `<div class="mx-auto max-w-[60rem]">
       <div class="hk-card mx-auto max-w-lg p-8 text-center">
         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-muted text-ink-muted">${icon("search", "h-6 w-6")}</div>
-        <p class="text-[15px] font-semibold text-ink">${esc(t("home.empty.title"))}</p>
-        <p class="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed text-ink-secondary">${esc(t("home.empty.body"))}</p>
+        <p class="text-lg font-semibold text-ink">${esc(t("home.empty.title"))}</p>
+        <p class="mx-auto mt-1 max-w-sm text-base leading-relaxed text-ink-secondary">${esc(t("home.empty.body"))}</p>
       </div>
     </div>`;
     return;
@@ -703,22 +810,22 @@ function renderHome() {
   const section = (title, hint, items) => `
     <section class="mb-8">
       <div class="mb-1 flex items-baseline gap-2">
-        <h2 class="text-[17px] font-bold text-ink">${esc(title)}</h2>
-        <span class="text-[13px] font-semibold text-ink-muted">${items.length}</span>
+        <h2 class="text-xl font-bold text-ink">${esc(title)}</h2>
+        <span class="text-base font-semibold text-ink-muted">${items.length}</span>
       </div>
-      <p class="mb-3 text-[13px] text-ink-secondary">${esc(hint)}</p>
+      <p class="mb-3 text-base text-ink-secondary">${esc(hint)}</p>
       ${
         items.length
           ? `<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">${items.join("")}</div>`
-          : `<div class="rounded-[14px] border border-dashed border-line-strong px-4 py-6 text-center text-[13px] text-ink-muted">${esc(hint)}</div>`
+          : `<div class="rounded-[14px] border border-dashed border-line-strong px-4 py-6 text-center text-base text-ink-muted">${esc(hint)}</div>`
       }
     </section>`;
 
   container.innerHTML = `
-    <div class="mx-auto max-w-[960px]">
+    <div class="mx-auto max-w-[60rem]">
       <div class="mb-7">
-        <h1 class="text-[26px] font-extrabold leading-tight tracking-tight text-ink">${esc(t("home.title"))}</h1>
-        <p class="mt-1 text-[14px] text-ink-secondary">${esc(t("home.subtitle"))}</p>
+        <h1 class="text-4xl font-extrabold leading-tight tracking-tight text-ink">${esc(t("home.title"))}</h1>
+        <p class="mt-1 text-md text-ink-secondary">${esc(t("home.subtitle"))}</p>
       </div>
       ${targetsBanner()}
       ${section(
@@ -754,7 +861,7 @@ function targetsBanner() {
   const rows = state.targets
     .map((target) => {
       const where = `${target.user} (${target.home})`;
-      return `<li class="mt-1 text-[13px] text-ink-secondary">${esc(
+      return `<li class="mt-1 text-base text-ink-secondary">${esc(
         t("home.targets.item", {
           where,
           harnesses: target.harnesses.join(", "),
@@ -764,9 +871,9 @@ function targetsBanner() {
     .join("");
   const command = `hakonfig-cli --target ${state.targets[0].user} providers`;
   return `<div class="mb-7 rounded-[14px] border border-line bg-surface-muted px-4 py-3">
-    <p class="text-[13px] font-semibold text-ink">${esc(t("home.targets.title"))}</p>
+    <p class="text-base font-semibold text-ink">${esc(t("home.targets.title"))}</p>
     <ul class="mt-1 list-none">${rows}</ul>
-    <p class="mt-2 text-[12px] text-ink-muted">${esc(t("home.targets.hint", { command }))}</p>
+    <p class="mt-2 text-sm text-ink-muted">${esc(t("home.targets.hint", { command }))}</p>
   </div>`;
 }
 
@@ -818,43 +925,43 @@ function renderHarness() {
   const snapshot = state.snapshot;
 
   if (state.loadError) {
-    container.innerHTML = `<div class="mx-auto max-w-[960px]">
-      <div class="rounded-[14px] border border-line bg-danger-bg px-4 py-3 text-[13px] text-danger-text">${esc(state.loadError)}</div>
+    container.innerHTML = `<div class="mx-auto max-w-[60rem]">
+      <div class="rounded-[14px] border border-line bg-danger-bg px-4 py-3 text-base text-danger-text">${esc(state.loadError)}</div>
     </div>`;
     return;
   }
   if (!snapshot) {
-    container.innerHTML = `<div class="mx-auto max-w-[960px]"><p class="text-[13px] text-ink-secondary">…</p></div>`;
+    container.innerHTML = `<div class="mx-auto max-w-[60rem]"><p class="text-base text-ink-secondary">…</p></div>`;
     return;
   }
 
   const warnings = snapshot.warnings.length
     ? `<div class="mb-4 space-y-1.5 rounded-[14px] border border-line bg-warn-bg px-4 py-3">
-         ${snapshot.warnings.map((line) => `<p class="text-[13px] leading-relaxed text-warn-text">${esc(line)}</p>`).join("")}
+         ${snapshot.warnings.map((line) => `<p class="text-base leading-relaxed text-warn-text">${esc(line)}</p>`).join("")}
        </div>`
     : "";
 
   const defaultCard = `
     <div class="hk-card flex flex-wrap items-center justify-between gap-3 p-4">
       <div class="min-w-0">
-        <p class="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">${esc(t("harness.defaultTitle"))}</p>
+        <p class="text-sm font-semibold uppercase tracking-wide text-ink-muted">${esc(t("harness.defaultTitle"))}</p>
         ${
           snapshot.defaultProvider
             ? `<div class="mt-1 flex flex-wrap items-center gap-2">
                  ${logo(snapshot.defaultProvider, 24)}
-                 <span class="text-[15px] font-semibold text-ink">${esc(
+                 <span class="text-lg font-semibold text-ink">${esc(
                    snapshot.providers.find((p) => p.id === snapshot.defaultProvider)?.name ?? snapshot.defaultProvider,
                  )}</span>
                  ${
                    snapshot.defaultModel
-                     ? `<span class="selectable font-mono text-[13px] text-ink-secondary">${esc(snapshot.defaultModel)}</span>`
+                     ? `<span class="selectable font-mono text-base text-ink-secondary">${esc(snapshot.defaultModel)}</span>`
                      : ""
                  }
                </div>
-               <p class="mt-1 text-[12px] text-ink-secondary">${esc(
+               <p class="mt-1 text-sm text-ink-secondary">${esc(
                  t("harness.defaultHint", { name: state.harnesses.find((h) => h.id === state.activeId)?.name ?? "" }),
                )}</p>`
-            : `<p class="mt-1 text-[13px] text-ink-muted">${esc(t("harness.notSet"))}</p>`
+            : `<p class="mt-1 text-base text-ink-muted">${esc(t("harness.notSet"))}</p>`
         }
       </div>
       <button data-action data-set-default class="hk-btn ${snapshot.defaultProvider ? "hk-btn-secondary" : "hk-btn-primary"} hk-btn-sm">
@@ -865,22 +972,22 @@ function renderHarness() {
   const filesDisclosure = `
     <details class="group hk-card overflow-hidden">
       <summary class="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3">
-        <span class="flex items-center gap-2 text-[13px] font-semibold text-ink">
+        <span class="flex items-center gap-2 text-base font-semibold text-ink">
           ${icon("chevronRight", "h-4 w-4 text-ink-muted transition group-open:rotate-90")}
           ${esc(t("harness.configFiles"))}
-          <span class="text-[12px] font-medium text-ink-muted">${snapshot.files.length}</span>
+          <span class="text-sm font-medium text-ink-muted">${snapshot.files.length}</span>
         </span>
-        <span class="text-[12px] text-ink-secondary">${esc(t("harness.explain"))}</span>
+        <span class="text-sm text-ink-secondary">${esc(t("harness.explain"))}</span>
       </summary>
       <div class="border-t border-line">
         ${snapshot.files
           .map(
             (file) => `<div class="flex items-center gap-3 border-b border-line px-4 py-2.5 last:border-0">
-              <span class="w-32 shrink-0 text-[13px] text-ink-secondary">${esc(t(ROLE_KEY[file.role] ?? "file.config"))}</span>
-              <span class="selectable min-w-0 flex-1 truncate font-mono text-[12px] text-ink-muted" title="${esc(file.path)}">${esc(
+              <span class="w-32 shrink-0 text-base text-ink-secondary">${esc(t(ROLE_KEY[file.role] ?? "file.config"))}</span>
+              <span class="selectable min-w-0 flex-1 truncate font-mono text-sm text-ink-muted" title="${esc(file.path)}">${esc(
                 file.path.replace(/^.*\/(\.?[^/]+\/[^/]+\/[^/]+)$/, "~/$1"),
               )}</span>
-              <span class="shrink-0 text-[12px] font-semibold ${file.exists ? "text-ok-text" : "text-ink-muted"}">${esc(
+              <span class="shrink-0 text-sm font-semibold ${file.exists ? "text-ok-text" : "text-ink-muted"}">${esc(
                 file.exists ? t("file.exists") : t("file.missing"),
               )}</span>
               <button data-action data-reveal="${esc(file.path)}" class="hk-btn hk-btn-icon shrink-0" aria-label="${esc(
@@ -896,23 +1003,23 @@ function renderHarness() {
     ? `<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">${snapshot.providers.map(providerCard).join("")}</div>`
     : `<div class="hk-card px-6 py-12 text-center">
          <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-muted text-ink-muted">${icon("plug", "h-6 w-6")}</div>
-         <p class="text-[15px] font-semibold text-ink">${esc(t("provider.empty.title"))}</p>
-         <p class="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed text-ink-secondary">${esc(t("provider.empty.body"))}</p>
+         <p class="text-lg font-semibold text-ink">${esc(t("provider.empty.title"))}</p>
+         <p class="mx-auto mt-1 max-w-sm text-base leading-relaxed text-ink-secondary">${esc(t("provider.empty.body"))}</p>
          <button data-action data-add-empty class="hk-btn hk-btn-primary mt-4">${icon("plus", "h-4 w-4")}<span>${esc(
            t("provider.empty.action"),
          )}</span></button>
        </div>`;
 
   container.innerHTML = `
-    <div class="mx-auto max-w-[960px]">
+    <div class="mx-auto max-w-[60rem]">
       ${warnings}
       <div class="mb-4 space-y-3">
         ${defaultCard}
         ${filesDisclosure}
       </div>
       <div class="mb-3 flex items-baseline gap-2">
-        <h2 class="text-[17px] font-bold text-ink">${esc(t("harness.providers"))}</h2>
-        <span class="text-[13px] font-semibold text-ink-muted">${snapshot.providers.length}</span>
+        <h2 class="text-xl font-bold text-ink">${esc(t("harness.providers"))}</h2>
+        <span class="text-base font-semibold text-ink-muted">${snapshot.providers.length}</span>
       </div>
       ${providersBlock}
     </div>`;
@@ -1117,7 +1224,7 @@ async function commit(op, targetHarness = null) {
       <div class="mb-4 last:mb-0">
         <div class="mb-1.5 flex items-center gap-2">
           <span class="hk-chip hk-chip-neutral">${esc(t(ROLE_KEY[file.role] ?? "file.config"))}</span>
-          <span class="selectable min-w-0 flex-1 truncate font-mono text-[12px] text-ink-secondary">${esc(file.path)}</span>
+          <span class="selectable min-w-0 flex-1 truncate font-mono text-sm text-ink-secondary">${esc(file.path)}</span>
         </div>
         ${renderDiff(file.before ?? "", file.after ?? "")}
       </div>`,
@@ -1132,16 +1239,16 @@ async function commit(op, targetHarness = null) {
       <ul class="mb-4 space-y-2 rounded-[14px] border border-line bg-surface-muted px-4 py-3">
         ${summaries
           .map(
-            (line) => `<li class="flex gap-2 text-[13px] leading-relaxed text-ink">
+            (line) => `<li class="flex gap-2 text-base leading-relaxed text-ink">
               <span class="mt-0.5 shrink-0 text-ok-text">${icon("check", "h-4 w-4")}</span>${esc(line)}
             </li>`,
           )
           .join("")}
-        ${created.map((path) => `<li class="flex gap-2 text-[13px] text-ink">${icon("plus", "h-4 w-4 shrink-0 text-ok-text")}${esc(t("review.newFile", { path }))}</li>`).join("")}
+        ${created.map((path) => `<li class="flex gap-2 text-base text-ink">${icon("plus", "h-4 w-4 shrink-0 text-ok-text")}${esc(t("review.newFile", { path }))}</li>`).join("")}
       </ul>
-      <p class="mb-3 flex items-center gap-1.5 text-[12px] text-ink-muted">${icon("lock", "h-3.5 w-3.5")}${esc(t("review.secrets"))}</p>
+      <p class="mb-3 flex items-center gap-1.5 text-sm text-ink-muted">${icon("lock", "h-3.5 w-3.5")}${esc(t("review.secrets"))}</p>
       <details class="group">
-        <summary class="mb-2 flex cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-ink-secondary">
+        <summary class="mb-2 flex cursor-pointer list-none items-center gap-1.5 text-base font-semibold text-ink-secondary">
           ${icon("chevronRight", "h-4 w-4 transition group-open:rotate-90")}${esc(t("review.technical"))}
         </summary>
         ${fileBlocks}
@@ -1273,7 +1380,7 @@ function openKeyModal(provider) {
     size: "md",
     body: `
       <div class="space-y-4">
-        <div class="rounded-lg bg-surface-muted px-3 py-2 text-[12px] text-ink-secondary">
+        <div class="rounded-lg bg-surface-muted px-3 py-2 text-sm text-ink-secondary">
           ${esc(t("advanced.keyCurrentLabel"))}
           <span class="selectable font-mono font-semibold text-ink">${esc(provider.keyDisplay ?? t("provider.noKey"))}</span>
         </div>
@@ -1286,17 +1393,17 @@ function openKeyModal(provider) {
           </div>
         </div>
         <div class="space-y-2">
-          <label class="flex cursor-pointer items-start gap-2 text-[13px] text-ink">
+          <label class="flex cursor-pointer items-start gap-2 text-base text-ink">
             <input type="radio" name="keyMode" value="inline" ${mode === "inline" ? "checked" : ""}
               class="mt-0.5 accent-[var(--color-brand)]" />
             <span>${esc(t("advanced.keyInline"))}</span>
           </label>
-          <label class="flex cursor-pointer items-start gap-2 text-[13px] text-ink">
+          <label class="flex cursor-pointer items-start gap-2 text-base text-ink">
             <input type="radio" name="keyMode" value="env" ${mode === "env" ? "checked" : ""}
               class="mt-0.5 accent-[var(--color-brand)]" />
             <span>
               ${esc(t("advanced.keyEnv"))}
-              <span class="selectable font-mono text-[11px] text-ink-secondary">${esc(envName)}</span>
+              <span class="selectable font-mono text-xs text-ink-secondary">${esc(envName)}</span>
             </span>
           </label>
         </div>
@@ -1352,8 +1459,8 @@ function openModelsModal(provider) {
     body: `
       <input data-search type="search" class="hk-input mb-2" autocomplete="off"
         placeholder="${esc(t("provider.searchModels"))}" />
-      <div data-list class="max-h-[320px] space-y-1 overflow-y-auto"></div>
-      <p data-count class="mt-2 px-0.5 text-[11px] font-medium text-ink-muted"></p>`,
+      <div data-list class="max-h-[20rem] space-y-1 overflow-y-auto"></div>
+      <p data-count class="mt-2 px-0.5 text-xs font-medium text-ink-muted"></p>`,
     footer: `
       <button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.cancel"))}</button>
       <button data-action data-save-models class="hk-btn hk-btn-primary">${esc(t("action.save"))}</button>`,
@@ -1373,8 +1480,8 @@ function openModelsModal(provider) {
         ([id, model]) => `
         <label class="flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-surface-muted">
           <input data-model="${esc(id)}" type="checkbox" class="hk-check" ${model.on ? "checked" : ""} />
-          <span class="min-w-0 flex-1 truncate text-[13px] text-ink">${esc(model.name || prettyModel(id))}</span>
-          <span class="shrink-0 truncate font-mono text-[10px] text-ink-muted" style="max-width:45%">${esc(id)}</span>
+          <span class="min-w-0 flex-1 truncate text-base text-ink">${esc(model.name || prettyModel(id))}</span>
+          <span class="shrink-0 truncate font-mono text-2xs text-ink-muted" style="max-width:45%">${esc(id)}</span>
         </label>`,
       )
       .join("");
@@ -1423,7 +1530,7 @@ function openProviderDefaultPicker(provider) {
     body: `
       <input data-search type="search" class="hk-input mb-2" autocomplete="off"
         placeholder="${esc(t("provider.searchModels"))}" />
-      <div data-list class="max-h-[320px] space-y-1 overflow-y-auto"></div>`,
+      <div data-list class="max-h-[20rem] space-y-1 overflow-y-auto"></div>`,
     footer: `<button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.cancel"))}</button>`,
   });
 
@@ -1441,8 +1548,8 @@ function openProviderDefaultPicker(provider) {
         <button data-action data-pick="${esc(model.id)}"
           class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-brand-soft">
           <span class="shrink-0 text-ink-muted">${model.id === currentModel ? icon("check", "h-4 w-4 text-brand-strong") : icon("star", "h-4 w-4")}</span>
-          <span class="min-w-0 flex-1 truncate text-[13px] text-ink">${esc(model.name || prettyModel(model.id))}</span>
-          <span class="shrink-0 truncate font-mono text-[10px] text-ink-muted" style="max-width:45%">${esc(model.id)}</span>
+          <span class="min-w-0 flex-1 truncate text-base text-ink">${esc(model.name || prettyModel(model.id))}</span>
+          <span class="shrink-0 truncate font-mono text-2xs text-ink-muted" style="max-width:45%">${esc(model.id)}</span>
         </button>`,
       )
       .join("");
@@ -1474,8 +1581,8 @@ function providerPickCard(preset) {
   return `<button data-action data-pick="${esc(preset.id)}"
     class="hk-card flex flex-col items-center gap-2 p-3 text-center transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md">
     ${logo(preset.id, 40)}
-    <span class="w-full truncate text-[13px] font-semibold text-ink">${esc(preset.name)}</span>
-    ${badge || '<span class="h-[22px]"></span>'}
+    <span class="w-full truncate text-base font-semibold text-ink">${esc(preset.name)}</span>
+    ${badge || '<span class="h-[1.375rem]"></span>'}
   </button>`;
 }
 
@@ -1492,10 +1599,10 @@ function openProviderPicker() {
       <div data-grid class="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
         ${state.presets.map(providerPickCard).join("")}
       </div>
-      <div data-empty class="hidden py-8 text-center text-[13px] text-ink-muted">-</div>
+      <div data-empty class="hidden py-8 text-center text-base text-ink-muted">-</div>
       <div class="mt-4 flex items-center gap-2.5 border-t border-line pt-4">
         ${logo(FALLBACK_LOGO, 32)}
-        <button data-action data-custom class="text-left text-[13px] font-semibold text-brand-text hover:underline">
+        <button data-action data-custom class="text-left text-base font-semibold text-brand-text hover:underline">
           ${esc(t("provider.custom"))} →
         </button>
       </div>`,
@@ -1589,7 +1696,7 @@ function openAddFlow(preset) {
           <input data-filter type="search" class="hk-input mb-2" style="height:36px;font-size:13px"
             placeholder="${esc(t("add.filterModels"))}" autocomplete="off" />
           <div data-models class="max-h-60 space-y-1 overflow-y-auto rounded-[14px] border border-line bg-surface-muted p-2"></div>
-          <p data-count class="mt-2 text-[12px] font-medium text-ink-secondary"></p>
+          <p data-count class="mt-2 text-sm font-medium text-ink-secondary"></p>
         </div>
       </div>`,
     footer: `
@@ -1609,7 +1716,7 @@ function openAddFlow(preset) {
     statusBox.className = "space-y-1.5";
     statusBox.innerHTML = lines
       .map(
-        (line) => `<p class="flex items-start gap-2 rounded-lg px-3 py-2 text-[13px] leading-relaxed ${
+        (line) => `<p class="flex items-start gap-2 rounded-lg px-3 py-2 text-base leading-relaxed ${
           line.tone === "ok"
             ? "bg-ok-bg text-ok-text"
             : line.tone === "err"
@@ -1649,12 +1756,12 @@ function openAddFlow(preset) {
             const index = [...entries.keys()].indexOf(id);
             return `<label class="flex cursor-pointer items-center gap-2.5 rounded-lg bg-surface px-2.5 py-2 hover:bg-surface-muted">
               <input data-check="${index}" type="checkbox" class="hk-check" ${meta.selected ? "checked" : ""} />
-              <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">${esc(meta.label)}</span>
-              <span class="selectable shrink-0 truncate font-mono text-[11px] text-ink-muted" style="max-width:45%">${esc(id)}</span>
+              <span class="min-w-0 flex-1 truncate text-base font-medium text-ink">${esc(meta.label)}</span>
+              <span class="selectable shrink-0 truncate font-mono text-xs text-ink-muted" style="max-width:45%">${esc(id)}</span>
             </label>`;
           })
           .join("")
-      : `<p class="px-2 py-4 text-center text-[13px] text-ink-muted">-</p>`;
+      : `<p class="px-2 py-4 text-center text-base text-ink-muted">-</p>`;
 
     $$("[data-check]", list).forEach((checkbox) => {
       checkbox.addEventListener("change", () => {
@@ -1828,21 +1935,21 @@ function modelRow(index, model) {
       </summary>
       <div class="mt-2.5 grid grid-cols-2 gap-2 rounded-lg border border-line bg-surface p-2.5">
         <label class="block">
-          <span class="mb-1 block text-[11px] font-medium text-ink-muted">${esc(t("advanced.modelContext"))}</span>
+          <span class="mb-1 block text-xs font-medium text-ink-muted">${esc(t("advanced.modelContext"))}</span>
           <input data-field="contextWindow" value="${esc(model.contextWindow ?? "")}" inputmode="numeric"
             class="hk-input" style="height:34px;font-family:var(--font-mono);font-size:12px" />
         </label>
         <label class="block">
-          <span class="mb-1 block text-[11px] font-medium text-ink-muted">${esc(t("advanced.modelMax"))}</span>
+          <span class="mb-1 block text-xs font-medium text-ink-muted">${esc(t("advanced.modelMax"))}</span>
           <input data-field="maxTokens" value="${esc(model.maxTokens ?? "")}" inputmode="numeric"
             class="hk-input" style="height:34px;font-family:var(--font-mono);font-size:12px" />
         </label>
         <div class="col-span-2 flex flex-wrap items-center gap-3 border-t border-line pt-2">
-          <label class="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink">
+          <label class="flex cursor-pointer items-center gap-1.5 text-sm text-ink">
             <input data-field="vision" type="checkbox" class="hk-check" ${model.vision ? "checked" : ""} />
             ${icon("eye", "h-4 w-4 text-ink-secondary")}${esc(t("cap.vision"))}
           </label>
-          <label class="flex cursor-pointer items-center gap-1.5 text-[12px] text-ink">
+          <label class="flex cursor-pointer items-center gap-1.5 text-sm text-ink">
             <input data-field="reasoning" type="checkbox" class="hk-check" ${model.reasoning ? "checked" : ""} />
             ${icon("brain", "h-4 w-4 text-ink-secondary")}${esc(t("cap.reasoning"))}
           </label>
@@ -1909,21 +2016,21 @@ function renderProviderForm(mode, provider) {
         ${
           isEdit
             ? ""
-            : `<div class="rounded-lg bg-surface-muted px-3 py-2 text-[12px] leading-relaxed text-ink-secondary">
+            : `<div class="rounded-lg bg-surface-muted px-3 py-2 text-sm leading-relaxed text-ink-secondary">
                  ${esc(t("advanced.badge"))} · ${esc(t("advanced.backToPresets"))}
                </div>`
         }
 
         <section>
-          <h3 class="mb-3 text-[13px] font-bold uppercase tracking-wide text-ink-muted">${esc(t("advanced.sectionEndpoint"))}</h3>
+          <h3 class="mb-3 text-base font-bold uppercase tracking-wide text-ink-muted">${esc(t("advanced.sectionEndpoint"))}</h3>
           ${
             managed
               ? `<div class="flex items-start gap-3 rounded-[14px] border border-line bg-surface px-3.5 py-3">
                    ${logo(provider.id, 36)}
                    <div class="min-w-0 flex-1">
-                     <p class="truncate text-[13px] font-semibold text-ink">${esc(provider.name)}</p>
-                     <p class="truncate font-mono text-[11px] text-ink-muted">${esc(provider.baseUrl ?? "")}</p>
-                     <p class="mt-1 text-[11px] leading-relaxed text-ink-muted">${esc(
+                     <p class="truncate text-base font-semibold text-ink">${esc(provider.name)}</p>
+                     <p class="truncate font-mono text-xs text-ink-muted">${esc(provider.baseUrl ?? "")}</p>
+                     <p class="mt-1 text-xs leading-relaxed text-ink-muted">${esc(
                        t("advanced.registeredEndpoint"),
                      )} · ${esc(provider.api ?? "")}</p>
                    </div>
@@ -1959,7 +2066,7 @@ function renderProviderForm(mode, provider) {
         </section>
 
         <section>
-          <h3 class="mb-3 text-[13px] font-bold uppercase tracking-wide text-ink-muted">
+          <h3 class="mb-3 text-base font-bold uppercase tracking-wide text-ink-muted">
             ${esc(t("advanced.sectionKey"))}
             ${
               isEdit
@@ -1976,7 +2083,7 @@ function renderProviderForm(mode, provider) {
           </div>
           ${
             keyHint
-              ? `<p class="mt-3 flex flex-wrap items-center gap-x-1.5 rounded-lg bg-surface-muted px-3 py-2 text-[12px] text-ink-secondary">
+              ? `<p class="mt-3 flex flex-wrap items-center gap-x-1.5 rounded-lg bg-surface-muted px-3 py-2 text-sm text-ink-secondary">
                    ${esc(t("advanced.keyCurrentLabel"))} <span class="selectable font-mono font-semibold text-ink">${esc(
                      provider?.keyDisplay ?? "-",
                    )}</span>
@@ -1984,22 +2091,22 @@ function renderProviderForm(mode, provider) {
               : ""
           }
           <div class="mt-3 space-y-2">
-            <label class="flex cursor-pointer items-start gap-2 text-[13px] text-ink">
+            <label class="flex cursor-pointer items-start gap-2 text-base text-ink">
               <input type="radio" name="keyMode" value="inline" checked class="mt-0.5 accent-[var(--color-brand)]" />
               <span>
                 ${esc(t("advanced.keyInline"))}
-                <span data-key-mode-hint="inline" class="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">${
+                <span data-key-mode-hint="inline" class="mt-0.5 text-sm leading-relaxed text-ink-secondary">${
                   keyFile
                     ? esc(t("advanced.keyInlineWhere", { file: keyFile }))
                     : ""
                 }</span>
               </span>
             </label>
-            <label class="flex cursor-pointer items-start gap-2 text-[13px] text-ink">
+            <label class="flex cursor-pointer items-start gap-2 text-base text-ink">
               <input type="radio" name="keyMode" value="env" class="mt-0.5 accent-[var(--color-brand)]" />
               <span>
                 ${esc(t("advanced.keyEnv"))}
-                <span data-key-mode-hint="env" class="mt-0.5 text-[12px] leading-relaxed text-ink-secondary">
+                <span data-key-mode-hint="env" class="mt-0.5 text-sm leading-relaxed text-ink-secondary">
                   ${esc(t("advanced.keyEnvWhere"))} <span data-env-var class="selectable font-mono font-semibold text-ink">${esc(
                     "\u2039provider-id\u203a_API_KEY",
                   )}</span>
@@ -2011,7 +2118,7 @@ function renderProviderForm(mode, provider) {
 
         <section>
           <div class="mb-3 flex items-center justify-between">
-            <h3 class="text-[13px] font-bold uppercase tracking-wide text-ink-muted">${esc(t("advanced.sectionModels"))}</h3>
+            <h3 class="text-base font-bold uppercase tracking-wide text-ink-muted">${esc(t("advanced.sectionModels"))}</h3>
             <div class="flex items-center gap-1">
               <button data-action data-sync-models class="hk-btn hk-btn-secondary hk-btn-sm">
                 ${icon("refresh", "h-3.5 w-3.5")}${esc(t("advanced.syncModels"))}
@@ -2031,28 +2138,28 @@ function renderProviderForm(mode, provider) {
       </div>`;
 
   const harnessName = state.harnesses.find((item) => item.id === state.activeId)?.name ?? "";
-  // `#content` sudah punya px-6 (24px), jadi wrapper isi cukup max-w-[880px].
+  // `#content` sudah punya px-6 (24px), jadi wrapper isi cukup max-w-[55rem].
   // Topbar & bar bawah membungkus padding-nya sendiri, jadi lebarnya 880 + 48
   // supaya tombol back/Simpan tepat segaris dengan tepi kolom isi.
   $("#topbar").innerHTML = `
-    <div class="mx-auto flex w-full max-w-[928px] items-center gap-3 px-6 py-3">
+    <div class="mx-auto flex w-full max-w-[58rem] items-center gap-3 px-6 py-3">
       <button data-action data-back class="hk-btn hk-btn-icon" aria-label="${esc(t("action.cancel"))}">
         ${icon("arrowLeft")}
       </button>
       <div class="min-w-0">
-        <p class="truncate text-[15px] font-bold leading-tight text-ink">${esc(
+        <p class="truncate text-lg font-bold leading-tight text-ink">${esc(
           isEdit ? t("provider.editTitle", { name: provider?.name ?? "" }) : t("advanced.title"),
         )}</p>
-        <p class="truncate text-[12px] leading-tight text-ink-secondary">${esc(harnessName)}</p>
+        <p class="truncate text-sm leading-tight text-ink-secondary">${esc(harnessName)}</p>
       </div>
     </div>`;
   const container = $("#content");
   container.innerHTML = `
-    <div class="mx-auto max-w-[880px] pb-28">
+    <div class="mx-auto max-w-[55rem] pb-28">
       ${bodyHtml}
     </div>
     <div class="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface">
-      <div class="mx-auto flex max-w-[928px] items-center justify-end gap-2 px-6 py-3">
+      <div class="mx-auto flex max-w-[58rem] items-center justify-end gap-2 px-6 py-3">
         <button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.cancel"))}</button>
         <button data-action data-save class="hk-btn hk-btn-primary">${esc(t("action.save"))}</button>
       </div>
@@ -2205,7 +2312,7 @@ function renderProviderForm(mode, provider) {
 
     // Endpoint tidak mengembalikan model apa pun: bedakan dari "filter tidak cocok".
     if (!endpointModels.length) {
-      resultsHost.innerHTML = `<p class="px-2 py-3 text-center text-[12px] text-ink-muted">${esc(
+      resultsHost.innerHTML = `<p class="px-2 py-3 text-center text-sm text-ink-muted">${esc(
         t("add.modelsFailed"),
       )}</p>`;
       return;
@@ -2229,21 +2336,21 @@ function renderProviderForm(mode, provider) {
           .map((model) =>
             added.has(model.id)
               ? `<div class="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 opacity-55">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-medium text-ink">${esc(prettyModel(model.id))}</span>
-              <span class="shrink-0 truncate font-mono text-[10px] text-ink-muted" style="max-width:40%">${esc(model.id)}</span>
-              <span class="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-ink-muted">${esc(
+              <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">${esc(prettyModel(model.id))}</span>
+              <span class="shrink-0 truncate font-mono text-2xs text-ink-muted" style="max-width:40%">${esc(model.id)}</span>
+              <span class="shrink-0 text-2xs font-semibold uppercase tracking-wide text-ink-muted">${esc(
                 t("advanced.alreadyAdded"),
               )}</span>
             </div>`
               : `<button data-action data-pick="${esc(model.id)}"
               class="flex w-full items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5 text-left hover:bg-brand-soft">
-              <span class="min-w-0 flex-1 truncate text-[12px] font-medium text-ink">${esc(prettyModel(model.id))}</span>
-              <span class="shrink-0 truncate font-mono text-[10px] text-ink-muted" style="max-width:40%">${esc(model.id)}</span>
+              <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">${esc(prettyModel(model.id))}</span>
+              <span class="shrink-0 truncate font-mono text-2xs text-ink-muted" style="max-width:40%">${esc(model.id)}</span>
               <span class="shrink-0 text-brand-strong">${icon("plus", "h-3.5 w-3.5")}</span>
             </button>`,
           )
           .join("")
-      : `<p class="px-2 py-3 text-center text-[12px] text-ink-muted">${esc(t("advanced.noModelFound"))}</p>`;
+      : `<p class="px-2 py-3 text-center text-sm text-ink-muted">${esc(t("advanced.noModelFound"))}</p>`;
 
     $$("[data-pick]", resultsHost).forEach((button) => {
       button.addEventListener("click", () => {
@@ -2276,13 +2383,13 @@ function renderProviderForm(mode, provider) {
 
     const key = typedKey();
     if (!canReachEndpoint()) {
-      resultsHost.innerHTML = `<p class="px-2 py-3 text-center text-[12px] text-ink-muted">${esc(
+      resultsHost.innerHTML = `<p class="px-2 py-3 text-center text-sm text-ink-muted">${esc(
         t("advanced.needKeyForTest"),
       )}</p>`;
       return;
     }
 
-    resultsHost.innerHTML = `<p class="px-2 py-3 text-center text-[12px] text-ink-muted">${esc(t("add.testing"))}</p>`;
+    resultsHost.innerHTML = `<p class="px-2 py-3 text-center text-sm text-ink-muted">${esc(t("add.testing"))}</p>`;
     try {
       endpointModels = await api.models(endpointUrl(), endpointApi(), key, harnessId, providerId);
       renderResults();
@@ -2433,8 +2540,8 @@ function openDefaultForm() {
       : `<div class="space-y-2">
           <input data-search type="search" class="hk-input" autocomplete="off" spellcheck="false"
             placeholder="${esc(t("advanced.searchModelPlaceholder"))}" />
-          <div data-results class="max-h-[300px] space-y-1 overflow-y-auto"></div>
-          <p data-count class="px-0.5 text-[11px] font-medium text-ink-muted"></p>
+          <div data-results class="max-h-[18.75rem] space-y-1 overflow-y-auto"></div>
+          <p data-count class="px-0.5 text-xs font-medium text-ink-muted"></p>
         </div>`,
     footer: manual
       ? `<button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.cancel"))}</button>
@@ -2484,8 +2591,8 @@ function openDefaultForm() {
                 current ? "bg-brand-soft/50" : "bg-surface"
               }">
               <span class="min-w-0 flex-1">
-                <span class="block truncate text-[13px] font-medium leading-tight text-ink">${esc(entry.label)}</span>
-                <span class="block truncate font-mono text-[11px] leading-tight text-ink-muted">${esc(entry.modelId)}</span>
+                <span class="block truncate text-base font-medium leading-tight text-ink">${esc(entry.label)}</span>
+                <span class="block truncate font-mono text-xs leading-tight text-ink-muted">${esc(entry.modelId)}</span>
               </span>
               <span class="shrink-0">${chip("neutral", entry.providerName)}</span>
               ${
@@ -2496,7 +2603,7 @@ function openDefaultForm() {
             </button>`;
           })
           .join("")
-      : `<p class="px-2 py-4 text-center text-[12px] text-ink-muted">${esc(t("advanced.noModelFound"))}</p>`;
+      : `<p class="px-2 py-4 text-center text-sm text-ink-muted">${esc(t("advanced.noModelFound"))}</p>`;
 
     countHost.textContent = t("default.modelCount", { shown: rows.length, total: entries.length });
 
@@ -2548,11 +2655,11 @@ function finishOnboarding() {
 
 function renderOnboardingHeader() {
   $("#topbar").innerHTML = `
-    <div class="mx-auto flex w-full max-w-[1008px] items-center gap-3 px-6 py-3.5">
+    <div class="mx-auto flex w-full max-w-[63rem] items-center gap-3 px-6 py-3.5">
       <div class="flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface-muted text-ink shadow-xs">${LOGO_SVG}</div>
       <div class="min-w-0">
-        <p class="text-[15px] font-bold leading-tight text-ink">Hakonfig</p>
-        <p class="text-[12px] leading-tight text-ink-secondary">${esc(t("app.tagline"))}</p>
+        <p class="text-lg font-bold leading-tight text-ink">Hakonfig</p>
+        <p class="text-sm leading-tight text-ink-secondary">${esc(t("app.tagline"))}</p>
       </div>
     </div>`;
 }
@@ -2564,12 +2671,12 @@ function renderOnboarding() {
 
   if (!onboarding || onboarding.step === "welcome") {
     container.innerHTML = `
-      <div class="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center py-10">
+      <div class="mx-auto flex min-h-full w-full max-w-[35rem] flex-col justify-center py-10">
         <span class="mb-5 flex h-14 w-14 items-center justify-center rounded-[18px] bg-brand text-on-brand shadow-sm">
           ${icon("wand", "h-6 w-6")}
         </span>
-        <h1 class="text-[26px] font-extrabold leading-tight tracking-tight text-ink">${esc(t("onboard.title"))}</h1>
-        <p class="mt-3 max-w-[46ch] text-[14px] leading-relaxed text-ink-secondary">${esc(t("onboard.subtitle"))}</p>
+        <h1 class="text-4xl font-extrabold leading-tight tracking-tight text-ink">${esc(t("onboard.title"))}</h1>
+        <p class="mt-3 max-w-[46ch] text-md leading-relaxed text-ink-secondary">${esc(t("onboard.subtitle"))}</p>
         <div class="mt-8">
           <button data-action data-start class="hk-btn hk-btn-primary">
             ${icon("search", "h-4 w-4")}${esc(t("onboard.start"))}
@@ -2586,12 +2693,12 @@ function renderOnboarding() {
 
   if (onboarding.step === "scanning") {
     container.innerHTML = `
-      <div class="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center py-10">
+      <div class="mx-auto flex min-h-full w-full max-w-[35rem] flex-col justify-center py-10">
         <div class="flex items-center gap-2.5">
           <span class="hk-spin text-brand">${icon("hourglass", "h-4 w-4")}</span>
-          <h1 class="text-[20px] font-bold leading-snug text-ink">${esc(t("onboard.scanning"))}</h1>
+          <h1 class="text-3xl font-bold leading-snug text-ink">${esc(t("onboard.scanning"))}</h1>
         </div>
-        <p data-status class="mt-2 text-[13px] leading-relaxed text-ink-secondary">${esc(
+        <p data-status class="mt-2 text-base leading-relaxed text-ink-secondary">${esc(
           t("onboard.scanningModels"),
         )}</p>
         <div class="mt-5 h-1.5 overflow-hidden rounded-full bg-surface-sunken">
@@ -2612,17 +2719,17 @@ function renderOnboarding() {
   )} · ${pluralModels(models)}`;
 
   container.innerHTML = `
-    <div class="mx-auto flex min-h-full w-full max-w-[560px] flex-col justify-center py-10">
+    <div class="mx-auto flex min-h-full w-full max-w-[35rem] flex-col justify-center py-10">
       <span class="mb-5 flex h-14 w-14 items-center justify-center rounded-[18px] ${
         installed ? "bg-ok-bg text-ok-text" : "bg-warn-bg text-warn-text"
       }">
         ${icon(installed ? "check" : "alert", "h-6 w-6")}
       </span>
-      <h1 class="text-[26px] font-extrabold leading-tight tracking-tight text-ink">${esc(
+      <h1 class="text-4xl font-extrabold leading-tight tracking-tight text-ink">${esc(
         t("onboard.done.title"),
       )}</h1>
-      <p class="mt-3 text-[14px] font-semibold leading-relaxed text-ink">${esc(summary)}</p>
-      <p class="mt-2 max-w-[46ch] text-[13px] leading-relaxed text-ink-secondary">${esc(
+      <p class="mt-3 text-md font-semibold leading-relaxed text-ink">${esc(summary)}</p>
+      <p class="mt-2 max-w-[46ch] text-base leading-relaxed text-ink-secondary">${esc(
         onboarding.error ? onboarding.error : installed ? t("onboard.done.body") : t("onboard.done.none"),
       )}</p>
       ${
@@ -2632,10 +2739,10 @@ function renderOnboarding() {
                  .map(
                    (harness) => `<div class="flex items-center gap-2.5 py-3">
                      <span class="shrink-0 text-ok-text">${icon("check", "h-4 w-4")}</span>
-                     <span class="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">${esc(
+                     <span class="min-w-0 flex-1 truncate text-base font-semibold text-ink">${esc(
                        harness.name,
                      )}</span>
-                     <span class="shrink-0 text-[12px] font-medium text-ink-muted">${esc(
+                     <span class="shrink-0 text-sm font-medium text-ink-muted">${esc(
                        pluralProviders(harness.providerCount),
                      )}</span>
                    </div>`,
@@ -2683,8 +2790,8 @@ async function runOnboardingScan() {
       (harness) => `
       <div data-row="${esc(harness.id)}" class="flex items-center gap-2.5 py-3">
         <span class="shrink-0 text-ink-muted">${icon("search", "h-3.5 w-3.5")}</span>
-        <span class="min-w-0 flex-1 truncate text-[13px] font-medium text-ink">${esc(harness.name)}</span>
-        <span data-note class="shrink-0 text-[12px] font-medium text-ink-muted">...</span>
+        <span class="min-w-0 flex-1 truncate text-base font-medium text-ink">${esc(harness.name)}</span>
+        <span data-note class="shrink-0 text-sm font-medium text-ink-muted">...</span>
       </div>`,
     )
     .join("");
@@ -2711,7 +2818,7 @@ async function runOnboardingScan() {
         if (row) row.firstElementChild.outerHTML = `<span class="shrink-0 text-ok-text">${icon("check", "h-3.5 w-3.5")}</span>`;
         if (note) {
           note.textContent = `${pluralProviders(providerCount)} · ${pluralModels(modelCount)}`;
-          note.className = "shrink-0 text-[12px] font-semibold text-ink-secondary";
+          note.className = "shrink-0 text-sm font-semibold text-ink-secondary";
         }
       } catch {
         if (row) row.firstElementChild.outerHTML = `<span class="shrink-0 text-warn-text">${icon("alert", "h-3.5 w-3.5")}</span>`;
@@ -2762,32 +2869,32 @@ async function runPackage(harnessId, mode) {
     title: t(titleKey, { name: entry.name }),
     size: "md",
     body: `
-      <p class="text-[14px] leading-relaxed text-ink">${esc(t(bodyKey, { name: entry.name }))}</p>
-      <pre class="selectable mt-3 overflow-x-auto rounded-lg border border-line bg-surface-muted px-3 py-2 font-mono text-[12px] text-ink-secondary">${esc(
+      <p class="text-md leading-relaxed text-ink">${esc(t(bodyKey, { name: entry.name }))}</p>
+      <pre class="selectable mt-3 overflow-x-auto rounded-lg border border-line bg-surface-muted px-3 py-2 font-mono text-sm text-ink-secondary">${esc(
         command,
       )}</pre>
       ${
         isInstall && entry.kind === "planned"
-          ? `<p class="mt-3 flex gap-2 rounded-lg bg-warn-bg px-3 py-2 text-[12px] leading-relaxed text-warn-text">
+          ? `<p class="mt-3 flex gap-2 rounded-lg bg-warn-bg px-3 py-2 text-sm leading-relaxed text-warn-text">
                ${icon("info", "h-4 w-4 shrink-0")}<span>${esc(t("install.warnUnsupported"))}</span>
              </p>`
           : ""
       }
       ${
         isInstall && !entry.verified
-          ? `<p class="mt-2 flex gap-2 rounded-lg bg-warn-bg px-3 py-2 text-[12px] leading-relaxed text-warn-text">
+          ? `<p class="mt-2 flex gap-2 rounded-lg bg-warn-bg px-3 py-2 text-sm leading-relaxed text-warn-text">
                ${icon("alert", "h-4 w-4 shrink-0")}<span>${esc(t("install.warnUnverified"))}</span>
              </p>`
           : ""
       }
       <div data-progress class="mt-4 hidden">
         <div class="hk-bar"></div>
-        <p data-phase class="mt-2 text-[13px] text-ink-secondary">${esc(
+        <p data-phase class="mt-2 text-base text-ink-secondary">${esc(
           isInstall ? t("install.running") : t("uninstall.running"),
         )}</p>
         <details class="mt-2">
-          <summary class="cursor-pointer text-[12px] font-semibold text-ink-secondary">${esc(t("install.showLog"))}</summary>
-          <pre data-log class="selectable mt-1.5 h-36 overflow-auto rounded-lg border border-line bg-surface-sunken px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-secondary"></pre>
+          <summary class="cursor-pointer text-sm font-semibold text-ink-secondary">${esc(t("install.showLog"))}</summary>
+          <pre data-log class="selectable mt-1.5 h-36 overflow-auto rounded-lg border border-line bg-surface-sunken px-3 py-2 font-mono text-xs leading-relaxed text-ink-secondary"></pre>
         </details>
       </div>`,
     footer: `
@@ -2855,11 +2962,11 @@ function openPwaHelp() {
     subtitle: t("web.pwaSubtitle"),
     size: "sm",
     body: `
-      <div class="space-y-3 text-[13px] leading-relaxed text-ink-secondary">
+      <div class="space-y-3 text-base leading-relaxed text-ink-secondary">
         ${["chrome", "safari", "mobile"]
           .map(
             (key) => `<div class="rounded-[14px] border border-line bg-surface px-3.5 py-3">
-              <p class="mb-1 text-[12px] font-bold uppercase tracking-wide text-ink-muted">${esc(
+              <p class="mb-1 text-sm font-bold uppercase tracking-wide text-ink-muted">${esc(
                 t(`web.pwa.${key}.title`),
               )}</p>
               <p>${esc(t(`web.pwa.${key}.body`))}</p>
@@ -2880,7 +2987,7 @@ function openSettings() {
     body: `
       <div class="space-y-5">
         <section>
-          <h3 class="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.language"))}</h3>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.language"))}</h3>
           <div class="flex gap-2">
             <button data-action data-lang="en" class="hk-btn hk-btn-secondary hk-btn-sm ${
               getLang() === "en" ? "hk-btn-active" : ""
@@ -2892,7 +2999,7 @@ function openSettings() {
         </section>
 
         <section>
-          <h3 class="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.appearance"))}</h3>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.appearance"))}</h3>
           <div class="flex gap-2">
             <button data-action data-theme="light" class="hk-btn hk-btn-secondary hk-btn-sm ${
               state.prefs.theme !== "dark" ? "hk-btn-active" : ""
@@ -2903,10 +3010,26 @@ function openSettings() {
           </div>
         </section>
 
+        <section data-scale-root>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.scale"))}</h3>
+          <div class="flex flex-wrap gap-2">
+            <button data-action data-scale="auto" class="hk-btn hk-btn-secondary hk-btn-sm ${
+              state.prefs.uiScale === "auto" ? "hk-btn-active" : ""
+            }" aria-pressed="${state.prefs.uiScale === "auto"}">${esc(t("settings.scaleAuto"))}</button>
+            ${SCALE_STEPS.map(
+              (step) => `<button data-action data-scale="${step}" class="hk-btn hk-btn-secondary hk-btn-sm ${
+                state.prefs.uiScale === step ? "hk-btn-active" : ""
+              }" aria-pressed="${state.prefs.uiScale === step}">${Math.round(step * 100)}%</button>`,
+            ).join("")}
+          </div>
+          <p data-scale-status class="mt-2 text-sm text-ink-muted">${esc(scaleStatus())}</p>
+          <p data-scale-diag class="mt-1 font-mono text-xs leading-relaxed text-ink-muted">${esc(scaleDiagnostics())}</p>
+        </section>
+
         <section>
-          <h3 class="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.confirmations"))}</h3>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.confirmations"))}</h3>
           <label class="flex cursor-pointer items-center justify-between gap-3 rounded-lg bg-surface-muted px-3 py-2.5">
-            <span class="text-[13px] text-ink">${esc(t("settings.confirmDelete"))}</span>
+            <span class="text-base text-ink">${esc(t("settings.confirmDelete"))}</span>
             <button data-action data-confirm-toggle role="switch" aria-checked="${
               state.prefs.confirmDelete !== false
             }" class="hk-switch"></button>
@@ -2914,15 +3037,15 @@ function openSettings() {
         </section>
 
         <section>
-          <h3 class="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink-muted">${esc(t("onboard.section"))}</h3>
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-ink-muted">${esc(t("onboard.section"))}</h3>
           <button data-action data-onboard class="hk-btn hk-btn-secondary hk-btn-sm">
             ${icon("wand", "h-4 w-4")}${esc(t("onboard.rerun"))}
           </button>
         </section>
 
         <section>
-          <h3 class="mb-2 text-[12px] font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.about"))}</h3>
-          <div class="space-y-1.5 text-[13px]">
+          <h3 class="mb-2 text-sm font-bold uppercase tracking-wide text-ink-muted">${esc(t("settings.about"))}</h3>
+          <div class="space-y-1.5 text-base">
             <p class="text-ink-secondary">${esc(t("settings.version", { version: APP_VERSION }))}</p>
             <button data-action data-external="${esc(REPO_URL)}" class="flex items-center gap-1.5 font-semibold text-brand-text hover:underline">
               ${esc(t("settings.repo"))}${icon("arrowUpRight", "h-3.5 w-3.5")}
@@ -2968,6 +3091,22 @@ function openSettings() {
     });
   });
 
+  $$("[data-scale]", overlay).forEach((button) => {
+    button.addEventListener("click", async () => {
+      const raw = button.dataset.scale;
+      const uiScale = raw === "auto" ? "auto" : Number(raw);
+      savePrefs({ uiScale });
+      await applyUiScale();
+      close();
+      toast(
+        uiScale === "auto"
+          ? t("settings.scaleAutoSet")
+          : t("settings.scaleSet", { percent: Math.round(uiScale * 100) }),
+      );
+      openSettings();
+    });
+  });
+
   $("[data-confirm-toggle]", overlay).addEventListener("click", (event) => {
     const next = state.prefs.confirmDelete === false;
     savePrefs({ confirmDelete: next });
@@ -2991,8 +3130,8 @@ async function openHistory() {
         .map(
           (backup) => `<div class="flex items-start justify-between gap-3 border-b border-line px-1 py-3 last:border-0">
             <div class="min-w-0">
-              <p class="text-[13px] font-semibold text-ink">${esc(fmtDate(backup.createdAt))}</p>
-              <p class="selectable truncate font-mono text-[11px] text-ink-muted" title="${esc(backup.dir)}">${esc(
+              <p class="text-base font-semibold text-ink">${esc(fmtDate(backup.createdAt))}</p>
+              <p class="selectable truncate font-mono text-xs text-ink-muted" title="${esc(backup.dir)}">${esc(
                 backup.files.map((file) => file.path.split("/").pop()).join(" · "),
               )}</p>
             </div>
@@ -3002,7 +3141,7 @@ async function openHistory() {
           </div>`,
         )
         .join("")
-    : `<p class="rounded-[14px] border border-dashed border-line-strong px-4 py-8 text-center text-[13px] text-ink-muted">${esc(
+    : `<p class="rounded-[14px] border border-dashed border-line-strong px-4 py-8 text-center text-base text-ink-muted">${esc(
         t("history.empty"),
       )}</p>`;
 
@@ -3011,7 +3150,7 @@ async function openHistory() {
     subtitle: t("history.subtitle"),
     size: "md",
     body: `${list}
-      <p class="mt-3 text-[11px] leading-relaxed text-ink-muted">${esc(t("history.keepNote"))}</p>`,
+      <p class="mt-3 text-xs leading-relaxed text-ink-muted">${esc(t("history.keepNote"))}</p>`,
     footer: `<button data-action data-cancel class="hk-btn hk-btn-secondary">${esc(t("action.close"))}</button>`,
   });
 
@@ -3046,8 +3185,8 @@ function renderFatal(message) {
   $("#content").innerHTML = `
     <div class="mx-auto max-w-lg">
       <div class="hk-card p-6">
-        <p class="text-[15px] font-semibold text-ink">${esc(message)}</p>
-        <p class="mt-2 text-[13px] leading-relaxed text-ink-secondary">${esc(t("error.notDesktopHint"))}</p>
+        <p class="text-lg font-semibold text-ink">${esc(message)}</p>
+        <p class="mt-2 text-base leading-relaxed text-ink-secondary">${esc(t("error.notDesktopHint"))}</p>
       </div>
     </div>`;
 }
@@ -3056,11 +3195,35 @@ async function init() {
   setLang(state.prefs.lang ?? "en");
   applyTheme();
 
+  // Ctrl +/-/0 mengubah skala UI. Ditangkap di fase capture supaya tidak
+  // bertabrakan dengan zoom bawaan webview maupun handler fokus modal.
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+      const key = event.key;
+      if (key === "=" || key === "+") {
+        event.preventDefault();
+        stepUiScale(1);
+      } else if (key === "-" || key === "_") {
+        event.preventDefault();
+        stepUiScale(-1);
+      } else if (key === "0") {
+        event.preventDefault();
+        savePrefs({ uiScale: "auto" });
+        applyUiScale().then(() => toast(t("settings.scaleAutoSet")));
+      }
+    },
+    true,
+  );
+
   if (!invoke) {
     renderFatal(t("error.notDesktop"));
     renderHomeHeader();
     return;
   }
+
+  await applyUiScale();
 
   try {
     state.presets = await api.presets();
@@ -3098,7 +3261,7 @@ function showFatalBanner(message) {
     banner = document.createElement("div");
     banner.id = "fatal-banner";
     banner.className =
-      "fixed inset-x-0 top-0 z-[200] border-b border-line bg-danger-bg px-4 py-2 font-mono text-[11px] leading-relaxed text-danger-text";
+      "fixed inset-x-0 top-0 z-[200] border-b border-line bg-danger-bg px-4 py-2 font-mono text-xs leading-relaxed text-danger-text";
     document.body.append(banner);
   }
   banner.textContent = `Error: ${message}`;

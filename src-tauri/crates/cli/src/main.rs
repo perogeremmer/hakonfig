@@ -388,7 +388,10 @@ fn switch_user(user: &str, cli: &Cli) -> ExitCode {
     let Some(current_uid) = hakonfig_core::engine::targets::current_uid() else {
         eprintln!(
             "{}",
-            i18n::fill(t(Msg::AsUserUnsupported), &[("user", user.trim().to_string())])
+            i18n::fill(
+                t(Msg::AsUserUnsupported),
+                &[("user", user.trim().to_string())]
+            )
         );
         return ExitCode::FAILURE;
     };

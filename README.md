@@ -67,9 +67,10 @@ Hakonfig is **not** a proxy or a gateway, and it never stores your keys in its o
 It only writes to the files your tools already read.
 
 - **Stack:** Tauri v2 (Rust) + HTML + Tailwind CSS v4 + vanilla JS, no frontend framework
-- **UI:** Plus Jakarta Sans bundled locally, light and dark themes, English + Bahasa Indonesia
+- **UI:** Plus Jakarta Sans bundled locally, light and dark themes, English + Bahasa Indonesia,
+  display scale that survives HiDPI screens (auto, 90-150%, Ctrl +/-)
 - **CLI:** `hakonfig-cli`, the same engine without a GUI, for servers and scripts
-- **Tests:** 236 offline tests (188 Rust + 48 JS), no network required
+- **Tests:** 249 offline tests (198 Rust + 51 JS), no network required
 - **License:** [MIT](LICENSE), free to use, modify, and redistribute
 
 ### Open source
@@ -442,7 +443,7 @@ as repository secrets and pass them to `tauri-action`.
 ### Tests
 
 ```bash
-bun run test        # 188 Rust tests + 48 JS tests
+bun run test        # 198 Rust tests + 51 JS tests
 bun run test:rust   # cargo test --workspace
 bun run test:js     # node --test web/*.test.js
 ```
@@ -629,7 +630,7 @@ Pull requests, issues, and new tool adapters are very welcome. To add a tool, se
 Before sending a PR:
 
 ```bash
-bun run test            # 188 Rust + 48 JS tests must pass
+bun run test            # 198 Rust + 51 JS tests must pass
 bun run version:check   # version consistent across files
 bun run css && bun run logos
 ```

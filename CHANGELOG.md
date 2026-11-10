@@ -6,6 +6,30 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.0]
+
+### Added
+
+- GUI: `Settings → Skala tampilan` — zoom webview 90/100/110/125/150% atau auto,
+  dengan `Ctrl` + `+` / `-` / `0`. Zoom yang sama diterapkan sebelum halaman
+  pertama dilukis, jadi tidak ada satu frame UI kecil saat aplikasi dibuka.
+- GUI: mode auto menambal WebKitGTK yang melaporkan `devicePixelRatio` 1x di
+  layar 2x (`zoom = skala monitor / devicePixelRatio`, diabaikan bila < 1.1).
+- GUI: panel Settings menampilkan angka diagnosa (`monitor`, `webview`,
+  `viewport`, `zoom`) supaya laporan "kecil di laptop saya" bisa dipastikan
+  penyebabnya.
+- GUI: jendela dibatasi ke 90% work area monitor saat pertama dibuka, dan
+  minimum jendela ikut mengecil di layar sempit (dulu `minWidth 940` lebih besar
+  dari ruang CSS laptop 1366x768 @150% sehingga jendela tidak bisa muat).
+
+### Changed
+
+- Tipografi pindah ke rem: 147 kelas `text-[Npx]` menjadi token `text-2xs` …
+  `text-4xl`, dan 48 deklarasi `font-size`/`height`/`padding` di CSS juga rem.
+  Ukuran teks sekarang ikut preferensi font sistem. Test `web/scale.test.js`
+  menolak `text-[13px]` atau `h-[148px]` baru.
+- Default jendela minimum `940x620` → `720x480`.
+
 ## [0.5.2]
 
 ### Added
