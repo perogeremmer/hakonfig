@@ -20,6 +20,82 @@ use crate::engine::paths;
 
 pub struct OpenCodeAdapter;
 
+impl OpenCodeAdapter {
+    /// Default (`model`) tidak boleh menunjuk provider yang dinonaktifkan.
+    ///
+    /// OpenCode punya `disabled_providers`, tetapi `model` tetap tersimpan
+    /// sebagai referensi; membiarkannya berarti config menyebut provider yang
+    /// tidak pernah dimuat.
+    fn sync_default(docs: &mut Docs) -> Result<Vec<String>> {
+        let Some(current) = docs
+            .get("config")
+            .and_then(|doc| get_str(doc.data(), "model"))
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+        else {
+            return Ok(Vec::new());
+        };
+
+        let disabled: Vec<String> = docs
+            .get("config")
+            .and_then(|doc| doc.data().get("disabled_providers"))
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let (provider, _) = shared::split_provider_model(&current);
+        let Some(provider) = provider else {
+            return Ok(Vec::new());
+        };
+        if !disabled.iter().any(|candidate| candidate == &provider) {
+            return Ok(Vec::new());
+        }
+
+        // Pengganti: provider pertama yang masih aktif dan punya model.
+        let replacement: Option<(String, String)> = docs.get("config").and_then(|doc| {
+            let data = doc.data();
+            let container = providers_key(data);
+            let providers = data.get(container).and_then(Value::as_object)?;
+            providers
+                .iter()
+                .filter(|(id, _)| !disabled.iter().any(|candidate| candidate == *id))
+                .find_map(|(id, entry)| {
+                    entry
+                        .get("models")
+                        .and_then(Value::as_object)
+                        .and_then(|models| models.keys().next())
+                        .map(|model| (id.clone(), model.clone()))
+                })
+        });
+
+        let config = docs.require_mut("config")?;
+        let root = config.root_object();
+        match replacement {
+            Some((provider, model)) => {
+                root.insert(
+                    "model".to_string(),
+                    Value::String(format!("{provider}/{model}")),
+                );
+                Ok(vec![format!(
+                    "Default model moved to '{provider}/{model}' because '{current}' points at a disabled provider."
+                )])
+            }
+            None => {
+                root.remove("model");
+                Ok(vec![format!(
+                    "No provider is active any more, so the default model '{current}' was cleared."
+                )])
+            }
+        }
+    }
+}
+
 /// Pilih nama map provider yang dipakai file: hormati yang sudah ada.
 fn providers_key(data: &Value) -> &'static str {
     if data.get("providers").map(Value::is_object).unwrap_or(false) {
@@ -587,14 +663,16 @@ impl Adapter for OpenCodeAdapter {
                     list.push(Value::String(target.clone()));
                 }
 
-                Ok(vec![if *enabled {
+                let mut warnings = vec![if *enabled {
                     format!("Provider '{}' re-enabled.", target)
                 } else {
                     format!(
                         "Provider '{}' disabled (the entry stays in opencode.json).",
                         target
                     )
-                }])
+                }];
+                warnings.extend(Self::sync_default(docs)?);
+                Ok(warnings)
             }
             EditOp::SetDefault {
                 provider_id,

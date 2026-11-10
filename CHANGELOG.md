@@ -6,6 +6,18 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.5]
+
+### Fixed
+
+- Semua harness: menonaktifkan provider yang menjadi default sekarang juga
+  membereskan default di harness lain, bukan hanya pi.
+  - oh-my-pi: `modelRoles.default` dipindah ke provider aktif (atau dikosongkan),
+    dan referensi scope `enabledModels` milik provider itu ikut dibuang.
+  - OpenCode: `model` dipindah ke provider aktif lain (atau dihapus).
+  - Hermes: `model.provider`/`default`/`base_url` dikosongkan karena daftar
+    modelnya diambil dari endpoint, jadi tidak ada model pengganti yang pasti.
+
 ## [0.6.4]
 
 ### Fixed

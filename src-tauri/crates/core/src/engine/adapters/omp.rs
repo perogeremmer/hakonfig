@@ -21,6 +21,97 @@ use crate::engine::paths;
 pub struct OmpAdapter;
 
 impl OmpAdapter {
+    /// Provider aktif (belum ada di `disabledProviders`) beserta id modelnya.
+    fn active_models(docs: &Docs) -> std::collections::BTreeMap<String, Vec<String>> {
+        let disabled = Self::disabled_providers(docs);
+        let mut active: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        let Some(models) = docs.get("models") else {
+            return active;
+        };
+        let Some(providers) = models.data().get("providers").and_then(Value::as_object) else {
+            return active;
+        };
+        for (id, entry) in providers {
+            if disabled.iter().any(|candidate| candidate == id) {
+                continue;
+            }
+            let ids = entry
+                .get("models")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(|model| get_str(model, "id"))
+                        .map(|value| value.trim().to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            active.insert(id.clone(), ids);
+        }
+        active
+    }
+
+    /// `modelRoles.default` tidak boleh menunjuk provider yang dinonaktifkan.
+    ///
+    /// oh-my-pi memakai default ini saat scope `enabledModels` kosong, jadi
+    /// default yang menunjuk provider mati akan membuat pemilih model memakai
+    /// provider yang tidak pernah muncul di daftar.
+    fn sync_default(docs: &mut Docs) -> Result<Vec<String>> {
+        let Some(settings) = docs.get("settings") else {
+            return Ok(Vec::new());
+        };
+        if !settings.exists {
+            return Ok(Vec::new());
+        }
+        let Some(current) = settings
+            .data()
+            .get("modelRoles")
+            .and_then(|roles| roles.get("default"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
+        else {
+            return Ok(Vec::new());
+        };
+
+        let active = Self::active_models(docs);
+        let (provider, _) = shared::split_provider_model(&current);
+        let Some(provider) = provider else {
+            return Ok(Vec::new());
+        };
+        if active.contains_key(&provider) {
+            return Ok(Vec::new());
+        }
+
+        let replacement = active
+            .iter()
+            .find(|(_, models)| !models.is_empty())
+            .map(|(id, models)| (id.clone(), models[0].clone()));
+
+        let settings = docs.require_mut("settings")?;
+        let roles = settings.object_at("modelRoles");
+        match replacement {
+            Some((provider, model)) => {
+                roles.insert(
+                    "default".to_string(),
+                    Value::String(format!("{provider}/{model}")),
+                );
+                Ok(vec![format!(
+                    "Default moved to '{provider}/{model}' because '{current}' points at a disabled provider."
+                )])
+            }
+            None => {
+                roles.remove("default");
+                Ok(vec![format!(
+                    "No provider is active any more, so the default '{current}' was cleared. oh-my-pi will choose its own model."
+                )])
+            }
+        }
+    }
+}
+
+impl OmpAdapter {
     fn agent_dir() -> PathBuf {
         paths::omp_dir().join("agent")
     }
@@ -338,14 +429,42 @@ impl Adapter for OmpAdapter {
                     list.push(Value::String(target.clone()));
                 }
 
-                Ok(vec![if *enabled {
+                let mut warnings = vec![if *enabled {
                     format!("Provider '{}' re-enabled.", target)
                 } else {
                     format!(
                         "Provider '{}' disabled (the entry stays in models.yml).",
                         target
                     )
-                }])
+                }];
+
+                if !*enabled {
+                    // Scope memakai referensi `<provider>/<model>`; entri milik
+                    // provider yang dinonaktifkan dibuang supaya pemilih model
+                    // tidak menawarkan model mati sebagai urutan pertama.
+                    if let Some(list) = settings
+                        .root_object()
+                        .get_mut("enabledModels")
+                        .and_then(Value::as_array_mut)
+                    {
+                        let before = list.len();
+                        list.retain(|item| {
+                            item.as_str()
+                                .and_then(|value| value.split('/').next())
+                                .map(|head| head != target.as_str())
+                                .unwrap_or(true)
+                        });
+                        if list.len() != before {
+                            warnings.push(format!(
+                                "{} entries for '{target}' removed from enabledModels.",
+                                before - list.len()
+                            ));
+                        }
+                    }
+                }
+
+                warnings.extend(Self::sync_default(docs)?);
+                Ok(warnings)
             }
             EditOp::SetDefault {
                 provider_id,

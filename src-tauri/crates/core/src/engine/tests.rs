@@ -2743,3 +2743,138 @@ fn pi_disabling_everything_clears_a_stale_default_too() {
     assert!(settings.get("defaultModel").is_none());
     assert_eq!(settings["theme"], "dark");
 }
+
+// ------------------------------- default mati di harness lain (kelas bug sama)
+
+#[test]
+fn omp_disable_heals_a_default_pointing_at_the_disabled_provider() {
+    let (_lock, root) = sandbox("omp-default-heal");
+    let dir = root.join("omp/agent");
+    write(
+        &dir.join("models.yml"),
+        "providers:\n  groq:\n    apiKey: gsk-a\n    baseUrl: https://api.groq.com/openai/v1\n    models:\n      - id: m1\n  other:\n    apiKey: sk-b\n    baseUrl: https://other.example.com/v1\n    models:\n      - id: n1\n",
+    );
+    write(
+        &dir.join("config.yml"),
+        "modelRoles:\n  default: groq/m1\nenabledModels:\n  - groq/m1\n  - other/n1\n",
+    );
+
+    let result = api::apply_edit(
+        "omp".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = yaml(&dir.join("config.yml"));
+    assert_eq!(
+        settings["modelRoles"]["default"], "other/n1",
+        "default harus pindah ke provider yang masih aktif: {settings}"
+    );
+    assert_eq!(
+        settings["enabledModels"].as_array().unwrap().len(),
+        1,
+        "referensi scope milik provider mati harus dibuang: {settings}"
+    );
+    assert!(
+        result
+            .warnings
+            .iter()
+            .any(|line| line.contains("Default moved to 'other/n1'")),
+        "{:?}",
+        result.warnings
+    );
+}
+
+#[test]
+fn omp_default_is_cleared_when_the_last_provider_goes_off() {
+    let (_lock, root) = sandbox("omp-default-clear");
+    let dir = root.join("omp/agent");
+    write(
+        &dir.join("models.yml"),
+        "providers:\n  groq:\n    apiKey: gsk-a\n    baseUrl: https://api.groq.com/openai/v1\n    models:\n      - id: m1\n",
+    );
+    write(&dir.join("config.yml"), "modelRoles:\n  default: groq/m1\n");
+
+    api::apply_edit(
+        "omp".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let settings = yaml(&dir.join("config.yml"));
+    assert!(
+        settings["modelRoles"].get("default").is_none(),
+        "default harus dikosongkan: {settings}"
+    );
+}
+
+#[test]
+fn opencode_disable_heals_a_default_pointing_at_the_disabled_provider() {
+    let (_lock, root) = sandbox("opencode-default-heal");
+    let dir = root.join("opencode/config");
+    write(
+        &dir.join("opencode.json"),
+        r#"{
+  "provider": {
+    "groq": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": { "baseURL": "https://api.groq.com/openai/v1" },
+      "models": { "m1": { "name": "M1" } }
+    },
+    "other": {
+      "npm": "@ai-sdk/openai-compatible",
+      "options": { "baseURL": "https://other.example.com/v1" },
+      "models": { "n1": { "name": "N1" } }
+    }
+  },
+  "model": "groq/m1"
+}"#,
+    );
+
+    api::apply_edit(
+        "opencode".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let config = json(&dir.join("opencode.json"));
+    assert_eq!(
+        config["model"], "other/n1",
+        "default harus pindah ke provider lain yang aktif: {config}"
+    );
+}
+
+#[test]
+fn hermes_disable_clears_a_default_pointing_at_the_disabled_provider() {
+    let (_lock, root) = sandbox("hermes-default-clear");
+    let dir = root.join("hermes");
+    write(
+        &dir.join("config.yaml"),
+        "providers:\n  groq:\n    base_url: https://api.groq.com/openai/v1\n    key_env: GROQ_API_KEY\nmodel:\n  provider: custom:groq\n  default: m1\n  base_url: https://api.groq.com/openai/v1\n",
+    );
+
+    api::apply_edit(
+        "hermes".into(),
+        EditOp::SetEnabled {
+            provider_id: "groq".to_string(),
+            enabled: false,
+        },
+    )
+    .unwrap();
+
+    let config = yaml(&dir.join("config.yaml"));
+    assert!(
+        config["model"].get("provider").is_none(),
+        "default yang menunjuk provider mati harus dibersihkan: {config}"
+    );
+    assert!(config["model"].get("default").is_none());
+}

@@ -20,6 +20,42 @@ use crate::engine::paths;
 pub struct HermesAdapter;
 
 impl HermesAdapter {
+    /// `model.provider` tidak boleh menunjuk provider yang dinonaktifkan.
+    ///
+    /// Hermes menyimpan default sebagai `custom:<id>`; kalau provider itu
+    /// diparkir, referensinya tidak bisa dipakai lagi. Hermes mengambil daftar
+    /// model dari endpoint, jadi kita tidak tahu model pengganti yang pasti:
+    /// yang benar adalah mengosongkan default dan membiarkan Hermes memilih.
+    fn clear_default_if_disabled(docs: &mut Docs, target: &str) -> Result<Vec<String>> {
+        let Some(config) = docs.get("config") else {
+            return Ok(Vec::new());
+        };
+        let Some(provider) = config
+            .data()
+            .get("model")
+            .and_then(|model| get_str(model, "provider"))
+        else {
+            return Ok(Vec::new());
+        };
+        if provider.trim() != format!("custom:{target}") {
+            return Ok(Vec::new());
+        }
+
+        let config = docs.require_mut("config")?;
+        let model = config.object_at("model");
+        let had = model.remove("provider").is_some()
+            | model.remove("default").is_some()
+            | model.remove("base_url").is_some();
+        if !had {
+            return Ok(Vec::new());
+        }
+        Ok(vec![format!(
+            "Default pointed at 'custom:{target}', which is now disabled, so the default was cleared. Hermes will choose its own model."
+        )])
+    }
+}
+
+impl HermesAdapter {
     fn dir() -> PathBuf {
         paths::hermes_dir()
     }
@@ -328,10 +364,12 @@ impl Adapter for HermesAdapter {
                     if removed {
                         config.park(&target, &entry);
                     }
-                    Ok(vec![format!(
+                    let mut warnings = vec![format!(
                         "Provider '{}' disabled (commented out in config.yaml).",
                         target
-                    )])
+                    )];
+                    warnings.extend(Self::clear_default_if_disabled(docs, &target)?);
+                    Ok(warnings)
                 }
             }
             EditOp::SetDefault {
