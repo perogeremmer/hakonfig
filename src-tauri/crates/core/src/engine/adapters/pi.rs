@@ -135,8 +135,12 @@ impl PiAdapter {
                     if !enabled && current.as_deref() == Some(touched) {
                         root.remove("defaultProvider");
                         root.remove("defaultModel");
+                        // "Default kosong" bukan berarti "tidak ada model":
+                        // pi memilih sendiri dari provider yang masih punya
+                        // kredensial, termasuk provider bawaan. Lebih baik
+                        // dikatakan sekarang daripada ditebak pengguna nanti.
                         messages.push(format!(
-                            "No provider is active any more, so the default pointing at '{touched}' was cleared. pi will choose its own model."
+                            "No provider is active any more, so the default pointing at '{touched}' was cleared. pi will choose its own model, and a provider that still has credentials (including a built-in one) can be picked."
                         ));
                     }
                 }

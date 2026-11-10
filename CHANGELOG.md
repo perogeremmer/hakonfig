@@ -6,6 +6,14 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+### Changed
+
+- pi: pesan saat default dikosongkan (semua provider nonaktif) sekarang menyebut
+  bahwa pi akan memilih modelnya sendiri dan provider yang masih punya
+  kredensial — termasuk provider bawaan — bisa terpilih. "Tidak ada default"
+  bukan berarti "tidak ada model", dan itu lebih baik dikatakan daripada ditebak
+  pengguna saat harness tiba-tiba memakai model lain.
+
 ## [0.6.2]
 
 ### Added

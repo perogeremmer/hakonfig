@@ -2182,13 +2182,16 @@ fn pi_disable_last_provider_clears_default() {
     assert!(settings.get("defaultModel").is_none());
     // Key lain di settings.json tidak boleh ikut hilang.
     assert_eq!(settings["theme"], "dark");
+    let cleared = result
+        .warnings
+        .iter()
+        .find(|line| line.contains("default pointing at 'deepseek' was cleared"))
+        .unwrap_or_else(|| panic!("{:?}", result.warnings));
+    // "Tidak ada default" bukan "tidak ada model": pi memilih sendiri, dan
+    // provider yang masih punya kredensial bisa terpilih. Pesannya harus jujur.
     assert!(
-        result
-            .warnings
-            .iter()
-            .any(|line| line.contains("default pointing at 'deepseek' was cleared")),
-        "{:?}",
-        result.warnings
+        cleared.contains("credentials"),
+        "pesan harus menyebut bahwa pi memilih sendiri: {cleared}"
     );
 }
 
