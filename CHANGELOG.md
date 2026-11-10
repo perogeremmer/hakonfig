@@ -6,6 +6,26 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.6.2]
+
+### Added
+
+- pi: setiap model ber-reasoning yang didaftarkan lewat Hakonfig sekarang membawa
+  `thinkingLevelMap` lengkap — none (`off`), low, medium, high, max — sehingga
+  level `max` benar-benar ada di pemilih model. Tanpa map, pi hanya menawarkan
+  level sampai `high` karena `xhigh`/`max` dianggap tidak didukung.
+  `minimal` dan `xhigh` ditandai `null` (tidak didukung) supaya variant yang
+  dijanjikan tepat lima.
+- pi: notice `pi.thinking_map` + perbaikan otomatis untuk model lama yang belum
+  punya map, jadi config yang sudah ada tidak perlu diedit satu per satu.
+
+### Fixed
+
+- pi: `SetModels` sekarang menggabungkan draft dengan entri model yang sudah ada
+  (per id), bukan membangun ulang. Field yang tidak diurus form — mis.
+  `thinkingLevelMap` buatan pengguna atau `cost` — tidak lagi hilang saat daftar
+  model disimpan ulang. Map yang sudah ada juga tidak ditimpa map bawaan.
+
 ## [0.6.1]
 
 ### Fixed
