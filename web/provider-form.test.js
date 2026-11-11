@@ -10,6 +10,9 @@ import {
   envVarFor,
   envVarName,
   isRegisteredProvider,
+  keyEnvName,
+  keyFromEnv,
+  keyModeFor,
   normalizeValue,
   registeredApi,
 } from "./provider-form.js";
@@ -102,4 +105,28 @@ test("custom provider uses the id being typed", () => {
   assert.equal(envVarFor({ provider: null, typedId: "endpointku", managed: false }), "ENDPOINTKU_API_KEY");
   // id masih kosong: tampilkan pola, bukan "_API_KEY"
   assert.equal(envVarFor({ provider: null, typedId: "", managed: false }), "\u2039provider-id\u203a_API_KEY");
+});
+
+// ------------------------------------------------------- mode key (env/file)
+
+test("env key preselects the environment option, not inline", () => {
+  const provider = { keyMode: "env", keyEnv: "COMMANDCODE_API_KEY", keyDisplay: "$COMMANDCODE_API_KEY" };
+  assert.equal(keyModeFor(provider), "env");
+  assert.equal(keyFromEnv(provider), true);
+  assert.equal(keyEnvName(provider), "COMMANDCODE_API_KEY");
+});
+
+test("stored key preselects the inline option", () => {
+  const provider = { keyMode: "stored", keyDisplay: "sk-…abcd" };
+  assert.equal(keyModeFor(provider), "inline");
+  assert.equal(keyFromEnv(provider), false);
+});
+
+test("older summaries without keyMode still work through keyDisplay", () => {
+  assert.equal(keyModeFor({ keyDisplay: "$GROQ_API_KEY" }), "env");
+  assert.equal(keyModeFor({ keyDisplay: "${GROQ_API_KEY} (not set)" }), "env");
+  assert.equal(keyEnvName({ keyDisplay: "${GROQ_API_KEY} (not set)" }), "GROQ_API_KEY");
+  assert.equal(keyModeFor({ keyDisplay: "sk-…1234" }), "inline");
+  assert.equal(keyModeFor({}), "inline");
+  assert.equal(keyEnvName({}), null);
 });

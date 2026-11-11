@@ -61,6 +61,15 @@ pub struct ProviderSummary {
     pub api: Option<String>,
     pub has_key: bool,
     pub key_display: Option<String>,
+    /// Bagaimana kredensial provider ini disimpan: `stored`, `env`, atau `none`.
+    ///
+    /// GUI memakainya untuk memilih mode key yang benar saat membuka form edit;
+    /// menebak dari tampilan `key_display` rapuh karena mask berbeda per harness.
+    #[serde(default)]
+    pub key_mode: String,
+    /// Nama variabel environment yang dirujuk, kalau `key_mode` = `env`.
+    #[serde(default)]
+    pub key_env: Option<String>,
     /// true bila kredensialnya tersimpan di file (bisa dihapus dari sini).
     ///
     /// `has_key` juga benar untuk key yang hanya ada di environment; yang itu

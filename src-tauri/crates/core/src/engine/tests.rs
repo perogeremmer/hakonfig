@@ -3225,3 +3225,57 @@ fn forget_key_works_on_a_provider_that_is_already_disabled() {
     );
     assert!(result.backup_dir.is_some(), "harus ada backup");
 }
+
+#[test]
+fn pi_summary_reports_where_the_key_comes_from() {
+    let (_lock, root) = sandbox("pi-key-mode");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{
+  "providers": {
+    "commandcode": {
+      "name": "Command Code",
+      "baseUrl": "https://api.commandcode.ai/provider/v1",
+      "api": "openai-completions",
+      "apiKey": "$COMMANDCODE_API_KEY",
+      "models": [{ "id": "m1" }]
+    },
+    "withauth": {
+      "name": "With Auth",
+      "baseUrl": "https://auth.example/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "m2" }]
+    },
+    "nothing": {
+      "name": "Nothing",
+      "baseUrl": "https://none.example/v1",
+      "api": "openai-completions",
+      "models": [{ "id": "m3" }]
+    }
+  }
+}"#,
+    );
+    write(
+        &dir.join("auth.json"),
+        r#"{"withauth":{"type":"api_key","key":"sk-abc"}}"#,
+    );
+    write(&dir.join("settings.json"), "{}");
+
+    let snap = snapshot("pi");
+    let by_id = |id: &str| snap.providers.iter().find(|p| p.id == id).unwrap();
+
+    let env = by_id("commandcode");
+    assert_eq!(env.key_mode, "env", "key dari environment harus ditandai");
+    assert_eq!(env.key_env.as_deref(), Some("COMMANDCODE_API_KEY"));
+    assert!(!env.key_stored, "tidak ada yang bisa dihapus dari file");
+
+    let stored = by_id("withauth");
+    assert_eq!(stored.key_mode, "stored");
+    assert_eq!(stored.key_env, None);
+    assert!(stored.key_stored);
+
+    let none = by_id("nothing");
+    assert_eq!(none.key_mode, "none");
+    assert_eq!(none.key_env, None);
+}

@@ -358,7 +358,27 @@ impl Adapter for OpenCodeAdapter {
                 api: get_str(entry, "npm"),
                 has_key,
                 key_display,
-                key_stored: false,
+                key_stored: has_key,
+                // Kredensial OpenCode tersimpan di auth.json miliknya sendiri.
+                key_mode: if has_key {
+                    "stored".to_string()
+                } else {
+                    "none".to_string()
+                },
+                // Key dari blok `options` juga bisa berupa referensi env.
+                key_env: entry
+                    .get("options")
+                    .and_then(|options| get_str(options, "apiKey"))
+                    .or_else(|| get_str(entry, "apiKey"))
+                    .map(|value| value.trim().to_string())
+                    .filter(|value| value.starts_with('$'))
+                    .map(|value| {
+                        value
+                            .trim_start_matches('$')
+                            .trim_start_matches('{')
+                            .trim_end_matches('}')
+                            .to_string()
+                    }),
                 models,
                 enabled: !disabled.iter().any(|d| d == id),
                 can_toggle: self.supports_toggle(),

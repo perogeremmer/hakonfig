@@ -139,10 +139,20 @@ impl Adapter for HermesAdapter {
                     name: get_str(entry, "name").unwrap_or_else(|| id.clone()),
                     base_url: get_str(entry, "base_url"),
                     api: get_str(entry, "api_mode"),
-                    has_key: stored.is_some(),
+                    has_key: stored.is_some() || key_env.is_some(),
                     key_display,
                     // Kredensial hidup di entri provider; tidak ada aksi hapus terpisah.
                     key_stored: false,
+                    // Hermes menyimpan nama variabel di `key_env`, jadi key bisa
+                    // datang dari environment walau entri provider-nya ada.
+                    key_mode: if stored.is_some() {
+                        "stored".to_string()
+                    } else if key_env.is_some() {
+                        "env".to_string()
+                    } else {
+                        "none".to_string()
+                    },
+                    key_env: key_env.clone(),
                     models: Vec::new(),
                     enabled: true,
                     can_toggle: self.supports_toggle(),
@@ -169,9 +179,17 @@ impl Adapter for HermesAdapter {
                 name: get_str(&entry, "name").unwrap_or_else(|| id.clone()),
                 base_url: get_str(&entry, "base_url"),
                 api: get_str(&entry, "api_mode"),
-                has_key: stored.is_some(),
+                has_key: stored.is_some() || key_env.is_some(),
                 key_display,
                 key_stored: false,
+                key_mode: if stored.is_some() {
+                    "stored".to_string()
+                } else if key_env.is_some() {
+                    "env".to_string()
+                } else {
+                    "none".to_string()
+                },
+                key_env: key_env.clone(),
                 models: Vec::new(),
                 enabled: false,
                 can_toggle: true,

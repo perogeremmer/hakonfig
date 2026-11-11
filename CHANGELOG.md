@@ -6,6 +6,24 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.7.2]
+
+### Fixed
+
+- GUI: form edit provider sekarang memilih mode key sesuai aslinya. Provider yang
+  memakai variabel environment (`apiKey: "$COMMANDCODE_API_KEY"`) selalu tampil
+  sebagai "simpan di config", sehingga pengguna bisa tanpa sengaja menulis key
+  ke file. Sumbernya field baru `keyMode`/`keyEnv` di summary (bukan menebak dari
+  teks yang sudah dimask), dan `keyDisplay` hanya dipakai sebagai cadangan.
+- GUI: key yang berasal dari environment sekarang diberi chip "from environment"
+  dan nama variabelnya ditampilkan di opsi environment, jadi `$COMMANDCODE_API_KEY`
+  tidak lagi terlihat seperti nilai literal.
+
+### Added
+
+- `providers --json` (CLI) menyertakan `keyMode` dan `keyEnv` supaya skrip bisa
+  membedakan key tersimpan dari key environment.
+
 ## [0.7.1]
 
 ### Fixed

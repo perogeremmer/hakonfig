@@ -133,6 +133,7 @@ export default {
   "advanced.baseUrlHelp": "Kebanyakan endpoint berakhiran /v1.",
   "advanced.apiType": "Jenis API",
   "advanced.keyInline": "Simpan di file konfigurasi (paling mudah)",
+  "advanced.keyFromEnvChip": "dari environment",
   "advanced.keyEnv": "Pakai variabel environment",
   "advanced.keyInlineWhere": "Ditulis ke {file}.",
   "advanced.keyEnvWhere": "Config cuma menyimpan nama variabelnya. Export dulu di shell kamu:",

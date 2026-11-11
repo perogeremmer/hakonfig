@@ -1015,6 +1015,24 @@ impl Adapter for PiAdapter {
                 };
                 // Yang bisa dihapus: entri auth.json atau apiKey literal.
                 let key_stored = stored_key.is_some() || inline_key.is_some();
+                // Referensi `$VAR`/`${VAR}` berarti key datang dari environment,
+                // bukan dari file. GUI perlu tahu ini untuk memilih mode key.
+                let (key_mode, key_env) = if stored_key.is_some() || inline_key.is_some() {
+                    ("stored".to_string(), None)
+                } else if let Some(reference) = config_key
+                    .as_deref()
+                    .filter(|value| value.trim_start().starts_with('$'))
+                {
+                    let name = reference
+                        .trim()
+                        .trim_start_matches('$')
+                        .trim_start_matches('{')
+                        .trim_end_matches('}')
+                        .to_string();
+                    ("env".to_string(), Some(name))
+                } else {
+                    ("none".to_string(), None)
+                };
 
                 providers.push(ProviderSummary {
                     id: id.clone(),
@@ -1024,6 +1042,8 @@ impl Adapter for PiAdapter {
                     has_key,
                     key_display,
                     key_stored,
+                    key_mode,
+                    key_env,
                     models: shared::models_from_pi_style(entry),
                     enabled: true,
                     can_toggle: self.supports_toggle(),
@@ -1059,6 +1079,12 @@ impl Adapter for PiAdapter {
                 key_display,
                 // Provider nonaktif: kredensialnya masih tersimpan.
                 key_stored,
+                key_mode: if key_stored {
+                    "stored".to_string()
+                } else {
+                    "none".to_string()
+                },
+                key_env: None,
                 models: shared::models_from_pi_style(&entry),
                 enabled: false,
                 can_toggle: true,

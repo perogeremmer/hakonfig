@@ -520,6 +520,10 @@ fn rows_json(rows: &[Installed]) -> Vec<serde_json::Value> {
                 "api": row.provider.api,
                 "hasKey": row.provider.has_key,
                 "keyDisplay": row.provider.key_display,
+                // Dari mana key datang: `stored` (file), `env` (variabel), atau
+                // `none`. Skrip butuh ini untuk membedakan keduanya.
+                "keyMode": row.provider.key_mode,
+                "keyEnv": row.provider.key_env,
                 "enabled": row.provider.enabled,
                 "isDefault": row.is_default,
                 "models": row.provider.models.iter().map(|model| model.id.clone()).collect::<Vec<_>>(),

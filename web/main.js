@@ -7,7 +7,14 @@ import { esc, renderDiff } from "./diff.js";
 import { icon } from "./icons.js";
 import { t, setLang, getLang, fmtDate } from "./i18n/index.js";
 import { APP_VERSION } from "./version.js";
-import { envVarFor, isRegisteredProvider, registeredApi } from "./provider-form.js";
+import {
+  envVarFor,
+  isRegisteredProvider,
+  keyEnvName,
+  keyFromEnv,
+  keyModeFor,
+  registeredApi,
+} from "./provider-form.js";
 import {
   LOGO_DARK_VARIANT,
   LOGO_EXT_PNG,
@@ -1515,7 +1522,9 @@ function activeHarnessId() {
 function openKeyModal(provider) {
   const harnessId = activeHarnessId();
   const envName = `${provider.id.replace(/[^A-Za-z0-9]+/g, "_").toUpperCase()}_API_KEY`;
-  let mode = provider.keyDisplay?.startsWith("$") ? "env" : "inline";
+  // `keyMode` dari backend menentukan pilihan awal; `keyDisplay` hanya cadangan.
+  let mode = keyModeFor(provider);
+  const envFromKey = keyEnvName(provider);
 
   const { overlay, close } = openModal({
     title: t("provider.changeKeyTitle", { name: provider.name || provider.id }),
@@ -1526,6 +1535,11 @@ function openKeyModal(provider) {
         <div class="rounded-lg bg-surface-muted px-3 py-2 text-sm text-ink-secondary">
           ${esc(t("advanced.keyCurrentLabel"))}
           <span class="selectable font-mono font-semibold text-ink">${esc(provider.keyDisplay ?? t("provider.noKey"))}</span>
+          ${
+            keyFromEnv(provider)
+              ? `<span class="hk-chip hk-chip-neutral ml-1">${esc(t("advanced.keyFromEnvChip"))}</span>`
+              : ""
+          }
         </div>
         <div>
           <label class="hk-label">${esc(t("add.keyLabel"))}</label>
@@ -1546,8 +1560,7 @@ function openKeyModal(provider) {
               class="mt-0.5 accent-[var(--color-brand)]" />
             <span>
               ${esc(t("advanced.keyEnv"))}
-              <span class="selectable font-mono text-xs text-ink-secondary">${esc(envName)}</span>
-            </span>
+              <span class="selectable font-mono text-xs text-ink-secondary">${esc(envFromKey ?? envName)}</span>
           </label>
         </div>
       </div>`,
@@ -2248,12 +2261,19 @@ function renderProviderForm(mode, provider) {
                    ${esc(t("advanced.keyCurrentLabel"))} <span class="selectable font-mono font-semibold text-ink">${esc(
                      provider?.keyDisplay ?? "-",
                    )}</span>
+                   ${
+                     keyFromEnv(provider)
+                       ? `<span class="hk-chip hk-chip-neutral">${esc(t("advanced.keyFromEnvChip"))}</span>`
+                       : ""
+                   }
                  </p>`
               : ""
           }
           <div class="mt-3 space-y-2">
             <label class="flex cursor-pointer items-start gap-2 text-base text-ink">
-              <input type="radio" name="keyMode" value="inline" checked class="mt-0.5 accent-[var(--color-brand)]" />
+              <input type="radio" name="keyMode" value="inline" ${
+                keyModeFor(provider) === "inline" ? "checked" : ""
+              } class="mt-0.5 accent-[var(--color-brand)]" />
               <span>
                 ${esc(t("advanced.keyInline"))}
                 <span data-key-mode-hint="inline" class="mt-0.5 text-sm leading-relaxed text-ink-secondary">${
@@ -2264,7 +2284,9 @@ function renderProviderForm(mode, provider) {
               </span>
             </label>
             <label class="flex cursor-pointer items-start gap-2 text-base text-ink">
-              <input type="radio" name="keyMode" value="env" class="mt-0.5 accent-[var(--color-brand)]" />
+              <input type="radio" name="keyMode" value="env" ${
+                keyModeFor(provider) === "env" ? "checked" : ""
+              } class="mt-0.5 accent-[var(--color-brand)]" />
               <span>
                 ${esc(t("advanced.keyEnv"))}
                 <span data-key-mode-hint="env" class="mt-0.5 text-sm leading-relaxed text-ink-secondary">

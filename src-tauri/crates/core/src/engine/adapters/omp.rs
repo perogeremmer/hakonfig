@@ -223,6 +223,23 @@ impl Adapter for OmpAdapter {
         if let Some(map) = models.data().get("providers").and_then(Value::as_object) {
             for (id, entry) in map {
                 let api_key = get_str(entry, "apiKey");
+                // apiKey bisa literal atau referensi `$VAR`; mode key mengikuti itu.
+                let env_ref = api_key
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| value.starts_with('$'))
+                    .map(|value| {
+                        value
+                            .trim_start_matches('$')
+                            .trim_start_matches('{')
+                            .trim_end_matches('}')
+                            .to_string()
+                    });
+                let stored_key = api_key
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty() && !value.starts_with('$'))
+                    .map(str::to_string);
                 providers.push(ProviderSummary {
                     id: id.clone(),
                     name: get_str(entry, "name").unwrap_or_else(|| id.clone()),
@@ -230,7 +247,15 @@ impl Adapter for OmpAdapter {
                     api: get_str(entry, "api"),
                     has_key: api_key.is_some(),
                     key_display: api_key.map(|k| mask_key(&k)),
-                    key_stored: false,
+                    key_stored: stored_key.is_some(),
+                    key_mode: if stored_key.is_some() {
+                        "stored".to_string()
+                    } else if env_ref.is_some() {
+                        "env".to_string()
+                    } else {
+                        "none".to_string()
+                    },
+                    key_env: env_ref,
                     models: shared::models_from_pi_style(entry),
                     enabled: !disabled.iter().any(|d| d == id),
                     can_toggle: self.supports_toggle(),

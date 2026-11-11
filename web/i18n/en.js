@@ -141,6 +141,7 @@ export default {
   "advanced.baseUrlHelp": "Most endpoints end with /v1.",
   "advanced.apiType": "API type",
   "advanced.keyInline": "Save it in the config file (easiest)",
+  "advanced.keyFromEnvChip": "from environment",
   "advanced.keyEnv": "Use an environment variable",
   "advanced.keyInlineWhere": "Written to {file}.",
   "advanced.keyEnvWhere": "The config only stores the variable name. Export it in your shell first:",

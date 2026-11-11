@@ -61,3 +61,33 @@ export function envVarFor({ provider, typedId, managed }) {
   const trimmed = String(id ?? "").trim();
   return trimmed ? envVarName(trimmed) : "\u2039provider-id\u203a_API_KEY";
 }
+
+/**
+ * Mode key yang harus dipilih saat form dibuka.
+ *
+ * Sumber utamanya `key_mode` dari backend; `key_display` hanya cadangan untuk
+ * data lama. Sebelumnya form selalu memilih "simpan di config", sehingga
+ * provider yang memakai variabel environment terlihat seolah key-nya disimpan
+ * di file.
+ */
+export function keyModeFor(provider) {
+  const mode = String(provider?.keyMode ?? "").trim();
+  if (mode === "env" || mode === "stored" || mode === "none") {
+    return mode === "env" ? "env" : "inline";
+  }
+  return String(provider?.keyDisplay ?? "").trim().startsWith("$") ? "env" : "inline";
+}
+
+/** Nama variabel environment milik provider, kalau ada. */
+export function keyEnvName(provider) {
+  const env = String(provider?.keyEnv ?? "").trim();
+  if (env) return env;
+  const display = String(provider?.keyDisplay ?? "").trim();
+  if (!display.startsWith("$")) return null;
+  return display.replace(/^\$\{?/, "").replace(/\}.*$/, "").replace(/\s.*$/, "") || null;
+}
+
+/** true bila key provider ini datang dari environment, bukan dari file. */
+export function keyFromEnv(provider) {
+  return keyModeFor(provider) === "env";
+}
