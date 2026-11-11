@@ -6,6 +6,29 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.7.3]
+
+### Fixed
+
+- GUI: tombol **Sync models** tidak lagi memaksa menempel API key ketika key-nya
+  sudah ada di environment. Sebelumnya provider yang baru diisi id-nya (belum ada
+  key di config) selalu ditolak dengan "paste the key first", padahal
+  `DEEPSEEK_API_KEY` sudah di-`export` seperti yang disarankan aplikasi.
+- Key dari environment sekarang dibaca juga oleh **shell login** pengguna
+  (`bash -lc`), bukan hanya environment proses aplikasi. Aplikasi desktop yang
+  diluncurkan dari menu tidak mewarisi variabel dari `.bashrc`/`.zshrc`, jadi
+  sebelumnya "export it in your shell" bisa tetap tidak terpakai.
+- Backend: `fetch_models` / `test_connection` mencari key berurutan — yang
+  diketik, key tersimpan di config, variabel environment yang dideklarasikan
+  provider (`apiKey: "$VAR"` / `key_env`), lalu nama konvensional `<ID>_API_KEY`.
+
+### Added
+
+- GUI: status variabel environment di form provider — chip "found in your
+  environment" / "not set in your environment" — supaya jelas apakah tombol sync
+  memakai key dari shell atau memang perlu ditempel.
+- Command Tauri `env_presence` untuk pemeriksaan di atas.
+
 ## [0.7.2]
 
 ### Fixed

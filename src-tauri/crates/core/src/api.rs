@@ -602,8 +602,48 @@ pub fn request_key(
 
     let adapter = harness(harness_id)?;
     let docs = Docs::load(&adapter.specs())?;
+
+    // 1. Key tersimpan (literal atau referensi `$VAR` di config).
     let stored = adapter.stored_key(&docs, provider_id).unwrap_or_default();
-    Ok(resolve_env_key(&stored))
+    let resolved = resolve_env_key(&stored);
+    if !resolved.trim().is_empty() {
+        return Ok(resolved);
+    }
+
+    // 2. Variabel environment yang dideklarasikan config provider ini.
+    let declared_env = adapter.snapshot(&docs).ok().and_then(|snapshot| {
+        snapshot
+            .providers
+            .into_iter()
+            .find(|entry| entry.id == provider_id)
+            .and_then(|entry| entry.key_env)
+    });
+    if let Some(name) = declared_env {
+        if let Some(value) = env_value(&name) {
+            return Ok(value);
+        }
+    }
+
+    // 3. Nama konvensional `<ID>_API_KEY` — persis yang kita sarankan untuk
+    //    di-`export` di shell, jadi key itu harus bisa dipakai tanpa menempel
+    //    ulang di form.
+    let conventional = crate::engine::doc::env_name_from(provider_id);
+    Ok(env_value(&conventional).unwrap_or_default())
+}
+
+/// Status keberadaan environment variable untuk satu daftar nama.
+///
+/// GUI memakainya untuk mengaktifkan tombol sync dan menjelaskan bahwa key
+/// datang dari shell, bukan dari file.
+pub fn env_presence(names: Vec<String>) -> std::collections::BTreeMap<String, bool> {
+    names
+        .into_iter()
+        .filter(|name| !name.trim().is_empty())
+        .map(|name| {
+            let present = env_value(&name).is_some();
+            (name, present)
+        })
+        .collect()
 }
 
 /// API key yang **sudah tersimpan** untuk sebuah provider, tanpa perlu
@@ -764,8 +804,73 @@ fn resolve_env_key(raw: &str) -> String {
         .and_then(|rest| rest.strip_suffix('}'))
         .or_else(|| trimmed.strip_prefix('$'));
     match name {
-        Some(name) if !name.is_empty() => std::env::var(name).unwrap_or_default(),
+        Some(name) if !name.is_empty() => env_value(name).unwrap_or_default(),
         _ => trimmed.to_string(),
+    }
+}
+
+/// Nilai environment variable: proses ini dulu, lalu shell login pengguna.
+///
+/// Aplikasi desktop sering diluncurkan dari menu (bukan dari terminal), jadi
+/// variabel yang di-`export` di `.bashrc`/`.zshrc` tidak ada di environment
+/// prosesnya. Probe lewat shell login memakai aturan yang sama dengan deteksi
+/// versi harness, sehingga "export it in your shell" benar-benar bisa dipakai.
+pub fn env_value(name: &str) -> Option<String> {
+    let name = name.trim();
+    if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return None;
+    }
+    if let Ok(value) = std::env::var(name) {
+        if !value.trim().is_empty() {
+            return Some(value);
+        }
+    }
+
+    let invocation = if cfg!(windows) {
+        format!("printf %s \"%{name}%\"")
+    } else {
+        format!("printf %s \"${{{name}}}\"")
+    };
+    let mut command = if cfg!(windows) {
+        let mut cmd = std::process::Command::new("cmd");
+        cmd.args(["/C", &invocation]);
+        cmd
+    } else {
+        let mut cmd = std::process::Command::new("bash");
+        cmd.args(["-lc", &invocation]);
+        cmd
+    };
+    let mut child = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok()?;
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(4);
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if std::time::Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return None;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(40));
+            }
+            Err(_) => {
+                let _ = child.kill();
+                return None;
+            }
+        }
+    }
+    let output = child.wait_with_output().ok()?;
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        None
+    } else {
+        Some(text)
     }
 }
 

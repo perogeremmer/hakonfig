@@ -29,6 +29,12 @@ pub fn list_harnesses() -> Vec<HarnessInfo> {
     core_api::list_harnesses()
 }
 
+/// Apakah variabel environment ini ada di mesin ini (proses atau shell login).
+#[tauri::command]
+pub fn env_presence(names: Vec<String>) -> std::collections::BTreeMap<String, bool> {
+    core_api::env_presence(names)
+}
+
 /// Dugaan dukungan thinking untuk model yang baru di-sync dari endpoint.
 #[tauri::command]
 pub fn reasoning_hints(

@@ -147,6 +147,7 @@ const api = {
   notices: (harnessId) => invoke("list_notices", { harnessId }),
   reasoningHints: (providerId, modelIds) =>
     invoke("reasoning_hints", { providerId, modelIds }),
+  envPresence: (names) => invoke("env_presence", { names }),
   preview: (harnessId, op) => invoke("preview_edit", { harnessId, op }),
   apply: (harnessId, op) => invoke("apply_edit", { harnessId, op }),
   backups: (harnessId) => invoke("list_backups", { harnessId }),
@@ -2293,6 +2294,7 @@ function renderProviderForm(mode, provider) {
                   ${esc(t("advanced.keyEnvWhere"))} <span data-env-var class="selectable font-mono font-semibold text-ink">${esc(
                     "\u2039provider-id\u203a_API_KEY",
                   )}</span>
+                  <span data-env-status class="ml-1 hidden"></span>
                 </span>
               </span>
             </label>
@@ -2369,7 +2371,12 @@ function renderProviderForm(mode, provider) {
   const harnessId = state.activeId;
   const providerId = provider?.id ?? null;
   const typedKey = () => field("key").value.trim();
-  const canReachEndpoint = () => typedKey().length > 0 || storedKeyAvailable;
+  // Key bisa datang dari tiga tempat: yang diketik, yang tersimpan di config,
+  // atau variabel environment yang sudah di-export di shell. Yang ketiga dulu
+  // tidak dihitung, sehingga tombol sync memaksa menempel key padahal
+  // `DEEPSEEK_API_KEY` sudah ada.
+  let envKeyPresent = isEdit ? provider?.keyMode === "env" && Boolean(provider?.keyEnv) : false;
+  const canReachEndpoint = () => typedKey().length > 0 || storedKeyAvailable || envKeyPresent;
 
   // Provider terdaftar tidak merender field endpoint, jadi nilainya diambil dari
   // provider itu sendiri (sudah sama dengan katalog karena `managed` dicek).
@@ -2513,7 +2520,17 @@ function renderProviderForm(mode, provider) {
         });
       }
       rerender(list);
-      toast(found.length === 1 ? t("add.modelsFoundOne") : t("add.modelsFound", { count: found.length }));
+      // Katakan dari mana key-nya datang: kalau tidak diketik, backend memakai
+      // key tersimpan atau variabel environment, dan pengguna berhak tahu.
+      const usedEnv = !typedKey() && envKeyPresent ? envCandidate() : null;
+      toast(
+        usedEnv
+          ? t("add.syncedWithEnv", { name: usedEnv })
+          : found.length === 1
+            ? t("add.modelsFoundOne")
+            : t("add.modelsFound", { count: found.length }),
+        usedEnv ? { detail: t("add.modelsFound", { count: found.length }) } : {},
+      );
     } catch (error) {
       toast(t("add.modelsFailed"), { variant: "err", detail: String(error) });
     } finally {
@@ -2642,18 +2659,59 @@ function renderProviderForm(mode, provider) {
       hint.style.display = hint.dataset.keyModeHint === mode ? "block" : "none";
     });
   };
+  const envStatus = $("[data-env-status]", overlay);
+  const envCandidate = () => {
+    const typedId = field("providerId") ? field("providerId").value : "";
+    // Kalau provider sudah ada, nama variabelnya datang dari config (bisa beda
+    // dari konvensi); untuk provider baru, pakai konvensi <ID>_API_KEY.
+    return provider?.keyEnv || envVarFor({ provider, typedId, managed }) || "";
+  };
+
   const refreshEnvVar = () => {
     if (!envVarLabel) return;
-    const typedId = field("providerId") ? field("providerId").value : "";
-    envVarLabel.textContent = envVarFor({ provider, typedId, managed });
+    envVarLabel.textContent = envCandidate() || envVarFor({ provider, typedId: "", managed });
+  };
+
+  /**
+   * Cek apakah variabel environment benar-benar ada di mesin ini.
+   *
+   * Aplikasi desktop sering diluncurkan dari menu, jadi environment-nya bukan
+   * environment shell pengguna. Backend yang memutuskan (proses + shell login),
+   * bukan tebakan di UI.
+   */
+  const refreshEnvPresence = async () => {
+    const name = envCandidate();
+    if (!name) {
+      envKeyPresent = false;
+      envStatus?.classList.add("hidden");
+      return;
+    }
+    try {
+      const status = await api.envPresence([name]);
+      envKeyPresent = status?.[name] === true;
+    } catch {
+      envKeyPresent = false;
+    }
+    if (envStatus) {
+      envStatus.textContent = envKeyPresent
+        ? t("advanced.keyEnvDetected")
+        : t("advanced.keyEnvNotSet");
+      envStatus.className = envKeyPresent
+        ? "ml-1 hk-chip hk-chip-ok"
+        : "ml-1 hk-chip hk-chip-warn";
+    }
   };
 
   $$('input[name="keyMode"]', overlay).forEach((radio) => {
     radio.addEventListener("change", refreshKeyMode);
   });
-  field("providerId")?.addEventListener("input", refreshEnvVar);
+  field("providerId")?.addEventListener("input", () => {
+    refreshEnvVar();
+    void refreshEnvPresence();
+  });
   refreshKeyMode();
   refreshEnvVar();
+  void refreshEnvPresence();
 
   $("[data-cancel]", overlay).addEventListener("click", close);
 

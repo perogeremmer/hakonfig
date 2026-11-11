@@ -3279,3 +3279,47 @@ fn pi_summary_reports_where_the_key_comes_from() {
     assert_eq!(none.key_mode, "none");
     assert_eq!(none.key_env, None);
 }
+
+#[test]
+fn request_key_falls_back_to_the_environment_variable() {
+    // Kasus nyata: key belum pernah disimpan di config, tetapi pengguna sudah
+    // `export DEEPSEEK_API_KEY=...` seperti yang disarankan aplikasi.
+    let (_lock, root) = sandbox("key-from-env");
+    let dir = root.join("pi/agent");
+    write(
+        &dir.join("models.json"),
+        r#"{"providers":{"deepseek":{"name":"DeepSeek","baseUrl":"https://api.deepseek.com","api":"openai-completions","apiKey":"$HAKONFIG_TEST_ENV_KEY_DIRECT","models":[{"id":"m1"}]}}}"#,
+    );
+    write(&dir.join("auth.json"), "{}");
+    write(&dir.join("settings.json"), "{}");
+
+    // Unik per test supaya tidak bertabrakan dengan test lain yang paralel.
+    std::env::set_var("HAKONFIG_TEST_ENV_KEY_DIRECT", "sk-dari-environment");
+    let resolved = api::request_key("", Some("pi"), Some("deepseek")).unwrap();
+    assert_eq!(
+        resolved, "sk-dari-environment",
+        "key harus diambil dari environment yang dideklarasikan config"
+    );
+
+    // Nama konvensional <ID>_API_KEY juga harus dikenali.
+    std::env::set_var("DEEPSEEK_API_KEY", "sk-konvensional");
+    std::env::remove_var("HAKONFIG_TEST_ENV_KEY_DIRECT");
+    let resolved = api::request_key("", Some("pi"), Some("deepseek")).unwrap();
+    assert_eq!(resolved, "sk-konvensional");
+    std::env::remove_var("DEEPSEEK_API_KEY");
+}
+
+#[test]
+fn env_presence_reports_which_variables_exist() {
+    std::env::set_var("HAKONFIG_TEST_ENV_PRESENT", "1");
+    std::env::remove_var("HAKONFIG_TEST_ENV_ABSENT");
+    let status = api::env_presence(vec![
+        "HAKONFIG_TEST_ENV_PRESENT".to_string(),
+        "HAKONFIG_TEST_ENV_ABSENT".to_string(),
+        "  ".to_string(),
+    ]);
+    assert_eq!(status.get("HAKONFIG_TEST_ENV_PRESENT"), Some(&true));
+    assert_eq!(status.get("HAKONFIG_TEST_ENV_ABSENT"), Some(&false));
+    assert!(!status.keys().any(|key| key.trim().is_empty()));
+    std::env::remove_var("HAKONFIG_TEST_ENV_PRESENT");
+}

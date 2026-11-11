@@ -28,6 +28,7 @@ fn main() {
             commands::open_external,
             commands::list_notices,
             commands::reasoning_hints,
+            commands::env_presence,
             ui_scale::ui_scale_info,
             ui_scale::set_ui_scale,
         ])
