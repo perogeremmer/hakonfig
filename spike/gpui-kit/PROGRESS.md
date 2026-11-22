@@ -30,7 +30,7 @@ menggabungkannya ke sini agar tidak ada konflik tulis.
 | Tambah provider | 0 | 7 |
 | Diff | 0 | 6 |
 | Riwayat & backup | 2 | 2 |
-| Halaman harness | 0 | 4 |
+| Halaman harness | 3 | 4 |
 | Pengaturan | 0 | 5 |
 | Lintas fitur | 1 | 5 |
 
@@ -47,6 +47,16 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 ```
 
 ## Log
+
+### 2026-11-23 01:10 · repo · berkas config + notice di layar Providers
+- Kerja: kartu "Berkas config" (role, path mono, badge kredensial, ada/belum,
+  klik = buka folder lewat `xdg-open`/`open`/`explorer`), dan kartu temuan
+  dari `api::list_notices` (amber, destructive ditandai merah).
+- File: `src/views/providers.rs`, `src/data.rs`.
+- Verifikasi: build hijau; `docs/ui-light.png`; uji pindah harness ke Hermes
+  (v0.20.1, eksperimental, 2 berkas, auth ditandai kredensial).
+- Catatan: `list_notices` membaca ulang berkas yang sama (±5 ms/harness), jadi
+  digabung ke `HarnessEntry::load` alih-alih panggilan terpisah.
 
 ### 2026-11-23 00:55 · repo · startup dipangkas 3x + layar Riwayat
 - Kerja: (1) `harness_version()` dipindah ke background, config dibaca sinkron

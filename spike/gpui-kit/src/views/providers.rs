@@ -75,6 +75,86 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
         );
     }
 
+    column = column.child(config_files_card(entry, p, cx));
+
+    if !entry.notices.is_empty() {
+        let mut list = v_flex().gap(px(4.));
+        for notice in &entry.notices {
+            list = list.child(
+                h_flex()
+                    .gap(px(8.))
+                    .items_start()
+                    .child(
+                        div()
+                            .w(px(6.))
+                            .h(px(6.))
+                            .mt(px(5.))
+                            .flex_shrink_0()
+                            .rounded_full()
+                            .bg(if notice.destructive {
+                                p.danger
+                            } else {
+                                p.warn_text
+                            }),
+                    )
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap(px(1.))
+                            .child(
+                                div()
+                                    .text_size(px(11.5))
+                                    .text_color(p.warn_text)
+                                    .child(notice.message.clone()),
+                            )
+                            .child(
+                                div()
+                                    .text_size(px(9.5))
+                                    .font_family(palette::MONO)
+                                    .text_color(p.ink_muted)
+                                    .child(format!(
+                                        "{} · {}",
+                                        notice.provider,
+                                        notice.fix.clone().unwrap_or_else(|| {
+                                            "perlu dibereskan manual".into()
+                                        })
+                                    )),
+                            ),
+                    ),
+            );
+        }
+        column = column.child(
+            v_flex()
+                .gap(px(4.))
+                .p(px(10.))
+                .rounded(px(12.))
+                .bg(p.warn_bg)
+                .border_1()
+                .border_color(p.warn_text.opacity(0.25))
+                .child(
+                    h_flex()
+                        .gap(px(6.))
+                        .items_center()
+                        .child(
+                            div()
+                                .text_size(px(9.5))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(p.warn_text)
+                                .child(format!("{} TEMUAN", entry.notices.len())),
+                        )
+                        .child(div().flex_1())
+                        .child(
+                            div()
+                                .text_size(px(9.5))
+                                .text_color(p.warn_text)
+                                .child("aksi perbaikan belum aktif di spike"),
+                        ),
+                )
+                .child(list),
+        );
+    }
+
     if let Some(provider) = entry.snapshot.as_ref().and_then(|s| s.default_provider.clone()) {
         if let Some(model) = entry.snapshot.as_ref().and_then(|s| s.default_model.clone()) {
             column = column.child(default_model_card(p, &provider, &model));
@@ -304,6 +384,126 @@ fn harness_header(
                     )),
             )
         })
+}
+
+/// Berkas config yang dikelola harness ini, dengan tombol buka folder.
+///
+/// Membuka folder memakai perintah OS (`xdg-open`/`open`/`explorer`) — sama
+/// seperti tombol "open folder" di GUI web, tanpa menambah dependency.
+fn config_files_card(
+    entry: &HarnessEntry,
+    p: &Palette,
+    _cx: &mut Context<App>,
+) -> impl IntoElement {
+    let files = entry
+        .snapshot
+        .as_ref()
+        .map(|s| s.files.clone())
+        .unwrap_or_default();
+
+    let mut rows = v_flex().gap(px(2.));
+    for file in files {
+        let dir = std::path::Path::new(&file.path)
+            .parent()
+            .map(|d| d.display().to_string())
+            .unwrap_or_else(|| file.path.clone());
+        rows = rows.child(
+            h_flex()
+                .id(ElementId::Name(format!("open-{}", file.path).into()))
+                .gap(px(8.))
+                .items_center()
+                .px(px(8.))
+                .py(px(4.))
+                .rounded(px(7.))
+                .cursor_pointer()
+                .hover(|s| s.bg(p.surface_muted))
+                .on_click(move |_, _, _| open_folder(&dir))
+                .child(
+                    div()
+                        .w(px(96.))
+                        .flex_shrink_0()
+                        .text_size(px(11.))
+                        .text_color(p.ink_secondary)
+                        .child(file.role.clone()),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(10.))
+                        .font_family(palette::MONO)
+                        .text_color(p.ink_muted)
+                        .child(file.path.clone()),
+                )
+                .when(file.sensitive, |s| {
+                    s.child(
+                        div()
+                            .px(px(5.))
+                            .rounded(px(4.))
+                            .bg(p.warn_bg)
+                            .text_color(p.warn_text)
+                            .text_size(px(9.))
+                            .child("kredensial"),
+                    )
+                })
+                .child(
+                    div()
+                        .px(px(5.))
+                        .rounded(px(4.))
+                        .bg(if file.exists { p.ok_bg } else { p.neutral_bg })
+                        .text_color(if file.exists { p.ok_text } else { p.neutral_text })
+                        .text_size(px(9.))
+                        .child(if file.exists { "ada" } else { "belum ada" }),
+                )
+                .child(
+                    div()
+                        .text_size(px(9.5))
+                        .text_color(p.ink_muted)
+                        .child("buka folder"),
+                ),
+        );
+    }
+
+    v_flex()
+        .gap(px(4.))
+        .p(px(10.))
+        .rounded(px(12.))
+        .bg(p.surface)
+        .border_1()
+        .border_color(p.line)
+        .shadow_2xs()
+        .child(
+            h_flex()
+                .px(px(8.))
+                .gap(px(6.))
+                .items_center()
+                .child(
+                    div()
+                        .text_size(px(9.5))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.ink_muted)
+                        .child("BERKAS CONFIG"),
+                )
+                .child(div().flex_1())
+                .child(
+                    div()
+                        .text_size(px(9.5))
+                        .text_color(p.ink_muted)
+                        .child("klik untuk membuka folder"),
+                ),
+        )
+        .child(rows)
+}
+
+fn open_folder(dir: &str) {
+    #[cfg(target_os = "linux")]
+    let cmd = "xdg-open";
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(target_os = "windows")]
+    let cmd = "explorer";
+    let _ = std::process::Command::new(cmd).arg(dir).spawn();
 }
 
 fn default_model_card(p: &Palette, provider: &str, model: &str) -> impl IntoElement {

@@ -78,8 +78,8 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 
 | ID | Fitur | Status | File |
 |----|-------|--------|------|
-| F25 | Panel berkas config: path, ada/tidak, sensitif, tombol buka folder | [ ] | `views/harness.rs` |
-| F26 | Notices: daftar masalah config + aksi perbaikan (preview saja) | [ ] | `views/harness.rs` |
+| F25 | Panel berkas config: path, ada/tidak, sensitif, buka folder | [x] | `views/providers.rs` |
+| F26 | Notices: daftar masalah config (aksi perbaikan belum aktif) | [x] | `views/providers.rs` |
 | F27 | Install/uninstall tool dengan log streaming + progress | [ ] | `views/harness.rs` |
 | F28 | Deteksi versi tool di background, tidak di jalur frame pertama | [x] | `src/data.rs` |
 

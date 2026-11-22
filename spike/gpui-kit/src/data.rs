@@ -7,7 +7,7 @@ use std::time::Instant;
 
 
 use hakonfig_core::api;
-use hakonfig_core::engine::model::HarnessSnapshot;
+use hakonfig_core::engine::model::{HarnessSnapshot, Notice};
 
 pub struct HarnessEntry {
     pub id: String,
@@ -19,6 +19,7 @@ pub struct HarnessEntry {
     pub version: Option<String>,
     pub config_path: String,
     pub snapshot: Option<HarnessSnapshot>,
+    pub notices: Vec<Notice>,
     pub error: Option<String>,
     /// (baca config, deteksi versi tool) dalam milidetik.
     pub timings: (u128, u128),
@@ -43,7 +44,13 @@ impl HarnessEntry {
         };
         let read_ms = t_read.elapsed().as_millis();
 
+        // Notice = hal di config yang membuat provider/model tidak terlihat
+        // harness. Murah (membaca berkas yang sama) dan penting untuk ditampilkan
+        // sebelum pengguna bingung "sudah ditulis tapi tidak muncul".
+        let notices = api::list_notices(Some(id.clone())).unwrap_or_default();
+
         Self {
+            notices,
             timings: (read_ms, 0),
             version: None,
             config_path: info
