@@ -9,9 +9,12 @@ Tujuannya menjawab dua pertanyaan dengan bukti, bukan opini:
    **Cukup jauh** — palet, font, kartu provider, tema gelap, dialog, toast,
    tabel diff semua native.
 
-![Providers](docs/ui-light.png)
-![Tema gelap](docs/ui-dark.png)
-![Riwayat](docs/ui-history.png)
+| | |
+|---|---|
+| ![Providers](docs/ui-light.png) | ![Tema gelap](docs/ui-dark.png) |
+| ![Diff](docs/ui-diff.png) | ![Pengaturan](docs/ui-settings.png) |
+| ![Tambah 1](docs/ui-add-1.png) | ![Tambah 3](docs/ui-add-3.png) |
+| ![Riwayat](docs/ui-history.png) | ![Pengaturan gelap](docs/ui-settings-dark.png) |
 
 ## Jalankan
 
@@ -50,9 +53,9 @@ sudah tampil).
 | Berkas config + tombol buka folder | selesai | `src/views/providers.rs` |
 | Notice/temuan dari `api::list_notices` | selesai | `src/views/providers.rs` |
 | Riwayat backup + dialog restore | selesai | `src/views/history.rs` |
-| Tambah provider (3 langkah) | dikerjakan agent | `src/views/add.rs` |
-| Diff per file | dikerjakan agent | `src/views/diff.rs` |
-| Pengaturan: tema, bahasa, diagnostik | dikerjakan agent | `src/views/settings.rs` |
+| Tambah provider: preset → key → model → pratinjau | selesai | `src/views/add.rs` |
+| Diff per file: tab, gutter, warna, masking, Apply nonaktif | selesai | `src/views/diff.rs` |
+| Pengaturan: tema, bahasa (ID/EN), diagnostik, tentang | selesai | `src/views/settings.rs` |
 
 Rincian 38 butir + status: [`FEATURES.md`](FEATURES.md). Log kerja: [`PROGRESS.md`](PROGRESS.md).
 

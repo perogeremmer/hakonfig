@@ -38,11 +38,11 @@ cd spike/gpui-kit
 |---|---|---|
 | Shell & navigasi | 5 | 5 |
 | Providers | 7 | 9 |
-| Tambah provider | 0 | 7 |
-| Diff | 0 | 6 |
+| Tambah provider | 7 | 7 |
+| Diff | 6 | 6 |
 | Riwayat & backup | 2 | 2 |
 | Halaman harness | 3 | 4 |
-| Pengaturan | 0 | 5 |
+| Pengaturan | 5 | 5 |
 | Lintas fitur | 1 | 5 |
 
 ## Verifikasi cepat
@@ -58,6 +58,21 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 ```
 
 ## Log
+
+### 2026-11-23 01:05 · agent/add, agent/diff, agent/settings + repo · tiga layar terakhir
+- Kerja: tiga agent paralel (worktree terpisah) mengisi `add.rs` (1.168 baris),
+  `diff.rs` (675 baris), `settings.rs` (479 baris). Pemilik repo menggabungkan,
+  membetulkan import yang salah (`EditOp`/`KeyMode`/`ProviderDraft` ada di
+  `engine::model`, bukan `api`), `px(11)` → `px(11.)`, dan `.disabled(...)` yang
+  tidak ada di `Stateful<Div>` → `opacity` + guard di handler.
+- Verifikasi manual tiap layar (screenshot di `docs/ui-*.png`): stepper 1-2-3
+  dengan 61 preset, mode key inline/env (`GROQ_API_KEY`), picker model dengan
+  context window + reasoning, ringkasan pratinjau ("0 file baru, 2 file diubah"
+  + warning core), diff nyata `models.json` (+13 −0) dan `settings.json` (+2 −1),
+  pengaturan dengan toggle tema yang me-repaint seluruh shell.
+- Kendala: build dingin di tiga worktree sekaligus menghabiskan >15 menit/orang;
+  agent diff menemukan bug porting nyata (slice JS inklusif vs Rust eksklusif,
+  masking yang ikut menelan `max_tokens`).
 
 ### 2026-11-23 00:45 · repo · Ctrl+K gagal, dicatat sebagai blocker
 - Kerja: coba pintasan keyboard lewat `cx.on_action(TypeId, window, ...)` +

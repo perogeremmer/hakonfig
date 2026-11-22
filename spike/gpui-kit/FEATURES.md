@@ -48,24 +48,24 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 
 | ID | Fitur | Status | File |
 |----|-------|--------|------|
-| F10 | Picker preset: 61 provider dari `api::list_presets()` + kartu Custom, dengan pencarian | [ ] | `views/add.rs` |
-| F11 | Langkah key: mode simpan vs env (nama otomatis `<ID>_API_KEY`), input tersamarkan | [ ] | `views/add.rs` |
-| F12 | "Test & find models": panggil endpoint provider, tampilkan ok/gagal + latensi + contoh model | [ ] | `views/add.rs` |
-| F13 | Picker model: multi-pilih, cari, tandai context window + reasoning, pilih semua/kosongkan | [ ] | `views/add.rs` |
-| F14 | Form lanjutan untuk Custom: id, display name, base URL, api type + validasi | [ ] | `views/add.rs` |
-| F15 | Ringkasan + tombol "Pratinjau diff" yang memanggil `api::preview_edit` (bukan apply) | [ ] | `views/add.rs` |
-| F16 | Stepper 1-2-3, tombol kembali, state tidak hilang saat pindah langkah | [ ] | `views/add.rs` |
+| F10 | Picker preset: 61 provider dari `api::list_presets()` + kartu Custom, dengan pencarian | [x] | `views/add.rs` |
+| F11 | Langkah key: mode simpan vs env (nama otomatis `<ID>_API_KEY`), input tersamarkan | [x] | `views/add.rs` |
+| F12 | "Test & find models": panggil endpoint provider, tampilkan ok/gagal + latensi + contoh model | [x] | `views/add.rs` |
+| F13 | Picker model: multi-pilih, cari, tandai context window + reasoning, pilih semua/kosongkan | [x] | `views/add.rs` |
+| F14 | Form lanjutan untuk Custom: id, display name, base URL, api type + validasi | [x] | `views/add.rs` |
+| F15 | Ringkasan + tombol "Pratinjau diff" yang memanggil `api::preview_edit` (bukan apply) | [x] | `views/add.rs` |
+| F16 | Stepper 1-2-3, tombol kembali, state tidak hilang saat pindah langkah | [x] | `views/add.rs` |
 
 ## D. Diff (pratinjau sebelum tulis)
 
 | ID | Fitur | Status | File |
 |----|-------|--------|------|
-| F17 | Tab per file + jumlah baris +/- per file | [ ] | `views/diff.rs` |
-| F18 | Render unified diff: warna tambah/hapus, nomor baris, konteks, monospace | [ ] | `views/diff.rs` |
-| F19 | Secret dimasking di dalam diff | [ ] | `views/diff.rs` |
-| F20 | Empty state "tidak ada perubahan" | [ ] | `views/diff.rs` |
-| F21 | Sumber diff read-only: `api::preview_edit` dari EditOp demo | [ ] | `views/diff.rs` |
-| F22 | Tombol Apply ada tapi nonaktif + alasan ("spike read-only") | [ ] | `views/diff.rs` |
+| F17 | Tab per file + jumlah baris +/- per file | [x] | `views/diff.rs` |
+| F18 | Render unified diff: warna tambah/hapus, nomor baris, konteks, monospace | [x] | `views/diff.rs` |
+| F19 | Secret dimasking di dalam diff | [x] | `views/diff.rs` |
+| F20 | Empty state "tidak ada perubahan" | [x] | `views/diff.rs` |
+| F21 | Sumber diff read-only: `api::preview_edit` dari EditOp demo | [x] | `views/diff.rs` |
+| F22 | Tombol Apply ada tapi nonaktif + alasan ("spike read-only") | [x] | `views/diff.rs` |
 
 ## E. Riwayat & backup
 
@@ -87,11 +87,11 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 
 | ID | Fitur | Status | File |
 |----|-------|--------|------|
-| F29 | Tema: terang / gelap / ikut sistem | [ ] | `views/settings.rs` |
-| F30 | Bahasa: Indonesia / English (port subset `web/i18n`) | [ ] | `views/settings.rs` |
-| F31 | Skala tampilan: catat bahwa zoom CSS tidak relevan di native, pakai DPI OS | [ ] | `views/settings.rs` |
-| F32 | Diagnostik: timing baca config vs probe versi, jumlah harness/provider/model, RSS | [ ] | `views/settings.rs` |
-| F33 | Tentang: versi, lisensi, tautan repo | [ ] | `views/settings.rs` |
+| F29 | Tema: terang / gelap / ikut sistem | [x] | `views/settings.rs` |
+| F30 | Bahasa: Indonesia / English (port subset `web/i18n`) | [x] | `views/settings.rs` |
+| F31 | Skala tampilan: catat bahwa zoom CSS tidak relevan di native, pakai DPI OS | [x] | `views/settings.rs` |
+| F32 | Diagnostik: timing baca config vs probe versi, jumlah harness/provider/model, RSS | [x] | `views/settings.rs` |
+| F33 | Tentang: versi, lisensi, tautan repo | [x] | `views/settings.rs` |
 
 ## H. Lintas fitur
 
