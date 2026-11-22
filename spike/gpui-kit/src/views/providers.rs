@@ -1,0 +1,427 @@
+//! Layar Providers: header harness, kartu default model, grid kartu provider,
+//! pencarian, dan footer status. Semua data dari `App` (yang membacanya lewat
+//! `hakonfig_core::api`).
+
+use gpui_kit::component::{
+    Sizable,
+    button::Button,
+    h_flex,
+    input::Input,
+    switch::Switch,
+    v_flex,
+};
+use gpui_kit::prelude::*;
+use gpui_kit::*;
+use hakonfig_core::engine::model::ProviderSummary;
+
+use crate::app::App;
+use crate::data::{monogram, HarnessEntry};
+use crate::palette::{self, Palette};
+
+pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement {
+    let mut column = v_flex().flex_1().min_w_0().min_h_0().p(px(20.)).gap(px(12.));
+
+    let Some(entry) = app.active() else {
+        return column
+            .child(div().text_size(px(10.)).text_color(p.ink_muted).child("MEMUAT"))
+            .child(
+                div()
+                    .text_size(px(15.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .child("Membaca konfigurasi harness…"),
+            );
+    };
+
+    column = column.child(harness_header(app, p, entry, cx));
+
+    if let Some(err) = &entry.error {
+        column = column.child(
+            div()
+                .p(px(12.))
+                .rounded(px(10.))
+                .bg(p.warn_bg)
+                .text_color(p.warn_text)
+                .text_size(px(12.))
+                .child(err.clone()),
+        );
+    }
+
+    if let Some(provider) = entry.snapshot.as_ref().and_then(|s| s.default_provider.clone()) {
+        if let Some(model) = entry.snapshot.as_ref().and_then(|s| s.default_model.clone()) {
+            column = column.child(default_model_card(p, &provider, &model));
+        }
+    }
+
+    let providers = app.visible_providers();
+    column = column.child(
+        h_flex()
+            .gap(px(8.))
+            .items_center()
+            .child(
+                div()
+                    .text_size(px(14.))
+                    .font_weight(FontWeight::BOLD)
+                    .child("Providers"),
+            )
+            .child(
+                div()
+                    .px(px(7.))
+                    .py(px(1.))
+                    .rounded_full()
+                    .bg(p.neutral_bg)
+                    .text_color(p.neutral_text)
+                    .text_size(px(10.5))
+                    .child(entry.provider_count.to_string()),
+            )
+            .child(div().flex_1())
+            .child(div().w(px(280.)).child(Input::new(&app.query).small())),
+    );
+
+    let mut grid = h_flex().flex_wrap().gap(px(12.)).items_start();
+    if providers.is_empty() && entry.error.is_none() {
+        grid = grid.child(
+            v_flex()
+                .w_full()
+                .py(px(30.))
+                .items_center()
+                .gap(px(4.))
+                .child(
+                    div()
+                        .text_size(px(13.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(if app.query_text.trim().is_empty() {
+                            "Belum ada provider di harness ini."
+                        } else {
+                            "Tidak ada provider yang cocok."
+                        }),
+                )
+                .child(
+                    div()
+                        .text_size(px(11.5))
+                        .text_color(p.ink_muted)
+                        .child(if app.query_text.trim().is_empty() {
+                            "Tambahkan provider lewat form tiga langkah."
+                        } else {
+                            "Coba kata kunci lain, misalnya nama provider."
+                        }),
+                ),
+        );
+    }
+    for (ix, provider) in providers {
+        grid = grid.child(provider_card(app, p, ix, provider, cx));
+    }
+    column = column.child(
+        v_flex()
+            .id("providers-scroll")
+            .flex_1()
+            .min_h_0()
+            .overflow_y_scroll()
+            .child(grid),
+    );
+
+    column.child(
+        h_flex()
+            .flex_shrink_0()
+            .pt(px(4.))
+            .gap(px(6.))
+            .items_center()
+            .text_size(px(10.5))
+            .text_color(p.ink_muted)
+            .child("Spike read-only — tidak ada file yang ditulis.")
+            .when(app.dirty > 0, |s| {
+                s.child(
+                    div()
+                        .px(px(6.))
+                        .py(px(1.))
+                        .rounded_full()
+                        .bg(p.warn_bg)
+                        .text_color(p.warn_text)
+                        .child(format!("{} perubahan lokal", app.dirty)),
+                )
+            }),
+    )
+}
+
+fn harness_header(
+    app: &App,
+    p: &Palette,
+    entry: &HarnessEntry,
+    cx: &mut Context<App>,
+) -> impl IntoElement {
+    v_flex()
+        .gap(px(3.))
+        .child(
+            h_flex()
+                .gap(px(12.))
+                .items_center()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(36.))
+                        .rounded(px(10.))
+                        .bg(p.brand_soft)
+                        .text_color(p.brand_text)
+                        .text_size(px(13.))
+                        .font_weight(FontWeight::BOLD)
+                        .child(monogram(&entry.name, &entry.id)),
+                )
+                .child(
+                    h_flex()
+                        .gap(px(8.))
+                        .items_center()
+                        .child(
+                            div()
+                                .text_size(px(20.))
+                                .font_weight(FontWeight::BOLD)
+                                .child(entry.name.clone()),
+                        )
+                        .when_some(entry.version.clone(), |s, v| {
+                            s.child(
+                                div()
+                                    .px(px(7.))
+                                    .py(px(1.))
+                                    .rounded_full()
+                                    .bg(p.neutral_bg)
+                                    .text_color(p.neutral_text)
+                                    .text_size(px(10.5))
+                                    .font_family(palette::MONO)
+                                    .child(v),
+                            )
+                        })
+                        .child(
+                            div()
+                                .text_size(px(11.5))
+                                .text_color(p.ink_muted)
+                                .child(format!(
+                                    "{} provider · {} model",
+                                    entry.provider_count,
+                                    entry.model_count()
+                                )),
+                        )
+                        .when(entry.experimental, |s| {
+                            s.child(
+                                div()
+                                    .px(px(7.))
+                                    .py(px(1.))
+                                    .rounded_full()
+                                    .bg(p.warn_bg)
+                                    .text_color(p.warn_text)
+                                    .text_size(px(10.5))
+                                    .child("eksperimental"),
+                            )
+                        }),
+                )
+                .child(div().flex_1())
+                .child(
+                    Button::new("refresh")
+                        .small()
+                        .label("Refresh")
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                ),
+        )
+        .child(
+            div()
+                .pl(px(48.))
+                .text_size(px(11.))
+                .font_family(palette::MONO)
+                .text_color(p.ink_muted)
+                .truncate()
+                .child(entry.config_path.clone()),
+        )
+        .when(app.load_ms > 0, |s| {
+            s.child(
+                div()
+                    .pl(px(48.))
+                    .text_size(px(10.))
+                    .text_color(p.ink_muted)
+                    .child(format!(
+                        "{} ms baca config · versi {} ms",
+                        entry.timings.0, entry.timings.1
+                    )),
+            )
+        })
+}
+
+fn default_model_card(p: &Palette, provider: &str, model: &str) -> impl IntoElement {
+    v_flex()
+        .gap(px(3.))
+        .p(px(14.))
+        .rounded(px(12.))
+        .bg(p.surface)
+        .border_1()
+        .border_color(p.line)
+        .shadow_2xs()
+        .child(
+            div()
+                .text_size(px(10.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.ink_muted)
+                .child("DEFAULT MODEL"),
+        )
+        .child(
+            h_flex()
+                .gap(px(8.))
+                .items_center()
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(p.brand_text)
+                        .child(provider.to_string()),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .font_family(palette::MONO)
+                        .text_color(p.ink_secondary)
+                        .truncate()
+                        .child(model.to_string()),
+                ),
+        )
+}
+
+fn provider_card(
+    app: &App,
+    p: &Palette,
+    ix: usize,
+    provider: ProviderSummary,
+    cx: &mut Context<App>,
+) -> impl IntoElement {
+    let _ = app;
+    let key_mode_env = provider.key_mode == "env";
+    let enabled = provider.enabled;
+
+    let (key_label, key_bg, key_fg) = if key_mode_env {
+        (
+            format!(
+                "env · {}",
+                provider.key_env.clone().unwrap_or_else(|| "—".into())
+            ),
+            p.neutral_bg,
+            p.neutral_text,
+        )
+    } else if provider.has_key {
+        ("✓ key tersimpan".to_string(), p.ok_bg, p.ok_text)
+    } else {
+        ("tanpa key".to_string(), p.neutral_bg, p.neutral_text)
+    };
+
+    v_flex()
+        .id(format!("provider-{}", provider.id))
+        .w(px(276.))
+        .gap(px(10.))
+        .p(px(13.))
+        .rounded(px(14.))
+        .bg(p.surface)
+        .border_1()
+        .border_color(p.line)
+        .shadow_2xs()
+        .hover(|s| s.border_color(p.line_strong))
+        .when(!enabled, |s| s.opacity(0.62))
+        .child(
+            h_flex()
+                .gap(px(9.))
+                .items_center()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(28.))
+                        .flex_shrink_0()
+                        .rounded(px(8.))
+                        .bg(p.brand_soft)
+                        .text_color(p.brand_text)
+                        .text_size(px(10.))
+                        .font_weight(FontWeight::BOLD)
+                        .child(monogram(&provider.name, &provider.id)),
+                )
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .child(
+                            h_flex()
+                                .gap(px(5.))
+                                .items_center()
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_size(px(12.5))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(provider.name.clone()),
+                                )
+                                .when(!enabled, |s| {
+                                    s.child(
+                                        div()
+                                            .px(px(5.))
+                                            .rounded(px(4.))
+                                            .bg(p.neutral_bg)
+                                            .text_color(p.neutral_text)
+                                            .text_size(px(9.5))
+                                            .child("nonaktif"),
+                                    )
+                                }),
+                        )
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(10.))
+                                .font_family(palette::MONO)
+                                .text_color(p.ink_muted)
+                                .child(provider.id.clone()),
+                        ),
+                )
+                .child(
+                    Switch::new(("sw", ix))
+                        .small()
+                        .checked(enabled)
+                        .on_change(cx.listener(move |this, checked: &bool, _, cx| {
+                            if let Some(snap) = this
+                                .entries
+                                .get_mut(this.selected)
+                                .and_then(|e| e.snapshot.as_mut())
+                            {
+                                if let Some(target) = snap.providers.get_mut(ix) {
+                                    target.enabled = *checked;
+                                    this.dirty += 1;
+                                }
+                            }
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(div().h(px(1.)).w_full().bg(p.line))
+        .child(
+            h_flex()
+                .gap(px(6.))
+                .items_center()
+                .child(
+                    div()
+                        .text_size(px(10.5))
+                        .text_color(p.ink_secondary)
+                        .child(format!("{} model", provider.models.len())),
+                )
+                .child(div().flex_1())
+                .child(
+                    div()
+                        .px(px(6.))
+                        .py(px(2.))
+                        .rounded(px(5.))
+                        .bg(key_bg)
+                        .text_color(key_fg)
+                        .text_size(px(9.5))
+                        .child(key_label),
+                ),
+        )
+        .child(
+            div()
+                .truncate()
+                .text_size(px(10.))
+                .font_family(palette::MONO)
+                .text_color(p.ink_muted)
+                .child(provider.base_url.clone().unwrap_or_else(|| "—".into())),
+        )
+}
