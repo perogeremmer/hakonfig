@@ -301,7 +301,10 @@ impl Spike {
                                     .text_color(muted)
                                     .truncate()
                                     .child(if installed {
-                                        format!("{} provider", entry.provider_count)
+                                        format!(
+                                            "{} provider · {} key",
+                                            entry.provider_count, entry.connected_count
+                                        )
                                     } else {
                                         "belum terpasang".to_string()
                                     }),
