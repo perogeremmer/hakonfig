@@ -2660,6 +2660,7 @@ dependencies = [
  "anyhow",
  "gpui-kit",
  "hakonfig-core",
+ "tokio",
 ]
 
 [[package]]

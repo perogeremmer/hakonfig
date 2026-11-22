@@ -6,7 +6,7 @@ use std::time::Instant;
 
 use gpui_kit::component::{
     Sizable,
-    button::{Button, ButtonVariants as _},
+    button::Button,
     h_flex,
     input::{InputEvent, InputState},
     v_flex,
@@ -16,7 +16,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::*;
 use hakonfig_core::engine::model::ProviderSummary;
 
-use crate::data::{load_all, monogram, HarnessEntry};
+use crate::data::{load_all, monogram, HarnessEntry, Metrics};
 use crate::palette::{self, Palette};
 use crate::views::{add::AddView, diff::DiffView, providers, settings::SettingsView};
 
@@ -148,6 +148,9 @@ impl App {
     }
 
     fn sync_views(&mut self, cx: &mut Context<Self>) {
+        let metrics = Metrics::of(&self.entries, self.load_ms, self.data_ready_ms);
+        self.settings
+            .update(cx, |v, cx| v.set_metrics(metrics, cx));
         let id = self.active_id();
         self.add.update(cx, |v, cx| v.set_harness(id.clone(), cx));
         self.diff.update(cx, |v, cx| v.set_harness(id.clone(), cx));

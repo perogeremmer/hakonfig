@@ -9,13 +9,21 @@ use gpui_kit::*;
 
 pub struct SettingsView {
     pub harness: String,
+    /// Angka hasil load terakhir; diisi `App::sync_views`.
+    pub metrics: crate::data::Metrics,
 }
 
 impl SettingsView {
     pub fn new(_cx: &mut Context<Self>) -> Self {
         Self {
             harness: String::new(),
+            metrics: crate::data::Metrics::default(),
         }
+    }
+
+    pub fn set_metrics(&mut self, metrics: crate::data::Metrics, cx: &mut Context<Self>) {
+        self.metrics = metrics;
+        cx.notify();
     }
 
     pub fn set_harness(&mut self, harness: String, cx: &mut Context<Self>) {

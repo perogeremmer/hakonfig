@@ -5,6 +5,7 @@
 
 use std::time::Instant;
 
+
 use hakonfig_core::api;
 use hakonfig_core::engine::model::HarnessSnapshot;
 
@@ -106,3 +107,27 @@ pub fn monogram(name: &str, id: &str) -> String {
     };
     source.chars().take(2).collect::<String>().to_uppercase()
 }
+
+/// Ringkasan hasil load terakhir, dibagikan ke view lain lewat setter
+/// (`SettingsView::set_metrics`) alih-alih global GPUI.
+#[derive(Clone, Copy, Default)]
+pub struct Metrics {
+    pub load_ms: u128,
+    pub data_ready_ms: Option<u128>,
+    pub harnesses: usize,
+    pub providers: usize,
+    pub models: usize,
+}
+
+impl Metrics {
+    pub fn of(entries: &[HarnessEntry], load_ms: u128, ready: Option<u128>) -> Self {
+        Self {
+            load_ms,
+            data_ready_ms: ready,
+            harnesses: entries.len(),
+            providers: entries.iter().map(|e| e.provider_count).sum(),
+            models: entries.iter().map(HarnessEntry::model_count).sum(),
+        }
+    }
+}
+

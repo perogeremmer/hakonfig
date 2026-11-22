@@ -8,6 +8,7 @@ publish = false
 gpui-kit = "0.10.0"
 hakonfig-core = { path = "../../src-tauri/crates/core" }
 anyhow = "1"
+tokio = { version = "1", features = ["rt", "time"] }
 
 [profile.dev]
 opt-level = 1

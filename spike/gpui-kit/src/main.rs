@@ -10,6 +10,7 @@
 
 mod app;
 mod data;
+mod net;
 mod palette;
 mod views;
 
