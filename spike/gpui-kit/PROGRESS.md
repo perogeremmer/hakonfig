@@ -48,7 +48,7 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
-### 2026-11-23 01:20 · repo · menu aksi provider + toast
+### 2026-11-23 00:37 · repo · menu aksi provider + toast
 - Kerja: tombol `…` per kartu provider membuka dialog berisi 6 aksi (Edit,
   Kelola model, Jadikan default, (Non)aktifkan, Lupakan kredensial, Hapus),
   masing-masing menyebut `EditOp` yang akan dipakai. Semua sengaja tidak
@@ -58,7 +58,7 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
   harus dibangun DI DALAM closure (`Div` tidak Clone) — ini penyebab error
   pertama saat menulis menu ini.
 
-### 2026-11-23 01:10 · repo · berkas config + notice di layar Providers
+### 2026-11-23 00:25 · repo · berkas config + notice di layar Providers
 - Kerja: kartu "Berkas config" (role, path mono, badge kredensial, ada/belum,
   klik = buka folder lewat `xdg-open`/`open`/`explorer`), dan kartu temuan
   dari `api::list_notices` (amber, destructive ditandai merah).
@@ -68,7 +68,7 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 - Catatan: `list_notices` membaca ulang berkas yang sama (±5 ms/harness), jadi
   digabung ke `HarnessEntry::load` alih-alih panggilan terpisah.
 
-### 2026-11-23 00:55 · repo · startup dipangkas 3x + layar Riwayat
+### 2026-11-23 00:10 · repo · startup dipangkas 3x + layar Riwayat
 - Kerja: (1) `harness_version()` dipindah ke background, config dibaca sinkron
   (40–52 ms). (2) View `Riwayat` baru: daftar backup nyata dari
   `api::list_backups`, dialog konfirmasi restore (eksekusi nonaktif).
