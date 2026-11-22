@@ -13,15 +13,15 @@ mesin ini (Linux, X11, Rust 1.95.0, release tanpa LTO), bukan perkiraan.
 2. **Tampilan bisa setara.** Font bundel, palet hangat, kartu provider, dark mode,
    dialog, toast, tabel diff — semuanya native, tanpa webview.
 3. **Distribusi Linux jauh lebih ringan** dari sisi dependency: tidak ada
-   GTK3/WebKitGTK. Binary 54 MB (42 MB strip) vs 6,3 MB + WebKitGTK 2.50 sistem.
+   GTK3/WebKitGTK. Binary 59 MB (46 MB strip) vs 6,3 MB + WebKitGTK 2.50 sistem.
 
 ## Yang TIDAK terbukti
 
 1. **"Lebih cepat karena native."** Tidak. Bottleneck startup adalah
    `harness_version()` (spawn `<bin> --version`, ±1.000 ms dari total ±1,3 s),
    dan itu identik di Tauri. Setelah dipindah ke background: frame pertama
-   ±340 ms — perbaikan itu bisa dilakukan di GUI Tauri sekarang juga.
-2. **"Lebih hemat memori."** Hanya 119 MB vs 144 MB (−17%).
+   236–387 ms — perbaikan itu bisa dilakukan di GUI Tauri sekarang juga.
+2. **"Lebih hemat memori."** Hanya 128 MB vs 144 MB (−11%).
 3. **"Iterasi lebih enak."** Tidak. Ubah CSS = simpan; ubah Rust = recompile.
    Untuk aplikasi yang isinya form/list/diff, HTML+Tailwind lebih cepat
    dikerjakan.

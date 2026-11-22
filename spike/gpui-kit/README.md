@@ -33,17 +33,17 @@ taut lokal kalau paket dev `libxkbcommon-x11` belum terpasang.
 
 | | Tauri 0.7.3 | Spike GPUI Kit |
 |---|---|---|
-| Binary | **6,3 MB** | 54 MB (42 MB di-strip) |
+| Binary | **6,3 MB** | 59 MB (46 MB di-strip) |
 | Dependency sistem | GTK3 + **WebKitGTK 2.50** | libxcb, libxkbcommon, libc |
-| Jendela tampil | **64–84 ms** | ±110 ms |
-| Frame pertama berisi data | — | **307–387 ms** |
-| RSS | 144 MB | **119 MB** |
+| Jendela tampil | 64–84 ms | **17–19 ms** |
+| Frame pertama berisi data | — | **236 ms** |
+| RSS | 144 MB | **128 MB** |
 
-Yang lebih penting dari tabel: **baca 4 config = 40–52 ms**, sedangkan
+Yang lebih penting dari tabel: **baca 4 config = 29–52 ms**, sedangkan
 `harness_version()` (spawn `<bin> --version`) memakan **±1.000 ms** dan identik di
 Tauri. Jadi bottleneck startup bukan renderer. Setelah probe versi dipindah ke
-background, frame pertama turun dari 1.178 ms (layar kosong) ke ±340 ms (data
-sudah tampil).
+background, frame pertama turun dari 1.178 ms (layar kosong) ke 236–387 ms
+(data sudah tampil).
 
 ## Isi
 

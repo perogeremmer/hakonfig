@@ -59,6 +59,12 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-23 01:15 · repo · angka final (CPU idle, release)
+- Frame pertama berisi data **236 ms**, baca 4 config **29 ms**, jendela ter-map
+  **17–19 ms**, RSS **128 MB**, binary **59 MB** (46 MB strip).
+- Perbandingan Tauri di mesin sama: jendela 64–84 ms, RSS 144 MB, binary 6,3 MB
+  + WebKitGTK sistem. Probe versi selesai 1,7 s di background.
+
 ### 2026-11-23 01:05 · agent/add, agent/diff, agent/settings + repo · tiga layar terakhir
 - Kerja: tiga agent paralel (worktree terpisah) mengisi `add.rs` (1.168 baris),
   `diff.rs` (675 baris), `settings.rs` (479 baris). Pemilik repo menggabungkan,
