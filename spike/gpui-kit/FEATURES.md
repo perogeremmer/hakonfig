@@ -99,7 +99,7 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 |----|-------|--------|------|
 | F34 | Toast/notifikasi (gpui-kit `notification`) untuk hasil aksi | [ ] | siapa pun yang butuh |
 | F35 | Dialog konfirmasi standar (judul, isi, Batal/OK, ESC, fokus awal) | [~] contoh ada di `src/app.rs` | pemilik repo |
-| F36 | Keyboard: `Ctrl+K` fokus pencarian, `Esc` tutup dialog, urutan Tab rapi | [ ] | pemilik repo |
+| F36 | Keyboard: `Esc` tutup dialog jalan; `Ctrl+K` diblokir API (`on_action` hanya saat paint) | [!] | `src/app.rs` |
 | F37 | Label aksesibilitas untuk switch/tombol ikon (AccessKit) | [ ] | per view |
 | F38 | Semua string lewat satu modul i18n (tidak ada teks hard-coded) | [ ] | `src/i18n.rs` |
 

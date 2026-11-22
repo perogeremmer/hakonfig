@@ -48,6 +48,16 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-23 00:45 · repo · Ctrl+K gagal, dicatat sebagai blocker
+- Kerja: coba pintasan keyboard lewat `cx.on_action(TypeId, window, ...)` +
+  `cx.bind_keys([KeyBinding::new("ctrl-k", ...)])`.
+- Hasil: **gagal**. `Window::on_action` hanya boleh dipanggil saat fase paint;
+  memanggilnya di `App::new` maupun di `render` sama-sama panic dengan
+  "this method can only be called during paint".
+- Keputusan: fitur dicabut (tidak ada kode mati), dicatat sebagai F36 `[!]`.
+  Yang perlu dicoba berikutnya: daftarkan action lewat elemen root milik sendiri
+  (`div().on_action(...)`) atau lewat `Root` gpui-kit, bukan `Context::on_action`.
+
 ### 2026-11-23 00:37 · repo · menu aksi provider + toast
 - Kerja: tombol `…` per kartu provider membuka dialog berisi 6 aksi (Edit,
   Kelola model, Jadikan default, (Non)aktifkan, Lupakan kredensial, Hapus),
