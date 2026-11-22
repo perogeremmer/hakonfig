@@ -26,7 +26,7 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 |----|-------|--------|------|
 | F0a | Top bar: brand, statistik tool/provider/model, tombol tema | [x] | `src/app.rs` |
 | F0b | Sidebar: daftar harness + jumlah provider/key, penanda aktif | [x] | `src/app.rs` |
-| F0c | Navigasi layar: Providers / Tambah provider / Diff / Pengaturan | [x] | `src/app.rs` |
+| F0c | Navigasi layar: Providers / Tambah provider / Diff / Riwayat / Pengaturan | [x] | `src/app.rs` |
 | F0d | Font bundel (Plus Jakarta Sans, JetBrains Mono) + palet terang/gelap | [x] | `src/palette.rs` |
 | F0e | Load config di background supaya frame pertama < 200 ms | [x] | `src/app.rs` |
 
@@ -71,8 +71,8 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 
 | ID | Fitur | Status | File |
 |----|-------|--------|------|
-| F23 | Daftar backup per harness (`api::list_backups`): waktu, id, ukuran | [ ] | `views/history.rs` |
-| F24 | Restore dengan dialog konfirmasi (tombol eksekusi tetap nonaktif di spike) | [ ] | `views/history.rs` |
+| F23 | Daftar backup per harness (`api::list_backups`): waktu, id, berkas | [x] | `views/history.rs` |
+| F24 | Restore dengan dialog konfirmasi (eksekusi sengaja nonaktif) | [x] | `views/history.rs` |
 
 ## F. Halaman harness
 
@@ -81,7 +81,7 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 | F25 | Panel berkas config: path, ada/tidak, sensitif, tombol buka folder | [ ] | `views/harness.rs` |
 | F26 | Notices: daftar masalah config + aksi perbaikan (preview saja) | [ ] | `views/harness.rs` |
 | F27 | Install/uninstall tool dengan log streaming + progress | [ ] | `views/harness.rs` |
-| F28 | Deteksi versi tool lazy + cache (sekarang 1.000 ms di jalur startup) | [ ] | `src/data.rs` (pemilik repo) |
+| F28 | Deteksi versi tool di background, tidak di jalur frame pertama | [x] | `src/data.rs` |
 
 ## G. Pengaturan
 

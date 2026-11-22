@@ -203,6 +203,7 @@ pub fn brand_button(p: &Palette, id: &'static str, label: &'static str) -> State
 }
 
 /// Tombol sekunder (garis tipis) dengan token palet yang sama.
+#[allow(dead_code)] // seam untuk view lain
 pub fn soft_button(p: &Palette, id: &'static str, label: &'static str) -> Stateful<Div> {
     div()
         .id(id)

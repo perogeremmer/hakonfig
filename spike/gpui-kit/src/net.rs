@@ -12,6 +12,7 @@ use hakonfig_core::engine::model::TestResult;
 
 /// Jalankan future yang butuh reaktor tokio. Aman dipanggil dari thread
 /// background GPUI, jangan dari render.
+#[allow(dead_code)] // dipakai view Tambah provider
 pub fn block_on<F: Future>(future: F) -> F::Output {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -23,6 +24,7 @@ pub fn block_on<F: Future>(future: F) -> F::Output {
 /// Tes koneksi provider (sama persis dengan yang dipanggil GUI web).
 ///
 /// `key` boleh kosong: core akan memakai key tersimpan atau environment.
+#[allow(dead_code)] // seam untuk view Tambah provider
 pub fn test_connection(
     base_url: String,
     api_type: String,

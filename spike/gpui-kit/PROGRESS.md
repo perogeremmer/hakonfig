@@ -29,7 +29,7 @@ menggabungkannya ke sini agar tidak ada konflik tulis.
 | Providers | 6 | 9 |
 | Tambah provider | 0 | 7 |
 | Diff | 0 | 6 |
-| Riwayat & backup | 0 | 2 |
+| Riwayat & backup | 2 | 2 |
 | Halaman harness | 0 | 4 |
 | Pengaturan | 0 | 5 |
 | Lintas fitur | 1 | 5 |
@@ -47,6 +47,23 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 ```
 
 ## Log
+
+### 2026-11-23 00:55 · repo · startup dipangkas 3x + layar Riwayat
+- Kerja: (1) `harness_version()` dipindah ke background, config dibaca sinkron
+  (40–52 ms). (2) View `Riwayat` baru: daftar backup nyata dari
+  `api::list_backups`, dialog konfirmasi restore (eksekusi nonaktif).
+  (3) Seam view jadi `new(window, cx)` supaya view bisa membuat `InputState`.
+- File: `src/app.rs`, `src/data.rs`, `src/views/history.rs`, `src/views/mod.rs`,
+  `src/views/{add,diff,settings}.rs` (signature saja), `src/net.rs`.
+- Verifikasi: build hijau tanpa warning; screenshot `docs/ui-history.png`,
+  `docs/ui-dark.png`.
+- Angka: frame pertama **307–387 ms** dengan data sudah tampil (sebelumnya
+  1.178 ms dengan layar kosong "Memuat…"), probe versi selesai ±1,9 s di
+  background. Catatan: run pertama setelah build bisa 1,2 s karena cache disk.
+- Kendala: `Theme::update` butuh `&mut App`, jadi view tidak bisa memakainya
+  lewat `cx.listener` (yang memberi `&mut Context<Self>`); handler tombol
+  gpui-kit menerima `&mut App` sehingga tombol tema di view harus pakai
+  closure mentah, bukan `cx.listener`.
 
 ### 2026-11-22 23:20 · repo · UI dipoles ke bahasa visual Hakonfig
 - Kerja: font bundel (Plus Jakarta Sans + JetBrains Mono, `add_fonts`), palet

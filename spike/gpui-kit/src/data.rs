@@ -121,6 +121,7 @@ pub fn monogram(name: &str, id: &str) -> String {
 /// Ringkasan hasil load terakhir, dibagikan ke view lain lewat setter
 /// (`SettingsView::set_metrics`) alih-alih global GPUI.
 #[derive(Clone, Copy, Default)]
+#[allow(dead_code)] // dibaca view Pengaturan
 pub struct Metrics {
     pub load_ms: u128,
     pub data_ready_ms: Option<u128>,

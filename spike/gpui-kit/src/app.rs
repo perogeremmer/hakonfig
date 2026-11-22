@@ -21,6 +21,7 @@ use crate::palette::{self, Palette};
 use crate::views::{
     add::AddView,
     diff::DiffView,
+    history::HistoryView,
     providers::{self, Filter},
     settings::SettingsView,
 };
@@ -33,6 +34,7 @@ pub enum Nav {
     Providers,
     Add,
     Diff,
+    History,
     Settings,
 }
 
@@ -50,6 +52,7 @@ pub struct App {
     first_frame: bool,
     pub add: Entity<AddView>,
     pub diff: Entity<DiffView>,
+    pub history: Entity<HistoryView>,
     pub settings: Entity<SettingsView>,
     _subs: Vec<Subscription>,
     _load: Option<Task<()>>,
@@ -91,6 +94,7 @@ impl App {
         // butuh window. Kontrak: `XView::new(window, cx)`.
         let add = cx.new(|cx| AddView::new(window, cx));
         let diff = cx.new(|cx| DiffView::new(window, cx));
+        let history = cx.new(|cx| HistoryView::new(window, cx));
         let settings = cx.new(|cx| SettingsView::new(window, cx));
 
         let ids: Vec<String> = entries.iter().map(|e| e.id.clone()).collect();
@@ -131,6 +135,7 @@ impl App {
             first_frame: false,
             add,
             diff,
+            history,
             settings,
             _subs,
             _load,
@@ -183,6 +188,8 @@ impl App {
         let id = self.active_id();
         self.add.update(cx, |v, cx| v.set_harness(id.clone(), cx));
         self.diff.update(cx, |v, cx| v.set_harness(id.clone(), cx));
+        self.history
+            .update(cx, |v, cx| v.set_harness(id.clone(), cx));
         self.settings.update(cx, |v, cx| v.set_harness(id, cx));
     }
 
@@ -236,6 +243,7 @@ impl Render for App {
             Nav::Providers => providers::render(self, &p, cx).into_any_element(),
             Nav::Add => self.add.clone().into_any_element(),
             Nav::Diff => self.diff.clone().into_any_element(),
+            Nav::History => self.history.clone().into_any_element(),
             Nav::Settings => self.settings.clone().into_any_element(),
         };
 
@@ -468,6 +476,11 @@ impl App {
                     .child(
                         nav_row("nav-diff", "Diff", Nav::Diff, *p)
                             .on_click(cx.listener(|this, _, _, cx| this.set_nav(Nav::Diff, cx))),
+                    )
+                    .child(
+                        nav_row("nav-history", "Riwayat", Nav::History, *p).on_click(
+                            cx.listener(|this, _, _, cx| this.set_nav(Nav::History, cx)),
+                        ),
                     )
                     .child(
                         nav_row("nav-settings", "Pengaturan", Nav::Settings, *p).on_click(
