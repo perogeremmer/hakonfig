@@ -38,7 +38,7 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 | F2 | Penanda key: `✓ key tersimpan` / `env · NAMA` / `tanpa key` | [x] | `views/providers.rs` |
 | F3 | Pencarian provider (nama + id, langsung per ketikan) | [x] | `views/providers.rs` |
 | F4 | Toggle aktif/nonaktif per provider | [~] lokal saja, belum menulis | `views/providers.rs` |
-| F5 | Menu `…` per kartu: Edit, Models, Set default, Forget key, Delete | [ ] | `views/providers.rs` |
+| F5 | Menu `…` per kartu: 6 aksi + panggilan core yang akan dipakai | [x] | `views/providers.rs` |
 | F6 | Filter cepat: semua / punya key / nonaktif | [ ] | `views/providers.rs` |
 | F7 | Kartu default model + tombol "Change" (picker lintas provider) | [~] tampil saja | `views/providers.rs` |
 | F8 | Masking key di semua tempat (`•••• 1a2b`), tidak pernah mentah | [x] | `views/providers.rs` |

@@ -9,6 +9,7 @@ use gpui_kit::component::{
     input::Input,
     switch::Switch,
     v_flex,
+    WindowExt as _,
 };
 use gpui_kit::prelude::*;
 use gpui_kit::*;
@@ -496,6 +497,93 @@ fn config_files_card(
         .child(rows)
 }
 
+impl App {
+    /// Daftar aksi per provider. Semua baris sengaja tidak menulis apa pun:
+    /// spike ini read-only, tapi nama aksi + panggilan core-nya dicantumkan
+    /// supaya jelas apa yang harus diimplementasikan nanti.
+    fn show_actions(&self, window: &mut Window, cx: &mut Context<Self>, provider: &ProviderSummary) {
+        let p = palette::palette(cx);
+        let name = provider.name.clone();
+        let id = provider.id.clone();
+        let models = provider.models.len();
+        let has_stored_key = provider.key_stored;
+        let enabled = provider.enabled;
+
+        let actions: Vec<(String, String)> = vec![
+            (
+                "Edit provider".into(),
+                format!("api::preview_edit → EditOp::Upsert ({} model)", models),
+            ),
+            (
+                "Kelola model".into(),
+                "api::preview_edit → EditOp::SetModels".into(),
+            ),
+            (
+                "Jadikan default".into(),
+                "api::preview_edit → EditOp::SetDefault".into(),
+            ),
+            (
+                if enabled {
+                    "Nonaktifkan".to_string()
+                } else {
+                    "Aktifkan".to_string()
+                },
+                "api::preview_edit → EditOp::SetEnabled".into(),
+            ),
+            (
+                "Lupakan kredensial".into(),
+                if has_stored_key {
+                    "api::preview_edit → EditOp::ForgetKey".into()
+                } else {
+                    "tidak ada kredensial tersimpan".to_string()
+                },
+            ),
+            (
+                "Hapus provider".into(),
+                "api::preview_edit → EditOp::Remove".into(),
+            ),
+        ];
+        window.open_dialog(cx, move |dialog, _, _| {
+            // Closure dialog bisa dipanggil lebih dari sekali, jadi elemen
+            // dibangun ulang di dalam — jangan pindahkan `Div` keluar.
+            let mut rows = v_flex().gap(px(2.));
+            for (label, hint) in &actions {
+                rows = rows.child(
+                    v_flex()
+                        .px(px(8.))
+                        .py(px(5.))
+                        .rounded(px(7.))
+                        .hover(|s| s.bg(p.surface_muted))
+                        .child(div().text_size(px(12.5)).child(label.clone()))
+                        .child(
+                            div()
+                                .text_size(px(9.5))
+                                .font_family(palette::MONO)
+                                .text_color(p.ink_muted)
+                                .child(hint.clone()),
+                        ),
+                );
+            }
+
+            dialog.title(format!("{name} · {id}")).child(
+                v_flex()
+                    .gap(px(6.))
+                    .w(px(420.))
+                    .child(
+                        div()
+                            .text_size(px(11.))
+                            .text_color(p.ink_muted)
+                            .child(
+                                "Aksi di bawah belum aktif: spike read-only, tidak ada file yang ditulis. \
+                                 Baris kecil menunjukkan panggilan core yang akan dipakai.",
+                            ),
+                    )
+                    .child(rows),
+            )
+        });
+    }
+}
+
 fn open_folder(dir: &str) {
     #[cfg(target_os = "linux")]
     let cmd = "xdg-open";
@@ -635,6 +723,24 @@ fn provider_card(
                                 .text_color(p.ink_muted)
                                 .child(provider.id.clone()),
                         ),
+                )
+                .child(
+                    div()
+                        .id(ElementId::Name(format!("menu-{}", provider.id).into()))
+                        .px(px(5.))
+                        .py(px(0.))
+                        .rounded(px(6.))
+                        .text_size(px(13.))
+                        .text_color(p.ink_muted)
+                        .cursor_pointer()
+                        .hover(|s| s.bg(p.surface_muted).text_color(p.ink))
+                        .child("…")
+                        .on_click(cx.listener({
+                            let provider = provider.clone();
+                            move |this, _, window, cx| {
+                                this.show_actions(window, cx, &provider);
+                            }
+                        })),
                 )
                 .child(
                     Switch::new(("sw", ix))

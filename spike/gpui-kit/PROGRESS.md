@@ -26,7 +26,7 @@ menggabungkannya ke sini agar tidak ada konflik tulis.
 | Area | Selesai | Total |
 |---|---|---|
 | Shell & navigasi | 5 | 5 |
-| Providers | 6 | 9 |
+| Providers | 7 | 9 |
 | Tambah provider | 0 | 7 |
 | Diff | 0 | 6 |
 | Riwayat & backup | 2 | 2 |
@@ -47,6 +47,16 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 ```
 
 ## Log
+
+### 2026-11-23 01:20 · repo · menu aksi provider + toast
+- Kerja: tombol `…` per kartu provider membuka dialog berisi 6 aksi (Edit,
+  Kelola model, Jadikan default, (Non)aktifkan, Lupakan kredensial, Hapus),
+  masing-masing menyebut `EditOp` yang akan dipakai. Semua sengaja tidak
+  mengeksekusi apa pun.
+- Verifikasi: build hijau; screenshot interaksi manual (dialog tampil benar).
+- Catatan: dialog gpui-kit memanggil closure-nya lebih dari sekali, jadi elemen
+  harus dibangun DI DALAM closure (`Div` tidak Clone) — ini penyebab error
+  pertama saat menulis menu ini.
 
 ### 2026-11-23 01:10 · repo · berkas config + notice di layar Providers
 - Kerja: kartu "Berkas config" (role, path mono, badge kredensial, ada/belum,
