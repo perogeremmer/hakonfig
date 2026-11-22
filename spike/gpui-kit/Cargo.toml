@@ -1,0 +1,16 @@
+[package]
+name = "hakonfig-spike"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+gpui-kit = "0.10.0"
+hakonfig-core = { path = "../../src-tauri/crates/core" }
+anyhow = "1"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 2
