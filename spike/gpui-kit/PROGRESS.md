@@ -21,6 +21,17 @@ bawah, termasuk yang gagal — kegagalan yang tidak dicatat akan diulang.
 Sesi paralel menulis ke `progress/<nama>.md` masing-masing, lalu pemilik repo
 menggabungkannya ke sini agar tidak ada konflik tulis.
 
+## Cara menggabungkan hasil agent
+
+Agent bekerja di worktree terpisah (`/tmp/gpui-<nama>`, branch `agent/<nama>`)
+dan hanya boleh menyentuh `src/views/<nama>.rs` + `progress/<nama>.md`.
+
+```sh
+cd spike/gpui-kit
+./merge-agent.sh add        # salin 2 file, tolak kalau agent menyentuh file lain, lalu build
+# kalau hijau: tambah entri di PROGRESS.md, commit di spike/gpui-kit
+```
+
 ## Status ringkas
 
 | Area | Selesai | Total |
