@@ -9,14 +9,15 @@ use gpui_kit::component::{
     button::Button,
     h_flex,
     input::{InputEvent, InputState},
+    notification::Notification,
     v_flex,
     WindowExt as _,
 };
 use gpui_kit::prelude::*;
 use gpui_kit::*;
-use hakonfig_core::engine::model::ProviderSummary;
+use hakonfig_core::engine::model::{Notice, ProviderSummary};
 
-use crate::data::{load_all, monogram, probe_versions, HarnessEntry, Metrics};
+use crate::data::{load_all, load_notices, monogram, probe_versions, HarnessEntry, Metrics};
 use crate::palette::{self, Palette};
 use crate::views::{
     add::AddView,
@@ -45,10 +46,14 @@ pub struct App {
     pub query: Entity<InputState>,
     pub query_text: String,
     pub filter: Filter,
+    /// Notice milik harness aktif saja (dibaca di background).
+    pub notices: Vec<Notice>,
     /// Berapa status provider yang diubah lokal (spike tidak menulis file).
     pub dirty: usize,
     pub load_ms: u128,
     pub data_ready_ms: Option<u128>,
+    /// Pesan yang menunggu ditampilkan sebagai toast di render berikutnya.
+    toast: Option<String>,
     first_frame: bool,
     pub add: Entity<AddView>,
     pub diff: Entity<DiffView>,
@@ -56,6 +61,7 @@ pub struct App {
     pub settings: Entity<SettingsView>,
     _subs: Vec<Subscription>,
     _load: Option<Task<()>>,
+    _load_notices: Option<Task<()>>,
 }
 
 impl App {
@@ -129,9 +135,11 @@ impl App {
             query,
             query_text: String::new(),
             filter: Filter::All,
+            notices: Vec::new(),
             dirty: 0,
             load_ms,
             data_ready_ms,
+            toast: None,
             first_frame: false,
             add,
             diff,
@@ -139,6 +147,7 @@ impl App {
             settings,
             _subs,
             _load,
+            _load_notices: None,
         }
     }
 
@@ -182,6 +191,20 @@ impl App {
     }
 
     fn sync_views(&mut self, cx: &mut Context<Self>) {
+        let harness = self.active_id();
+        if !harness.is_empty() {
+            let task = cx.spawn(async move |this, cx| {
+                let notices = cx
+                    .background_spawn(async move { load_notices(harness) })
+                    .await;
+                this.update(cx, |this, cx| {
+                    this.notices = notices;
+                    cx.notify();
+                })
+                .ok();
+            });
+            self._load_notices = Some(task);
+        }
         let metrics = Metrics::of(&self.entries, self.load_ms, self.data_ready_ms);
         self.settings
             .update(cx, |v, cx| v.set_metrics(metrics, cx));
@@ -213,6 +236,7 @@ impl App {
                 this.load_ms = ms;
                 this.data_ready_ms = PROCESS_START.get().map(|s| s.elapsed().as_millis());
                 this.selected = this.selected.min(this.entries.len().saturating_sub(1));
+                this.toast = Some(format!("Config dibaca ulang · {} ms", this.load_ms));
                 this.sync_views(cx);
                 cx.notify();
             })
@@ -231,12 +255,17 @@ impl App {
 // ---------------------------------------------------------------- shell
 
 impl Render for App {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if !self.first_frame {
             self.first_frame = true;
             if let Some(start) = PROCESS_START.get() {
                 eprintln!("[spike] frame pertama setelah {} ms", start.elapsed().as_millis());
             }
+        }
+        // Toast diantre dari event handler (yang tidak punya &mut App), lalu
+        // dipush di sini karena `push_notification` butuh window + App.
+        if let Some(msg) = self.toast.take() {
+            window.push_notification(Notification::success(msg), cx);
         }
         let p = palette::palette(cx);
         let body = match self.nav {

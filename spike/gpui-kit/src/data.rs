@@ -19,7 +19,6 @@ pub struct HarnessEntry {
     pub version: Option<String>,
     pub config_path: String,
     pub snapshot: Option<HarnessSnapshot>,
-    pub notices: Vec<Notice>,
     pub error: Option<String>,
     /// (baca config, deteksi versi tool) dalam milidetik.
     pub timings: (u128, u128),
@@ -44,13 +43,7 @@ impl HarnessEntry {
         };
         let read_ms = t_read.elapsed().as_millis();
 
-        // Notice = hal di config yang membuat provider/model tidak terlihat
-        // harness. Murah (membaca berkas yang sama) dan penting untuk ditampilkan
-        // sebelum pengguna bingung "sudah ditulis tapi tidak muncul".
-        let notices = api::list_notices(Some(id.clone())).unwrap_or_default();
-
         Self {
-            notices,
             timings: (read_ms, 0),
             version: None,
             config_path: info
@@ -75,6 +68,13 @@ impl HarnessEntry {
             .map(|s| s.providers.iter().map(|p| p.models.len()).sum())
             .unwrap_or(0)
     }
+}
+
+/// Notice untuk satu harness: hal di config yang membuat provider/model tidak
+/// terlihat harness. Dibaca terpisah karena biayanya ±25 ms per harness —
+/// hanya untuk harness yang sedang dibuka.
+pub fn load_notices(harness: String) -> Vec<Notice> {
+    api::list_notices(Some(harness)).unwrap_or_default()
 }
 
 /// Probe versi tool di background, terpisah dari pembacaan config.

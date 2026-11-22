@@ -77,9 +77,9 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
 
     column = column.child(config_files_card(entry, p, cx));
 
-    if !entry.notices.is_empty() {
+    if !app.notices.is_empty() {
         let mut list = v_flex().gap(px(4.));
-        for notice in &entry.notices {
+        for notice in &app.notices {
             list = list.child(
                 h_flex()
                     .gap(px(8.))
@@ -141,7 +141,7 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
                                 .text_size(px(9.5))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(p.warn_text)
-                                .child(format!("{} TEMUAN", entry.notices.len())),
+                                .child(format!("{} TEMUAN", app.notices.len())),
                         )
                         .child(div().flex_1())
                         .child(
