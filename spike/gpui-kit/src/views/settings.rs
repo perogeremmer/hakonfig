@@ -14,7 +14,7 @@ pub struct SettingsView {
 }
 
 impl SettingsView {
-    pub fn new(_cx: &mut Context<Self>) -> Self {
+    pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
         Self {
             harness: String::new(),
             metrics: crate::data::Metrics::default(),

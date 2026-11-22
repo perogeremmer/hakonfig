@@ -25,6 +25,9 @@ pub struct HarnessEntry {
 }
 
 impl HarnessEntry {
+    /// Baca config saja. `harness_version()` sengaja TIDAK dipanggil di sini:
+    /// dia spawn proses `<bin> --version` (±1.000 ms di mesin ini), dan itu
+    /// membuat frame pertama menunggu pekerjaan yang tidak dibutuhkan layar.
     pub fn load(id: String) -> Self {
         let info = api::list_harnesses()
             .into_iter()
@@ -40,14 +43,9 @@ impl HarnessEntry {
         };
         let read_ms = t_read.elapsed().as_millis();
 
-        // Versi tool datang dari `<bin> --version`, jadi butuh spawn proses.
-        let t_ver = Instant::now();
-        let version = api::harness_version(&id);
-        let ver_ms = t_ver.elapsed().as_millis();
-
         Self {
-            timings: (read_ms, ver_ms),
-            version,
+            timings: (read_ms, 0),
+            version: None,
             config_path: info
                 .files
                 .first()
@@ -72,6 +70,20 @@ impl HarnessEntry {
     }
 }
 
+/// Probe versi tool di background, terpisah dari pembacaan config.
+///
+/// Diukur: 4 harness = ±1.000 ms, dan 604 ms di antaranya `omp` (pembungkus
+/// Node). Karena itu hasilnya datang belakangan, bukan menahan frame pertama.
+pub fn probe_versions(ids: Vec<String>) -> Vec<(String, Option<String>, u128)> {
+    ids.into_iter()
+        .map(|id| {
+            let t = Instant::now();
+            let version = api::harness_version(&id);
+            (id, version, t.elapsed().as_millis())
+        })
+        .collect()
+}
+
 pub fn load_all() -> (Vec<HarnessEntry>, u128) {
     let started = Instant::now();
     let entries: Vec<HarnessEntry> = api::list_harnesses()
@@ -80,11 +92,9 @@ pub fn load_all() -> (Vec<HarnessEntry>, u128) {
             let t = Instant::now();
             let entry = HarnessEntry::load(h.id);
             eprintln!(
-                "[spike]   {}: {} ms total (config {} ms + versi {} ms) — {} provider, {} model",
+                "[spike]   {}: {} ms baca config — {} provider, {} model",
                 entry.id,
                 t.elapsed().as_millis(),
-                entry.timings.0,
-                entry.timings.1,
                 entry.provider_count,
                 entry.model_count()
             );

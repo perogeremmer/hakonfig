@@ -12,7 +12,7 @@ pub struct DiffView {
 }
 
 impl DiffView {
-    pub fn new(_cx: &mut Context<Self>) -> Self {
+    pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
         Self {
             harness: String::new(),
         }

@@ -18,6 +18,35 @@ use crate::app::App;
 use crate::data::{monogram, HarnessEntry};
 use crate::palette::{self, Palette};
 
+/// Filter cepat di atas grid provider.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Filter {
+    All,
+    WithKey,
+    NoKey,
+    Disabled,
+}
+
+impl Filter {
+    pub fn label(self) -> &'static str {
+        match self {
+            Filter::All => "Semua",
+            Filter::WithKey => "Punya key",
+            Filter::NoKey => "Tanpa key",
+            Filter::Disabled => "Nonaktif",
+        }
+    }
+
+    pub fn matches(self, provider: &ProviderSummary) -> bool {
+        match self {
+            Filter::All => true,
+            Filter::WithKey => provider.has_key,
+            Filter::NoKey => !provider.has_key,
+            Filter::Disabled => !provider.enabled,
+        }
+    }
+}
+
 pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement {
     let mut column = v_flex().flex_1().min_w_0().min_h_0().p(px(20.)).gap(px(12.));
 
@@ -76,6 +105,39 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
             .child(div().flex_1())
             .child(div().w(px(280.)).child(Input::new(&app.query).small())),
     );
+
+    let mut chips = h_flex().gap(px(6.)).items_center().pb(px(2.));
+    for filter in [Filter::All, Filter::WithKey, Filter::NoKey, Filter::Disabled] {
+        let active = app.filter == filter;
+        chips = chips.child(
+            div()
+                .id(ElementId::Name(
+                    format!("filter-{}", filter.label()).into(),
+                ))
+                .px(px(9.))
+                .py(px(3.))
+                .rounded_full()
+                .text_size(px(11.))
+                .when(active, |s| {
+                    s.bg(p.brand_soft)
+                        .text_color(p.brand_text)
+                        .font_weight(FontWeight::SEMIBOLD)
+                })
+                .when(!active, |s| {
+                    s.bg(p.surface)
+                        .border_1()
+                        .border_color(p.line)
+                        .text_color(p.ink_secondary)
+                        .hover(|s| s.border_color(p.line_strong))
+                })
+                .child(filter.label())
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.filter = filter;
+                    cx.notify();
+                })),
+        );
+    }
+    column = column.child(chips);
 
     let mut grid = h_flex().flex_wrap().gap(px(12.)).items_start();
     if providers.is_empty() && entry.error.is_none() {
@@ -416,6 +478,44 @@ fn provider_card(
                         .child(key_label),
                 ),
         )
+        .when(!provider.models.is_empty(), |s| {
+            s.child(
+                h_flex()
+                    .gap(px(4.))
+                    .items_center()
+                    .child(
+                        div()
+                            .truncate()
+                            .flex_1()
+                            .text_size(px(9.5))
+                            .font_family(palette::MONO)
+                            .text_color(p.ink_muted)
+                            .child(
+                                provider
+                                    .models
+                                    .iter()
+                                    .take(2)
+                                    .map(|m| {
+                                        m.name.clone().unwrap_or_else(|| m.id.clone())
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join(" · "),
+                            ),
+                    )
+                    .when(provider.models.iter().any(|m| m.reasoning), |s| {
+                        s.child(
+                            div()
+                                .px(px(5.))
+                                .py(px(1.))
+                                .rounded(px(4.))
+                                .bg(p.warn_bg)
+                                .text_color(p.warn_text)
+                                .text_size(px(9.))
+                                .child("reasoning"),
+                        )
+                    }),
+            )
+        })
         .child(
             div()
                 .truncate()

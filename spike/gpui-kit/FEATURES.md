@@ -112,6 +112,32 @@ Aturan tetap untuk semua pekerjaan di spike ini:
   `api::test_provider(preset, key)` supaya view tidak memanggil HTTP sendiri.
 - `api::list_backups()` mengembalikan `BackupInfo`; butuh ukuran file untuk UI riwayat.
 
+## Kontrak view (dipakai agent, jangan diubah tanpa memperbarui dokumen ini)
+
+```rust
+// src/views/<nama>.rs
+pub struct XView { /* state milik view */ }
+
+impl XView {
+    // App memanggil ini; window bisa dipakai membuat InputState.
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self;
+    // Dipanggil App setiap harness terpilih berubah (boleh no-op).
+    pub fn set_harness(&mut self, harness: String, cx: &mut Context<Self>);
+}
+
+impl Render for XView { /* ... */ }
+```
+
+Fakta core yang sering dibutuhkan (jangan cari ulang di repo):
+
+- `api::list_presets() -> Vec<ProviderPreset>`; `ProviderPreset { id, name, base_url, api, env_var: Option<String>, docs_url: Option<String>, key_required: bool, badge: Option<String>, notes: String, models: Vec<ModelSummary> }`.
+- `ModelSummary { id, name: Option<String>, context_window: Option<u64>, max_tokens: Option<u64>, reasoning: bool }`.
+- `EditOp::Upsert(ProviderDraft)`, `EditOp::SetModels { provider_id, models }`, `EditOp::SetKey { provider_id, key, key_mode }`, `EditOp::SetDefault { provider_id, model_id }`, `EditOp::SetEnabled { provider_id, enabled }`, `EditOp::Remove { provider_id }`, `EditOp::ForgetKey { provider_id }`.
+- `ProviderDraft { id, name, base_url, api, key: Option<String>, key_mode: Option<KeyMode>, models: Vec<ModelDraft> }`; `ModelDraft { id, name: Option<String>, context_window: Option<u64>, max_tokens: Option<u64>, reasoning: bool }`; `KeyMode::{Inline, Env}`.
+- `api::preview_edit(harness_id: String, op: EditOp) -> Result<PreviewResult, String>`; `PreviewResult { files: Vec<FileDiff>, warnings, will_create, will_modify }`; `FileDiff { path, role, sensitive, before: Option<String>, after: Option<String>, changed: bool }` (isi file utuh, sudah diredaksi core untuk file sensitif).
+- `api::test_connection` async; pakai pembungkus blocking `crate::net::test_connection(base_url, api, key, harness_id: Option<String>, provider_id: Option<String>) -> Result<TestResult, String>`; `TestResult { ok, status: Option<u16>, message, latency_ms: Option<u64>, models_sample: Vec<String> }`.
+- `api::list_backups(harness_id) -> Result<Vec<BackupInfo>, String>`; `BackupInfo { id, created_at, dir, files: Vec<BackupFile> }`.
+
 ## Catatan hasil spike (fakta terukur, jangan diubah tanpa mengukur ulang)
 
 - Baca config 4 harness = 2 ms. `harness_version()` = ±1.000 ms karena spawn proses.

@@ -16,9 +16,14 @@ use gpui_kit::prelude::*;
 use gpui_kit::*;
 use hakonfig_core::engine::model::ProviderSummary;
 
-use crate::data::{load_all, monogram, HarnessEntry, Metrics};
+use crate::data::{load_all, monogram, probe_versions, HarnessEntry, Metrics};
 use crate::palette::{self, Palette};
-use crate::views::{add::AddView, diff::DiffView, providers, settings::SettingsView};
+use crate::views::{
+    add::AddView,
+    diff::DiffView,
+    providers::{self, Filter},
+    settings::SettingsView,
+};
 
 /// Diisi `main()`, dibaca render pertama: angka "sampai frame pertama terlihat".
 pub static PROCESS_START: OnceLock<Instant> = OnceLock::new();
@@ -37,6 +42,7 @@ pub struct App {
     pub nav: Nav,
     pub query: Entity<InputState>,
     pub query_text: String,
+    pub filter: Filter,
     /// Berapa status provider yang diubah lokal (spike tidak menulis file).
     pub dirty: usize,
     pub load_ms: u128,
@@ -51,9 +57,14 @@ pub struct App {
 
 impl App {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        // Jendela dibuka dengan state kosong; pembacaan config + spawn
-        // `<bin> --version` jalan di background executor. Konstruktor GPUI
-        // sinkron, jadi kerja berat di sini akan menahan frame pertama.
+        // Dua tahap, dan pembagiannya disengaja:
+        //
+        // 1. Baca config (diukur 34 ms untuk 4 harness) DIBLOKIR di sini, supaya
+        //    frame pertama sudah berisi data, bukan layar "Memuat…".
+        // 2. Probe versi tool (`<bin> --version`, ±1.000 ms) jalan di background.
+        //
+        // Sebelumnya semuanya di background: data baru muncul di 884 ms, jadi
+        // pengguna melihat layar kosong lebih lama daripada menunggu 34 ms.
         let query = cx.new(|cx| InputState::new(window, cx).placeholder("Cari provider…"));
         let _subs = vec![cx.subscribe_in(&query, window, {
             let query = query.clone();
@@ -65,24 +76,40 @@ impl App {
             }
         })];
 
-        let add = cx.new(AddView::new);
-        let diff = cx.new(DiffView::new);
-        let settings = cx.new(SettingsView::new);
+        let (entries, load_ms) = load_all();
+        let data_ready_ms = PROCESS_START.get().map(|s| s.elapsed().as_millis());
+        eprintln!(
+            "[spike] config siap setelah {:?} ms (baca {} ms, {} harness, {} model)",
+            data_ready_ms.unwrap_or_default(),
+            load_ms,
+            entries.len(),
+            entries.iter().map(HarnessEntry::model_count).sum::<usize>()
+        );
 
+        // Ketiga view menerima `&mut Window` seperti `App::new`: tanpa itu view
+        // tidak bisa membuat `InputState` (kotak teks) karena konstruktornya
+        // butuh window. Kontrak: `XView::new(window, cx)`.
+        let add = cx.new(|cx| AddView::new(window, cx));
+        let diff = cx.new(|cx| DiffView::new(window, cx));
+        let settings = cx.new(|cx| SettingsView::new(window, cx));
+
+        let ids: Vec<String> = entries.iter().map(|e| e.id.clone()).collect();
         let _load = Some(cx.spawn(async move |this, cx| {
-            let (entries, load_ms) = cx.background_spawn(async { load_all() }).await;
+            // Tahap 2: probe versi tool, tanpa menahan UI.
+            let versions = cx
+                .background_spawn(async move { probe_versions(ids) })
+                .await;
             this.update(cx, |this, cx| {
-                this.entries = entries;
-                this.load_ms = load_ms;
-                this.data_ready_ms = PROCESS_START.get().map(|s| s.elapsed().as_millis());
-                this.selected = this.selected.min(this.entries.len().saturating_sub(1));
-                if let Some(ms) = this.data_ready_ms {
+                for (id, version, ms) in versions {
+                    if let Some(entry) = this.entries.iter_mut().find(|e| e.id == id) {
+                        entry.version = version;
+                        entry.timings.1 = ms;
+                    }
+                }
+                if let Some(start) = PROCESS_START.get() {
                     eprintln!(
-                        "[spike] data siap setelah {} ms (baca config {} ms, {} harness, {} model)",
-                        ms,
-                        this.load_ms,
-                        this.entries.len(),
-                        this.total_models()
+                        "[spike] versi tool siap setelah {} ms",
+                        start.elapsed().as_millis()
                     );
                 }
                 this.sync_views(cx);
@@ -92,14 +119,15 @@ impl App {
         }));
 
         Self {
-            entries: Vec::new(),
+            entries,
             selected: 0,
             nav: Nav::Providers,
             query,
             query_text: String::new(),
+            filter: Filter::All,
             dirty: 0,
-            load_ms: 0,
-            data_ready_ms: None,
+            load_ms,
+            data_ready_ms,
             first_frame: false,
             add,
             diff,
@@ -127,6 +155,7 @@ impl App {
             .providers
             .iter()
             .enumerate()
+            .filter(|(_, p)| self.filter.matches(p))
             .filter(|(_, p)| {
                 needle.is_empty()
                     || p.id.to_lowercase().contains(&needle)
