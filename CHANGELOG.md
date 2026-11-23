@@ -6,6 +6,15 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+### Fixed
+
+- GUI: wizard **Add provider** sekarang membawa `contextWindow` hasil sync
+  endpoint sampai ke config, bukan hanya angka dari katalog preset. Sebelumnya
+  model yang tidak ada di preset ditulis tanpa `contextWindow`, sehingga Pi dan
+  Oh My Pi memakai default 128000 — pada Command Code itu 102 dari 105 model
+  (76 model di endpoint berukuran ≥ 1 juta token). Angka endpoint diutamakan,
+  preset hanya cadangan, sama seperti aturan CLI.
+
 ## [0.7.3]
 
 ### Fixed
