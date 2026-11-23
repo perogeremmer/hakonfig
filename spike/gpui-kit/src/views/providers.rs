@@ -49,16 +49,23 @@ impl Filter {
 }
 
 pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement {
-    let mut column = v_flex().flex_1().min_w_0().min_h_0().p(px(20.)).gap(px(12.));
+    let mut column = v_flex().w_full().gap(px(12.));
 
     let Some(entry) = app.active() else {
-        return column
-            .child(div().text_size(px(10.)).text_color(p.ink_muted).child("MEMUAT"))
+        return v_flex()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .p(px(20.))
             .child(
-                div()
-                    .text_size(px(15.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .child("Membaca konfigurasi harness…"),
+                column
+                    .child(div().text_size(px(10.)).text_color(p.ink_muted).child("MEMUAT"))
+                    .child(
+                        div()
+                            .text_size(px(15.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("Membaca konfigurasi harness…"),
+                    ),
             );
     };
 
@@ -253,16 +260,9 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
     for (ix, provider) in providers {
         grid = grid.child(provider_card(app, p, ix, provider, cx));
     }
-    column = column.child(
-        v_flex()
-            .id("providers-scroll")
-            .flex_1()
-            .min_h_0()
-            .overflow_y_scroll()
-            .child(grid),
-    );
+    column = column.child(grid);
 
-    column.child(
+    column = column.child(
         h_flex()
             .flex_shrink_0()
             .pt(px(4.))
@@ -282,7 +282,26 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
                         .child(format!("{} perubahan lokal", app.dirty)),
                 )
             }),
-    )
+    );
+
+    // Seluruh halaman yang menggulir. Sebelumnya hanya grid provider yang
+    // punya `overflow_y_scroll`, sehingga pada harness besar (pi: 5 provider,
+    // 322 model) kartu di atas memakan seluruh tinggi dan grid-nya menyusut
+    // sampai tak bisa digulir sama sekali.
+    v_flex()
+        .flex_1()
+        .min_w_0()
+        .min_h_0()
+        .p(px(20.))
+        .child(
+            v_flex()
+                .id("providers-scroll")
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .overflow_y_scroll()
+                .child(column),
+        )
 }
 
 fn harness_header(

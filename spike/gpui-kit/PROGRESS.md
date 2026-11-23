@@ -59,6 +59,17 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-23 02:40 · repo · halaman Providers bisa digulir
+- Laporan: di harness `pi` halaman provider tidak bisa di-scroll. Penyebabnya
+  hanya grid provider yang punya `overflow_y_scroll`; header + kartu berkas
+  config + kartu notice memakan seluruh tinggi, grid menyusut sampai nol, dan
+  sisanya terpotong tanpa jalan untuk menggulir.
+- Perbaikan: seluruh halaman (header, config, notice, filter, grid, catatan
+  read-only) masuk satu wadah gulir `providers-scroll`.
+- Verifikasi roda mouse: 8 klik roda bawah → 10.487 piksel berubah; 25 klik
+  lagi → tidak berubah (sudah mentok, jadi tak ada konten yang terpotong); dua
+  klik roda atas → 11.275 piksel berubah.
+
 ### 2026-11-23 02:10 · repo · navigasi dipisah, panel pratinjau dipin
 - Keluhan wajar: menu dan daftar harness sama-sama di kiri. Sekarang **tab layar
   pindah ke bar atas** (Providers · Tambah provider · Diff · Riwayat ·
