@@ -13,7 +13,8 @@ Tujuannya menjawab dua pertanyaan dengan bukti, bukan opini:
 |---|---|
 | ![Providers](docs/ui-light.png) | ![Tema gelap](docs/ui-dark.png) |
 | ![Diff](docs/ui-diff.png) | ![Pengaturan](docs/ui-settings.png) |
-| ![Tambah 1](docs/ui-add-1.png) | ![Tambah 3](docs/ui-add-3.png) |
+| ![Tambah 1](docs/ui-add-1.png) | ![Tambah 2](docs/ui-add-2.png) |
+| ![Tambah 3](docs/ui-add-3.png) | ![Pratinjau](docs/ui-add-4.png) |
 | ![Riwayat](docs/ui-history.png) | ![Pengaturan gelap](docs/ui-settings-dark.png) |
 
 ## Jalankan
@@ -63,7 +64,7 @@ Rincian 38 butir + status: [`FEATURES.md`](FEATURES.md). Log kerja: [`PROGRESS.m
 
 ```
 src/main.rs      bootstrap: font, tema, jendela
-src/app.rs       state + shell (top bar, sidebar, navigasi)
+src/app.rs       state + shell (top bar, tab layar, sidebar harness)
 src/data.rs      pembacaan harness lewat hakonfig_core::api
 src/net.rs       pembungkus tes koneksi (reqwest butuh reaktor tokio)
 src/palette.rs   token warna dari web/styles.src.css + tema gpui-kit

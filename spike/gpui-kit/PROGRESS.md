@@ -59,6 +59,20 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-23 02:10 · repo · navigasi dipisah, panel pratinjau dipin
+- Keluhan wajar: menu dan daftar harness sama-sama di kiri. Sekarang **tab layar
+  pindah ke bar atas** (Providers · Tambah provider · Diff · Riwayat ·
+  Pengaturan, plus petunjuk singkat di kanan); **sidebar khusus harness** dengan
+  header "HARNESS · n".
+- Ditemukan saat verifikasi: tombol "Pratinjau diff" terasa mati karena panel
+  hasilnya ikut ter-render di dalam area scroll dan berada di bawah lipatan.
+  Panel sekarang dipin di bawah daftar model (`when_some` + `flex_shrink_0`),
+  jadi hasil selalu kelihatan.
+- Verifikasi pakai piksel (bukan mata): tab aktif bergeser sesuai klik, isi
+  layar berganti 5–11 ribu piksel per klik, panel pratinjau memunculkan blok
+  peringatan `#fff1e0`, sidebar tidak lagi punya baris menu (hanya 4 harness +
+  footer versi).
+
 ### 2026-11-23 01:15 · repo · angka final (CPU idle, release)
 - Frame pertama berisi data **236 ms**, baca 4 config **29 ms**, jendela ter-map
   **17–19 ms**, RSS **128 MB**, binary **59 MB** (46 MB strip).

@@ -39,6 +39,38 @@ pub enum Nav {
     Settings,
 }
 
+impl Nav {
+    pub const ALL: [Nav; 5] = [
+        Nav::Providers,
+        Nav::Add,
+        Nav::Diff,
+        Nav::History,
+        Nav::Settings,
+    ];
+
+    /// Label tab. Layar dan harness sengaja dipisah: tab di atas, harness di
+    /// sidebar kiri — dua daftar di kolom yang sama bikin bingung.
+    pub fn label(self) -> &'static str {
+        match self {
+            Nav::Providers => "Providers",
+            Nav::Add => "Tambah provider",
+            Nav::Diff => "Diff",
+            Nav::History => "Riwayat",
+            Nav::Settings => "Pengaturan",
+        }
+    }
+
+    fn slug(self) -> &'static str {
+        match self {
+            Nav::Providers => "providers",
+            Nav::Add => "add",
+            Nav::Diff => "diff",
+            Nav::History => "history",
+            Nav::Settings => "settings",
+        }
+    }
+}
+
 pub struct App {
     pub entries: Vec<HarnessEntry>,
     pub selected: usize,
@@ -281,6 +313,7 @@ impl Render for App {
             .bg(p.canvas)
             .text_color(p.ink)
             .child(self.topbar(&p, cx))
+            .child(self.nav_tabs(&p, cx))
             .child(
                 h_flex()
                     .flex_1()
@@ -293,6 +326,48 @@ impl Render for App {
 }
 
 impl App {
+    /// Navigasi layar: satu baris tab di bawah top bar, bukan di sidebar.
+    /// Sidebar dipakai khusus untuk memilih harness.
+    fn nav_tabs(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut bar = h_flex()
+            .flex_shrink_0()
+            .px(px(14.))
+            .py(px(7.))
+            .gap(px(3.))
+            .items_center()
+            .bg(p.surface)
+            .border_b_1()
+            .border_color(p.line);
+        for nav in Nav::ALL {
+            let active = self.nav == nav;
+            bar = bar.child(
+                h_flex()
+                    .id(ElementId::Name(format!("tab-{}", nav.slug()).into()))
+                    .px(px(11.))
+                    .py(px(6.))
+                    .rounded(px(8.))
+                    .text_size(px(12.))
+                    .items_center()
+                    .when(active, |s| {
+                        s.bg(p.brand_soft)
+                            .text_color(p.brand_text)
+                            .font_weight(FontWeight::SEMIBOLD)
+                    })
+                    .when(!active, |s| {
+                        s.text_color(p.ink_secondary).hover(|s| s.bg(p.canvas))
+                    })
+                    .child(nav.label())
+                    .on_click(cx.listener(move |this, _, _, cx| this.set_nav(nav, cx))),
+            );
+        }
+        bar.child(div().flex_1()).child(
+            div()
+                .pr(px(6.))
+                .text_size(px(11.))
+                .text_color(p.ink_muted)
+                .child(active_hint(self.nav)),
+        )
+    }
     fn topbar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .flex_shrink_0()
@@ -346,23 +421,8 @@ impl App {
                     )),
             )
             .child(
-                palette::brand_button(p, "add", "+ Add provider").on_click(cx.listener(
-                    |this, _, window, cx| {
-                        let p = palette::palette(cx);
-                        this.nav = Nav::Add;
-                        window.open_dialog(cx, move |dialog, _, _| {
-                            dialog.title("Form provider belum diporting").child(
-                                div()
-                                    .text_size(px(12.5))
-                                    .text_color(p.ink_secondary)
-                                    .child(
-                                        "Layar Tambah provider sudah ada di sidebar, isinya masih \
-                                         placeholder. Spike ini belum menulis file apa pun.",
-                                    ),
-                            )
-                        });
-                        cx.notify();
-                    },
+                palette::brand_button(p, "add", "+ Tambah provider").on_click(cx.listener(
+                    |this, _, _, cx| this.set_nav(Nav::Add, cx),
                 )),
             )
             .child(
@@ -440,23 +500,6 @@ impl App {
             );
         }
 
-        let nav_row = |id: &'static str, label: &'static str, target: Nav, p: Palette| {
-            let active = self.nav == target;
-            h_flex()
-                .id(id)
-                .px(px(10.))
-                .py(px(6.))
-                .rounded(px(8.))
-                .text_size(px(12.))
-                .when(active, |s| {
-                    s.bg(p.surface).text_color(p.brand_text).shadow_2xs()
-                })
-                .when(!active, |s| {
-                    s.text_color(p.ink_secondary).hover(|s| s.bg(p.canvas))
-                })
-                .when(active, |s| s.font_weight(FontWeight::SEMIBOLD))
-                .child(label)
-        };
 
         v_flex()
             .w(px(238.))
@@ -465,58 +508,27 @@ impl App {
             .border_r_1()
             .border_color(p.line)
             .child(
-                div()
+                h_flex()
                     .px(px(20.))
-                    .pt(px(16.))
+                    .pt(px(14.))
                     .pb(px(8.))
-                    .text_size(px(10.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(p.ink_muted)
-                    .child("HARNESS"),
-            )
-            .child(items)
-            .child(
-                v_flex()
-                    .gap(px(2.))
-                    .px(px(10.))
-                    .py(px(10.))
-                    .border_t_1()
-                    .border_color(p.line)
+                    .gap(px(6.))
+                    .items_baseline()
                     .child(
                         div()
-                            .px(px(10.))
-                            .pb(px(6.))
                             .text_size(px(10.))
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(p.ink_muted)
-                            .child("LAYAR"),
+                            .child("HARNESS"),
                     )
                     .child(
-                        nav_row("nav-providers", "Providers", Nav::Providers, *p)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.set_nav(Nav::Providers, cx)
-                            })),
-                    )
-                    .child(
-                        nav_row("nav-add", "Tambah provider", Nav::Add, *p).on_click(
-                            cx.listener(|this, _, _, cx| this.set_nav(Nav::Add, cx)),
-                        ),
-                    )
-                    .child(
-                        nav_row("nav-diff", "Diff", Nav::Diff, *p)
-                            .on_click(cx.listener(|this, _, _, cx| this.set_nav(Nav::Diff, cx))),
-                    )
-                    .child(
-                        nav_row("nav-history", "Riwayat", Nav::History, *p).on_click(
-                            cx.listener(|this, _, _, cx| this.set_nav(Nav::History, cx)),
-                        ),
-                    )
-                    .child(
-                        nav_row("nav-settings", "Pengaturan", Nav::Settings, *p).on_click(
-                            cx.listener(|this, _, _, cx| this.set_nav(Nav::Settings, cx)),
-                        ),
+                        div()
+                            .text_size(px(10.))
+                            .text_color(p.ink_muted)
+                            .child(format!("· {}", self.entries.len())),
                     ),
             )
+            .child(items)
             .child(div().flex_1())
             .child(
                 v_flex()
@@ -539,5 +551,16 @@ impl App {
                             .child("read-only spike"),
                     ),
             )
+    }
+}
+
+/// Petunjuk singkat di kanan tab: apa yang bisa dilakukan di layar itu.
+fn active_hint(nav: Nav) -> &'static str {
+    match nav {
+        Nav::Providers => "klik … pada kartu untuk aksi",
+        Nav::Add => "3 langkah · berakhir di pratinjau",
+        Nav::Diff => "read-only · Apply nonaktif",
+        Nav::History => "dialog restore tidak menulis apa pun",
+        Nav::Settings => "tema & bahasa tersimpan di sesi",
     }
 }

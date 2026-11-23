@@ -909,9 +909,6 @@ impl AddView {
                             .child("Spike read-only — tidak ada file yang ditulis."),
                     ),
             );
-        if let Some(res) = &self.preview {
-            col = col.child(self.preview_panel(p, res));
-        }
         col
     }
 
@@ -1159,11 +1156,31 @@ impl Render for AddView {
             .child(self.stepper(&p, cx))
             .child(
                 v_flex()
-                    .id("add-scroll")
                     .flex_1()
                     .min_h_0()
-                    .overflow_y_scroll()
-                    .child(body),
+                    .min_w_0()
+                    .child(
+                        v_flex()
+                            .id("add-scroll")
+                            .flex_1()
+                            .min_h_0()
+                            .overflow_y_scroll()
+                            .child(body),
+                    )
+                    // Hasil pratinjau dipin di bawah: sebelumnya ia ikut
+                    // ter-scroll sehingga tombol "Pratinjau diff" terasa
+                    // tidak melakukan apa pun.
+                    .when_some(
+                        self.preview.as_ref().filter(|_| self.step == 3),
+                        |s, res| {
+                            s.child(
+                                div()
+                                    .flex_shrink_0()
+                                    .pt(px(6.))
+                                    .child(self.preview_panel(&p, res)),
+                            )
+                        },
+                    ),
             )
             .child(self.nav(&p, meta.is_some(), cx))
     }

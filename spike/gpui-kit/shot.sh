@@ -21,21 +21,24 @@ xdotool windowactivate "$W"
 sleep 0.4
 
 shot() { import -window "$W" "docs/$1.png"; echo "  docs/$1.png"; }
+# Tab layar ada di baris atas (y=74): Providers 51 · Tambah 151 · Diff 236
+# · Riwayat 293 · Pengaturan 374. Tombol aksi utama di kanan bawah (1130,784).
+click() { xdotool mousemove --window "$W" "$1" "$2"; sleep 0.25; xdotool click 1; sleep 1.3; }
 
-# providers (terang)
 shot ui-light
+click 1140 26; shot ui-dark          # tombol tema di top bar
+click 1140 26
 
-# klik "+ Add provider" supaya dialog aksi tidak menutupi; lalu tema gelap
-xdotool mousemove --window "$W" 1134 26 click 1
-sleep 1.2
-shot ui-dark
-xdotool mousemove --window "$W" 1134 26 click 1   # balik ke terang
-sleep 0.8
+click 151 74; shot ui-add-1          # langkah 1: preset
+click 372 296; shot ui-add-2         # langkah 2: key
+click 1130 784; shot ui-add-3        # langkah 3: model
+click 1130 784                       # Pratinjau diff
+sleep 1.5; shot ui-add-4
 
-# Riwayat
-xdotool mousemove --window "$W" 60 470 click 1
-sleep 1.2
-shot ui-history
+click 236 74; sleep 1.5; shot ui-diff
+click 293 74; shot ui-history
+click 374 74; shot ui-settings
+click 1140 26; shot ui-settings-dark
 
 kill "$PID" 2>/dev/null || true
 wait "$PID" 2>/dev/null || true
