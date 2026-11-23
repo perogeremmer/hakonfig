@@ -6,6 +6,34 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.7.5]
+
+### Added
+
+- CLI: `add` punya entri **Custom endpoint (OpenAI-compatible)** di wizard dan
+  tidak lagi mewajibkan `--provider`. Id diturunkan dari nama (huruf kecil,
+  spasi/simbol jadi satu `-`); kalau id itu sudah dipakai preset, provider
+  terpasang, atau sentinel `custom`, akhiran 5 karakter acak (huruf kecil +
+  angka) ditambahkan alih-alih menolak. `--provider <id>` eksplisit tetap
+  dipakai apa adanya.
+- CLI: `add`/`set models` mengisi `reasoning` dari katalog harness, preset,
+  lalu pola id (sumber yang sama dengan **Detect reasoning** di GUI), sehingga
+  model hasil sync seperti Claude/GPT di Command Code mendapat
+  `thinkingLevelMap` di Pi tanpa `doctor --fix`. Metadata model yang sudah ada
+  (`contextWindow`, `maxTokens`, `reasoning`) dipertahankan saat daftar model
+  ditulis ulang, jadi `set models` tidak lagi menghapus context window.
+
+## [0.7.4]
+
+### Fixed
+
+- GUI: wizard **Add provider** sekarang membawa `contextWindow` hasil sync
+  endpoint sampai ke config, bukan hanya angka dari katalog preset. Sebelumnya
+  model yang tidak ada di preset ditulis tanpa `contextWindow`, sehingga Pi dan
+  Oh My Pi memakai default 128000 — pada Command Code itu 102 dari 105 model
+  (76 model di endpoint berukuran ≥ 1 juta token). Angka endpoint diutamakan,
+  preset hanya cadangan, sama seperti aturan CLI.
+
 ## [0.7.3]
 
 ### Fixed

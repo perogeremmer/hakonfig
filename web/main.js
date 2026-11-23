@@ -16,6 +16,12 @@ import {
   registeredApi,
 } from "./provider-form.js";
 import {
+  addFlowDrafts,
+  addFlowEntries,
+  mergeSyncedModel,
+  prettyModel,
+} from "./add-models.js";
+import {
   LOGO_DARK_VARIANT,
   LOGO_EXT_PNG,
   LOGO_IDS,
@@ -1815,19 +1821,9 @@ function openProviderPicker() {
   });
 }
 
-/** Pretty-print id model untuk ditampilkan sebagai nama: gpt-oss-120b → GPT OSS 120B */
-function prettyModel(id) {
-  return String(id)
-    .replace(/[._/]/g, "-")
-    .split("-")
-    .filter(Boolean)
-    .map((part) => (/^[a-z]/.test(part) ? part.charAt(0).toUpperCase() + part.slice(1) : part))
-    .join(" ");
-}
-
 function openAddFlow(preset) {
-  const entries = new Map(); // id -> { selected, label }
-  for (const model of preset.models ?? []) entries.set(model.id, { selected: true, label: model.name || prettyModel(model.id) });
+  // id -> { selected, label, contextWindow, maxTokens }
+  const entries = addFlowEntries(preset);
 
   const { overlay, close } = openModal({
     title: t("add.title", { name: preset.name }),
@@ -2009,13 +2005,7 @@ function openAddFlow(preset) {
     try {
       const models = await api.models(preset.baseUrl, preset.api, key);
       if (models.length) {
-        if (entries.size === 0) {
-          for (const model of models) entries.set(model.id, { selected: true, label: prettyModel(model.id) });
-        } else {
-          for (const model of models) {
-            if (!entries.has(model.id)) entries.set(model.id, { selected: true, label: prettyModel(model.id) });
-          }
-        }
+        for (const model of models) mergeSyncedModel(entries, model);
         renderModels();
         syncSaveLabel();
         lines.push({
@@ -2041,8 +2031,6 @@ function openAddFlow(preset) {
       toast(t("toast.pickModel"), { variant: "err" });
       return;
     }
-    const known = new Map((preset.models ?? []).map((model) => [model.id, model]));
-
     close();
     await commit({
       kind: "upsert",
@@ -2052,16 +2040,7 @@ function openAddFlow(preset) {
       api: preset.api,
       key: keyInput.value.trim() || null,
       keyMode: "inline",
-      models: picked.map((id) => {
-        const base = known.get(id);
-        return {
-          id,
-          name: base?.name ?? prettyModel(id),
-          contextWindow: base?.contextWindow ?? null,
-          maxTokens: base?.maxTokens ?? null,
-          reasoning: Boolean(base?.reasoning),
-        };
-      }),
+      models: addFlowDrafts(entries, preset),
     });
   });
 }

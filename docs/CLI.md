@@ -334,7 +334,7 @@ Non-interactive contract:
 | Flag | Effect |
 |---|---|
 | `--harness <id>` | Target harness. Optional when unambiguous. |
-| `--provider <id>` | Catalog provider id, or your own id for a custom endpoint. |
+| `--provider <id>` | Catalog provider id. Optional for a custom endpoint: with `custom`, or omitted entirely, the id is derived from `--name`. |
 | `--name <NAME>` | Display name (required for a custom provider). |
 | `--base-url <URL>` | Base URL (required for a custom provider). |
 | `--api <TYPE>` | API type for a custom provider. Default `openai-completions`. |
@@ -351,6 +351,19 @@ Non-interactive contract:
 | `--dry-run` | Show the preview only, write nothing. |
 | `--yes`, `-y` | Do not ask for confirmation (only relevant in a terminal). |
 
+Custom endpoint (OpenAI-compatible) without touching `--provider`:
+
+```bash
+hakonfig-cli add --harness pi --name "My GW" \
+  --base-url https://api.example.com/v1 --models m1,m2
+```
+
+The provider id is derived from the name: lowercase, spaces and symbols become
+a single `-` (`My GW` → `my-gw`). When that id is already used by a preset, an
+installed provider, or the `custom` sentinel, a 5-character random lowercase
+alphanumeric suffix is appended (`my-gw-7k2fa`) instead of refusing the add.
+An explicit `--provider my-id` still wins over the derived id.
+
 Idempotent: running the same `add` twice writes nothing the second time.
 A backup is created automatically before any overwrite.
 
@@ -366,6 +379,21 @@ Where the model list comes from, in order:
 3. The preset list (every model selected, `space` to deselect).
 4. Nothing available — interactive asks for a comma separated list, and
    non-interactive exits with "this provider has no model list yet".
+
+After the ids are chosen, every model is enriched before writing:
+
+- `reasoning` is detected from the harness catalog (`models-store.json`),
+  then the preset, then the model-id pattern — the same source the desktop
+  app's **Detect reasoning** button uses. Pi gets `thinkingLevelMap`
+  automatically for every reasoning model; OpenCode and Oh My Pi get
+  `reasoning: true`.
+- Models that already exist in the config keep their `contextWindow`,
+  `maxTokens`, and `reasoning` when the new source does not carry a value.
+  So `add ... --models m1` and `set models` never erase numbers that were
+  correct before.
+
+In the wizard, the model picker labels each row with `ctx` and `thinking`
+when known.
 
 With `--json`, `add` prints an `AddReport`:
 

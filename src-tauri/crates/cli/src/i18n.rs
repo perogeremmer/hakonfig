@@ -134,6 +134,14 @@ messages! {
         "type to search · ✓ = already configured",
         "ketik untuk mencari · ✓ = sudah terpasang"
     ),
+    CustomChoice => (
+        "Custom endpoint · OpenAI-compatible",
+        "Endpoint custom · OpenAI-compatible"
+    ),
+    CustomNamePrompt => ("Provider name", "Nama provider"),
+    CustomBaseUrlPrompt => ("Base URL", "Base URL"),
+    CustomBaseUrlHint => ("e.g. https://api.example.com/v1", "mis. https://api.example.com/v1"),
+    CustomApiPrompt => ("API type", "Tipe API"),
     NoHarnessInstalled => (
         "no harness with a config yet. Run `hakonfig-cli list` to see what is detected.",
         "belum ada harness yang punya config. Jalankan `hakonfig-cli list` untuk lihat yang terdeteksi."
@@ -191,9 +199,11 @@ messages! {
     Cancelled => ("cancelled.", "dibatalkan."),
     NeedProviderFlag => (
         "--provider <id> is required. List presets with `hakonfig-cli providers`, \
-         or use a custom endpoint: --provider <id> --name <name> --base-url <url>",
+         or add a custom endpoint with --name <name> --base-url <url>; the id is \
+         derived from the name.",
         "butuh --provider <id>. Lihat daftar dengan `hakonfig-cli providers`, \
-         atau pakai endpoint custom: --provider <id> --name <nama> --base-url <url>"
+         atau tambah endpoint custom dengan --name <nama> --base-url <url>; \
+         id-nya diturunkan dari nama."
     ),
     NeedCustomId => (
         "--provider custom needs its own id, e.g. \
