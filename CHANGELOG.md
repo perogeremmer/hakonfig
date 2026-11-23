@@ -6,6 +6,8 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.7.4]
+
 ### Fixed
 
 - GUI: wizard **Add provider** sekarang membawa `contextWindow` hasil sync
