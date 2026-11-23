@@ -5,9 +5,8 @@
 
 use std::time::Instant;
 
-
 use hakonfig_core::api;
-use hakonfig_core::engine::model::{HarnessSnapshot, Notice};
+use hakonfig_core::engine::model::{HarnessInfo, HarnessSnapshot, Notice};
 
 pub struct HarnessEntry {
     pub id: String,
@@ -28,16 +27,14 @@ impl HarnessEntry {
     /// Baca config saja. `harness_version()` sengaja TIDAK dipanggil di sini:
     /// dia spawn proses `<bin> --version` (±1.000 ms di mesin ini), dan itu
     /// membuat frame pertama menunggu pekerjaan yang tidak dibutuhkan layar.
-    pub fn load(id: String) -> Self {
-        let info = api::list_harnesses()
-            .into_iter()
-            .find(|h| h.id == id)
-            .expect("harness dari list_harnesses selalu bisa dibaca ulang");
-
+    ///
+    /// `info` datang dari `catalog()` supaya satu-satunya pemanggil
+    /// `list_harnesses()` adalah pemilik daftar, bukan setiap entry.
+    pub fn load(info: HarnessInfo) -> Self {
         // `read_harness` mengembalikan Result<String>, sama seperti yang
         // diterima frontend Tauri lewat `#[tauri::command]`.
         let t_read = Instant::now();
-        let (snapshot, error) = match api::read_harness(id.clone()) {
+        let (snapshot, error) = match api::read_harness(info.id.clone()) {
             Ok(snap) => (Some(snap), None),
             Err(e) => (None, Some(e)),
         };
@@ -51,7 +48,7 @@ impl HarnessEntry {
                 .first()
                 .map(|f| f.path.clone())
                 .unwrap_or_default(),
-            id,
+            id: info.id,
             name: info.name,
             installed: info.installed,
             experimental: info.experimental,
@@ -91,13 +88,22 @@ pub fn probe_versions(ids: Vec<String>) -> Vec<(String, Option<String>, u128)> {
         .collect()
 }
 
-pub fn load_all() -> (Vec<HarnessEntry>, u128) {
+/// Semua harness yang dikenal core, untuk picker "Tambah harness baru".
+pub fn catalog() -> Vec<HarnessInfo> {
+    api::list_harnesses()
+}
+
+/// Harness yang tampil di sidebar: yang sudah punya config/binary, ditambah
+/// yang pernah dipilih pengguna lewat picker. Instalasi baru tanpa config dan
+/// tanpa pilihan = daftar kosong.
+pub fn load_all(added: &[String]) -> (Vec<HarnessEntry>, u128) {
     let started = Instant::now();
     let entries: Vec<HarnessEntry> = api::list_harnesses()
         .into_iter()
+        .filter(|h| h.installed || added.iter().any(|id| id == &h.id))
         .map(|h| {
             let t = Instant::now();
-            let entry = HarnessEntry::load(h.id);
+            let entry = HarnessEntry::load(h);
             eprintln!(
                 "[spike]   {}: {} ms baca config — {} provider, {} model",
                 entry.id,

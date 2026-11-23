@@ -25,7 +25,8 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 | ID | Fitur | Status | File |
 |----|-------|--------|------|
 | F0a | Top bar: brand, statistik tool/provider/model, ikon cog → Pengaturan | [x] | `src/app.rs` |
-| F0b | Sidebar: daftar harness + jumlah provider/key, penanda aktif | [x] | `src/app.rs` |
+| F0b | Sidebar: daftar harness + jumlah provider/key, penanda aktif; kosong saat instalasi baru | [x] | `src/app.rs` |
+| F0g | Instalasi baru: sidebar kosong + tombol "Tambah harness baru" → modal Pi/OMP/OpenCode/Hermes; pilihan disimpan di `~/.config/hakonfig-spike/harnesses` | [x] | `src/app.rs`, `src/state.rs` |
 | F0c | Navigasi layar: kotak AKSI di Providers (Tambah/Diff/Riwayat) + cog (Pengaturan) + tombol kembali `‹ Providers` | [x] | `src/app.rs`, `src/views/providers.rs` |
 | F0e | Kotak AKSI: tiga baris berikon dengan judul + keterangan singkat, hover, klik membuka layar | [x] | `src/views/providers.rs` |
 | F0f | Tangkapan layar instalasi baru (HOME kosong) terang + gelap, lewat `./shot.sh --fresh` / `--dark` | [x] | `shot.sh`, `docs/fresh-install/` |

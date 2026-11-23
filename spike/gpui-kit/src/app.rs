@@ -16,8 +16,9 @@ use gpui_kit::prelude::*;
 use gpui_kit::*;
 use hakonfig_core::engine::model::{Notice, ProviderSummary};
 
-use crate::data::{load_all, load_notices, monogram, probe_versions, HarnessEntry, Metrics};
+use crate::data::{catalog, load_all, load_notices, monogram, probe_versions, HarnessEntry, Metrics};
 use crate::palette::{self, Palette};
+use crate::state;
 use crate::views::{
     add::AddView,
     diff::DiffView,
@@ -67,6 +68,11 @@ pub struct App {
     pub entries: Vec<HarnessEntry>,
     pub selected: usize,
     pub nav: Nav,
+    /// Harness yang dipilih lewat picker meski belum punya config; dipersist
+    /// oleh `state` supaya daftar kiri tidak kosong lagi setelah restart.
+    pub added: Vec<String>,
+    /// Picker "Tambah harness baru" sedang terbuka.
+    pub picker: bool,
     pub query: Entity<InputState>,
     pub query_text: String,
     pub filter: Filter,
@@ -109,7 +115,8 @@ impl App {
             }
         })];
 
-        let (entries, load_ms) = load_all();
+        let added = state::added();
+        let (entries, load_ms) = load_all(&added);
         let data_ready_ms = PROCESS_START.get().map(|s| s.elapsed().as_millis());
         eprintln!(
             "[spike] config siap setelah {:?} ms (baca {} ms, {} harness, {} model)",
@@ -156,6 +163,8 @@ impl App {
             entries,
             selected: 0,
             nav: Nav::Providers,
+            added,
+            picker: false,
             query,
             query_text: String::new(),
             filter: Filter::All,
@@ -250,11 +259,55 @@ impl App {
         cx.notify();
     }
 
+    pub fn open_picker(&mut self, cx: &mut Context<Self>) {
+        self.picker = true;
+        cx.notify();
+    }
+
+    pub fn close_picker(&mut self, cx: &mut Context<Self>) {
+        self.picker = false;
+        cx.notify();
+    }
+
+    /// Pilih satu harness dari picker. Harness yang sudah punya config hanya
+    /// dipilih; yang belum ada ditambahkan ke daftar dan ke state.
+    pub fn add_harness(&mut self, id: String, cx: &mut Context<Self>) {
+        self.picker = false;
+        let known = self.entries.iter().any(|e| e.id == id);
+        let name = catalog()
+            .into_iter()
+            .find(|h| h.id == id)
+            .map(|h| h.name)
+            .unwrap_or_else(|| id.clone());
+
+        if !known {
+            state::add(&id);
+            if !self.added.iter().any(|added| added == &id) {
+                self.added.push(id.clone());
+            }
+            let added = self.added.clone();
+            let (entries, ms) = load_all(&added);
+            self.entries = entries;
+            self.load_ms = ms;
+        }
+
+        if let Some(ix) = self.entries.iter().position(|e| e.id == id) {
+            self.selected = ix;
+        }
+        self.nav = Nav::Providers;
+        self.sync_views(cx);
+        if !known {
+            self.toast = Some(format!("{name} ditambahkan"));
+        }
+        cx.notify();
+    }
+
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         self.dirty = 0;
         self.data_ready_ms = None;
+        let added = self.added.clone();
         let task = cx.spawn(async move |this, cx| {
-            let (entries, ms) = cx.background_spawn(async { load_all() }).await;
+            let (entries, ms) = cx.background_spawn(async move { load_all(&added) }).await;
             this.update(cx, |this, cx| {
                 this.entries = entries;
                 this.load_ms = ms;
@@ -300,7 +353,8 @@ impl Render for App {
             Nav::Settings => self.settings.clone().into_any_element(),
         };
 
-        v_flex()
+        let mut root = v_flex()
+            .relative()
             .size_full()
             .bg(p.canvas)
             .text_color(p.ink)
@@ -321,7 +375,11 @@ impl Render for App {
                             })
                             .child(body),
                     ),
-            )
+            );
+        if self.picker {
+            root = root.child(self.picker_overlay(&p, cx));
+        }
+        root
     }
 }
 
@@ -441,7 +499,7 @@ impl App {
     }
 
     fn sidebar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut items = v_flex().gap(px(2.)).px(px(10.)).pb(px(10.));
+        let mut items = v_flex().gap(px(2.)).px(px(10.)).pb(px(4.));
         for (ix, entry) in self.entries.iter().enumerate() {
             let selected = ix == self.selected;
             items = items.child(
@@ -499,6 +557,45 @@ impl App {
             );
         }
 
+        // Instalasi baru: tidak ada config dan belum ada pilihan, jadi kolom
+        // kiri benar-benar kosong dan satu-satunya jalan masuk adalah tombol.
+        let empty = self.entries.is_empty();
+        let body = if empty {
+            v_flex()
+                .flex_1()
+                .justify_center()
+                .px(px(18.))
+                .gap(px(6.))
+                .items_center()
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(34.))
+                        .rounded(px(10.))
+                        .bg(p.neutral_bg)
+                        .text_color(p.ink_muted)
+                        .text_size(px(16.))
+                        .child(IconName::SquareTerminal),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.5))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child("Belum ada harness"),
+                )
+                .child(
+                    div()
+                        .text_size(px(10.5))
+                        .text_color(p.ink_muted)
+                        .text_center()
+                        .child("Pilih tool yang mau diatur lewat tombol di bawah."),
+                )
+                .into_any_element()
+        } else {
+            items.into_any_element()
+        };
 
         v_flex()
             .w(px(238.))
@@ -527,8 +624,31 @@ impl App {
                             .child(format!("· {}", self.entries.len())),
                     ),
             )
-            .child(items)
-            .child(div().flex_1())
+            .child(body)
+            .when(!empty, |s| s.child(div().flex_1()))
+            .child(
+                h_flex()
+                    .id("add-harness")
+                    .mx(px(10.))
+                    .mb(px(10.))
+                    .when(!empty, |s| s.mt(px(4.)))
+                    .when(empty, |s| s.mb(px(16.)))
+                    .px(px(10.))
+                    .py(px(8.))
+                    .gap(px(7.))
+                    .items_center()
+                    .rounded(px(9.))
+                    .border_1()
+                    .border_dashed()
+                    .border_color(p.line_strong)
+                    .text_size(px(11.5))
+                    .text_color(if empty { p.brand_text } else { p.ink_secondary })
+                    .cursor_pointer()
+                    .hover(|s| s.bg(p.surface).border_color(p.brand))
+                    .child(IconName::Plus)
+                    .child("Tambah harness baru")
+                    .on_click(cx.listener(|this, _, _, cx| this.open_picker(cx))),
+            )
             .child(
                 v_flex()
                     .px(px(20.))
@@ -549,6 +669,172 @@ impl App {
                             .text_color(p.ink_muted)
                             .child("read-only spike"),
                     ),
+            )
+    }
+
+    /// Modal pemilih harness. Menampilkan seluruh harness yang dikenal core;
+    /// yang sudah terpasang ditandai, yang sudah ada di sidebar tidak
+    /// diduplikasi saat diklik.
+    fn picker_overlay(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let mut options = v_flex().gap(px(4.));
+        for info in catalog() {
+            let id = info.id.clone();
+            let already = self.entries.iter().any(|e| e.id == info.id);
+            let selected = self
+                .active()
+                .map(|e| e.id == info.id)
+                .unwrap_or(false);
+            let chip = if already {
+                ("sudah di daftar", p.brand_soft, p.brand_text)
+            } else if info.installed {
+                ("terpasang", p.ok_bg, p.ok_text)
+            } else {
+                ("belum terpasang", p.neutral_bg, p.neutral_text)
+            };
+
+            options = options.child(
+                h_flex()
+                    .id(ElementId::Name(format!("pick-{id}").into()))
+                    .px(px(10.))
+                    .py(px(9.))
+                    .gap(px(10.))
+                    .items_center()
+                    .rounded(px(9.))
+                    .border_1()
+                    .border_color(if selected { p.brand } else { p.line })
+                    .cursor_pointer()
+                    .hover(|s| s.bg(p.canvas))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(26.))
+                            .flex_shrink_0()
+                            .rounded(px(7.))
+                            .bg(if selected { p.brand_soft } else { p.neutral_bg })
+                            .text_color(if selected { p.brand_text } else { p.ink_muted })
+                            .text_size(px(10.5))
+                            .font_weight(FontWeight::BOLD)
+                            .child(monogram(&info.name, &info.id)),
+                    )
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .gap(px(1.))
+                            .child(
+                                h_flex()
+                                    .gap(px(6.))
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .text_size(px(12.5))
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .child(info.name.clone()),
+                                    )
+                                    .when(info.experimental, |s| {
+                                        s.child(
+                                            div()
+                                                .px(px(5.))
+                                                .py(px(1.))
+                                                .rounded_full()
+                                                .bg(p.warn_bg)
+                                                .text_color(p.warn_text)
+                                                .text_size(px(9.5))
+                                                .child("eksperimental"),
+                                        )
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(10.5))
+                                    .text_color(p.ink_muted)
+                                    .child(info.notes.clone()),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex_shrink_0()
+                            .px(px(6.))
+                            .py(px(2.))
+                            .rounded_full()
+                            .bg(chip.1)
+                            .text_color(chip.2)
+                            .text_size(px(9.5))
+                            .child(chip.0),
+                    )
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.add_harness(id.clone(), cx)
+                    })),
+            );
+        }
+
+        div()
+            .id("picker-backdrop")
+            .absolute()
+            .top(px(0.))
+            .left(px(0.))
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(black().opacity(0.4))
+            .on_click(cx.listener(|this, _, _, cx| this.close_picker(cx)))
+            .child(
+                v_flex()
+                    .id("picker-card")
+                    .w(px(430.))
+                    .gap(px(10.))
+                    .p(px(14.))
+                    .rounded(px(14.))
+                    .bg(p.surface)
+                    .border_1()
+                    .border_color(p.line)
+                    .shadow_lg()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        h_flex()
+                            .gap(px(8.))
+                            .items_start()
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .gap(px(2.))
+                                    .child(
+                                        div()
+                                            .text_size(px(14.))
+                                            .font_weight(FontWeight::BOLD)
+                                            .child("Tambah harness baru"),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(10.5))
+                                            .text_color(p.ink_muted)
+                                            .child(
+                                                "Pilih tool yang mau diatur. Yang sudah punya \
+                                                 config langsung terdeteksi.",
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .id("picker-close")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(24.))
+                                    .rounded(px(7.))
+                                    .cursor_pointer()
+                                    .text_color(p.ink_muted)
+                                    .hover(|s| s.bg(p.canvas).text_color(p.ink))
+                                    .child(IconName::Close)
+                                    .on_click(cx.listener(|this, _, _, cx| this.close_picker(cx))),
+                            ),
+                    )
+                    .child(options),
             )
     }
 }

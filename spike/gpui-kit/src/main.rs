@@ -12,6 +12,7 @@ mod app;
 mod data;
 mod net;
 mod palette;
+mod state;
 mod views;
 
 use std::borrow::Cow;

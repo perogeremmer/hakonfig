@@ -16,10 +16,13 @@ Tujuannya menjawab dua pertanyaan dengan bukti, bukan opini:
 | ![Tambah 3](docs/ui-add-3.png) | ![Diff](docs/ui-diff.png) |
 | ![Riwayat](docs/ui-history.png) | ![Pengaturan](docs/ui-settings.png) |
 
-Tampilan instalasi baru (HOME kosong, belum ada config tool apa pun):
-`docs/fresh-install/` — `fresh-providers.png`, `fresh-add-1..3.png`,
-`fresh-diff.png`, `fresh-history.png`, `fresh-settings.png`, dan versi `-dark`
-dari semuanya. Dibuat ulang dengan `./shot.sh --fresh` (tambah `--dark`).
+Tampilan instalasi baru (HOME kosong, belum ada config tool apa pun): kolom
+kiri kosong dengan satu tombol **Tambah harness baru**; modalnya menawarkan
+Pi, OMP, OpenCode, dan Hermes. Tangkapan layarnya di `docs/fresh-install/` —
+`fresh-providers.png`, `fresh-picker.png` (modal pilihan), `fresh-added.png`
+(setelah memilih Pi), `fresh-add-1..3.png`, `fresh-diff.png`,
+`fresh-history.png`, `fresh-settings.png`, dan versi `-dark` dari semuanya.
+Dibuat ulang dengan `./shot.sh --fresh` (tambah `--dark`).
 
 ## Jalankan
 

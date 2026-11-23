@@ -52,6 +52,75 @@ impl Filter {
 pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement {
     let mut column = v_flex().w_full().gap(px(12.));
 
+    if app.entries.is_empty() {
+        return v_flex()
+            .flex_1()
+            .min_w_0()
+            .min_h_0()
+            .p(px(20.))
+            .items_center()
+            .justify_center()
+            .child(
+                v_flex()
+                    .w(px(420.))
+                    .gap(px(8.))
+                    .items_center()
+                    .p(px(26.))
+                    .rounded(px(16.))
+                    .bg(p.surface)
+                    .border_1()
+                    .border_color(p.line)
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(44.))
+                            .rounded(px(12.))
+                            .bg(p.brand_soft)
+                            .text_color(p.brand_text)
+                            .text_size(px(20.))
+                            .child(IconName::SquareTerminal),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(18.))
+                            .font_weight(FontWeight::BOLD)
+                            .child("Belum ada harness"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(12.))
+                            .text_color(p.ink_secondary)
+                            .text_center()
+                            .child(
+                                "Hakonfig mengatur provider untuk tool seperti Pi, OMP, \
+                                 OpenCode, dan Hermes. Tambahkan satu untuk mulai.",
+                            ),
+                    )
+                    .child(
+                        div()
+                            .pt(px(4.))
+                            .child(
+                                palette::brand_button(
+                                    p,
+                                    "empty-add-harness",
+                                    "Tambah harness baru",
+                                )
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.open_picker(cx)
+                                })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.5))
+                            .text_color(p.ink_muted)
+                            .child("Tool yang sudah punya config terdeteksi otomatis."),
+                    ),
+            );
+    }
+
     let Some(entry) = app.active() else {
         return v_flex()
             .flex_1()

@@ -59,6 +59,26 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-23 21:58 · repo · instalasi baru kosong + picker harness
+- Kerja: sidebar tidak lagi menampilkan keempat adapter tanpa syarat. Yang
+  tampil hanya harness yang punya config/binary atau yang pernah dipilih lewat
+  tombol **Tambah harness baru** (Pi, OMP, OpenCode, Hermes). Pilihan disimpan
+  di `~/.config/hakonfig-spike/harnesses` supaya bertahan setelah restart.
+  Layar Providers tanpa harness menampilkan kartu kosong dengan tombol yang
+  sama; memilih harness menambahkan ke sidebar lalu membuka Providers-nya.
+- File: `src/state.rs` (baru), `src/data.rs`, `src/app.rs`,
+  `src/views/providers.rs`, `src/main.rs`, `shot.sh`, `README.md`,
+  `FEATURES.md`.
+- Verifikasi: `cargo build` hijau. HOME kosong: 0 harness, sidebar kosong +
+  tombol; modal 4 pilihan; pilih Pi → sidebar `1 harness`, toast "Pi
+  ditambahkan", `~/.config/hakonfig-spike/harnesses` berisi `pi`; restart
+  dengan HOME sama → 1 harness. HOME asli → 4 harness terdeteksi + tombol
+  tambah tetap ada.
+- Kendala: ikon `PackagePlus`/`X` tidak ada di bundel default gpui-kit
+  (asetnya ada di katalog penuh, tapi `Assets` hanya memuat 106 ikon default),
+  jadi diganti `SquareTerminal`/`Close`. Root shell harus `v_flex`, bukan
+  `div`, kalau tidak baris konten tidak mengisi tinggi jendela.
+
 ### 2026-11-23 02:40 · repo · halaman Providers bisa digulir
 - Laporan: di harness `pi` halaman provider tidak bisa di-scroll. Penyebabnya
   hanya grid provider yang punya `overflow_y_scroll`; header + kartu berkas

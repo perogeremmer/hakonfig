@@ -34,16 +34,36 @@ fi
 sleep 5
 
 WIN=$(xdotool search --name "spike gpui-kit" | tail -1)
-OUT="docs"; PREFIX=""
-if [ "$FRESH" = 1 ]; then OUT="docs/fresh-install"; PREFIX="fresh-"; fi
-SUFFIX=""; [ "$DARK" = 1 ] && SUFFIX="-dark"
+OUT="docs/fresh-install"
+[ "$FRESH" = 0 ] && OUT="docs"
 mkdir -p "$OUT"
 
 click() { xdotool mousemove --window "$WIN" "$1" "$2"; sleep 0.3; xdotool click 1; sleep 1.5; }
-grab()  { import -window "$WIN" "$OUT/$PREFIX$1$SUFFIX.png"; echo "$OUT/$PREFIX$1$SUFFIX.png"; }
+grab() {
+  local name="$1" path
+  if [ "$FRESH" = 1 ]; then
+    path="$OUT/fresh-$name"
+    [ "$DARK" = 1 ] && path="$path-dark"
+  elif [ "$name" = providers ]; then
+    # README memakai nama lama: providers terang/gelap = ui-light / ui-dark.
+    if [ "$DARK" = 1 ]; then path="$OUT/ui-dark"; else path="$OUT/ui-light"; fi
+  else
+    path="$OUT/ui-$name"
+    [ "$DARK" = 1 ] && path="$path-dark"
+  fi
+  import -window "$WIN" "$path.png"
+  echo "$path.png"
+}
 
 xdotool windowactivate "$WIN"; sleep 0.6
 grab providers
+
+# Instalasi baru: kolom kiri kosong. Satu-satunya jalan masuk adalah tombol
+# "Tambah harness baru" di kiri bawah, lalu memilih Pi dari modal.
+if [ "$FRESH" = 1 ]; then
+  click 118 723; grab picker
+  click 600 343; grab added
+fi
 
 if [ "$FRESH" = 0 ] && [ "$DARK" = 1 ]; then
   click 1160 26; grab settings     # tema gelap cukup dua layar ini
