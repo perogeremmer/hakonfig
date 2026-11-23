@@ -53,6 +53,39 @@ enum Target {
     Custom { id: String },
 }
 
+/// Identitas lengkap endpoint custom. `id` sudah final (tidak bentrok dengan
+/// preset, provider terpasang, atau sentinel `custom`).
+struct CustomSpec {
+    id: String,
+    name: String,
+    base_url: String,
+    api: String,
+}
+
+/// Hasil pemilihan provider: target plus identitas custom bila ada.
+struct PickedTarget {
+    target: Target,
+    custom: Option<CustomSpec>,
+}
+
+impl PickedTarget {
+    fn preset(preset: &ProviderPreset) -> Self {
+        Self {
+            target: Target::Preset(Box::new(preset.clone())),
+            custom: None,
+        }
+    }
+
+    fn custom(spec: CustomSpec) -> Self {
+        Self {
+            target: Target::Custom {
+                id: spec.id.clone(),
+            },
+            custom: Some(spec),
+        }
+    }
+}
+
 /// Penanda "pengguna membatalkan". Bukan kegagalan: exit code tetap 0.
 #[derive(Debug)]
 pub struct Cancelled;
@@ -100,10 +133,11 @@ pub fn run(options: AddOptions) -> Result<()> {
         .collect();
 
     let presets = api::list_presets();
-    let target = match pick_target(&options, &presets, &installed_ids, interactive)? {
-        Some(target) => target,
-        None => return Err(anyhow::Error::new(Cancelled)),
-    };
+    let PickedTarget { target, custom } =
+        match pick_target(&options, &presets, &installed_ids, interactive)? {
+            Some(picked) => picked,
+            None => return Err(anyhow::Error::new(Cancelled)),
+        };
 
     let provider_id = target_id(&target).to_string();
     let existing = snapshot
@@ -142,20 +176,21 @@ pub fn run(options: AddOptions) -> Result<()> {
         }
     }
 
-    // Identitas provider custom divalidasi lebih dulu: tanpa base URL, langkah
+    // Identitas provider custom dilengkapi lebih dulu: tanpa base URL, langkah
     // key/model tidak ada artinya, jadi pesan errornya harus muncul duluan.
-    if matches!(target, Target::Custom { .. }) {
-        draft::draft_custom(
-            target_id(&target),
-            options.name.as_deref(),
-            options.base_url.as_deref(),
-            options.api.as_deref(),
-            None,
-            options.key_mode,
-            Vec::new(),
-        )
-        .map_err(|error| anyhow!(error))?;
-    }
+    // `--provider <id>` yang bukan preset memakai id itu apa adanya; id yang
+    // tidak disebut diturunkan dari nama (slug), dengan akhiran acak bila sudah
+    // dipakai preset/provider lain.
+    let custom = match (&target, custom) {
+        (Target::Custom { id }, None) => Some(resolve_custom(
+            Some(id.clone()),
+            &options,
+            &presets,
+            &installed_ids,
+            interactive,
+        )?),
+        (_, spec) => spec,
+    };
 
     let stored_key = api::stored_key(harness.clone(), provider_id.clone())
         .ok()
@@ -170,7 +205,7 @@ pub fn run(options: AddOptions) -> Result<()> {
         }
     };
 
-    let (base_url, api_name) = endpoint(&target, &options);
+    let (base_url, api_name) = endpoint(&target, &options, custom.as_ref());
 
     let should_test = options.test.unwrap_or(interactive);
     if should_test
@@ -202,6 +237,7 @@ pub fn run(options: AddOptions) -> Result<()> {
     let models = pick_models_with_key_source(
         &options,
         &target,
+        custom.as_ref(),
         &harness,
         key.as_deref(),
         interactive,
@@ -211,7 +247,13 @@ pub fn run(options: AddOptions) -> Result<()> {
     // Draft dibangun ulang penuh di sini (validasi custom sudah dijalankan
     // lebih awal supaya pesan errornya muncul sebelum langkah key/model),
     // jadi ini sekadar melengkapi key dan model yang sudah terkumpul.
-    let draft = build_draft(&target, key.as_deref(), options.key_mode, models, &options)?;
+    let draft = build_draft(
+        &target,
+        custom.as_ref(),
+        key.as_deref(),
+        options.key_mode,
+        models,
+    )?;
     let model_count = draft.models.len();
 
     let op = EditOp::Upsert(draft);
@@ -500,6 +542,7 @@ fn run_existing_action(
             let models = pick_models_with_key_source(
                 options,
                 target,
+                None,
                 harness,
                 key.as_deref(),
                 interactive,
@@ -628,32 +671,41 @@ fn pick_target(
     presets: &[ProviderPreset],
     installed: &[String],
     interactive: bool,
-) -> Result<Option<Target>> {
+) -> Result<Option<PickedTarget>> {
     if let Some(id) = options.provider.as_deref() {
         let trimmed = id.trim();
+        // `custom` berarti id tidak ditentukan: turunkan dari nama.
+        if trimmed.eq_ignore_ascii_case(CUSTOM_ID) {
+            let spec = resolve_custom(None, options, presets, installed, interactive)?;
+            return Ok(Some(PickedTarget::custom(spec)));
+        }
         if let Some(preset) = presets
             .iter()
             .find(|preset| preset.id.eq_ignore_ascii_case(trimmed))
         {
-            return Ok(Some(Target::Preset(Box::new(preset.clone()))));
+            return Ok(Some(PickedTarget::preset(preset)));
         }
         // Bukan preset: kalau pengguna menyebut --name atau --base-url, niatnya
-        // jelas custom, jadi biarkan validasi custom yang memberi pesan spesifik
-        // ("--base-url wajib") alih-alih "provider tidak ada di katalog".
-        if trimmed != CUSTOM_ID && (options.name.is_some() || options.base_url.is_some()) {
-            return Ok(Some(Target::Custom {
-                id: trimmed.to_string(),
-            }));
+        // jelas custom. Id yang disebut dipakai apa adanya.
+        if options.name.is_some() || options.base_url.is_some() {
+            let spec = resolve_custom(
+                Some(trimmed.to_string()),
+                options,
+                presets,
+                installed,
+                interactive,
+            )?;
+            return Ok(Some(PickedTarget::custom(spec)));
         }
         // Provider custom yang sudah terpasang juga sah: id-nya memang tidak ada
         // di katalog, dan aksi sempit (key/model/default) tidak butuh preset.
         if installed.iter().any(|id| id.eq_ignore_ascii_case(trimmed)) {
-            return Ok(Some(Target::Custom {
-                id: trimmed.to_string(),
+            return Ok(Some(PickedTarget {
+                target: Target::Custom {
+                    id: trimmed.to_string(),
+                },
+                custom: None,
             }));
-        }
-        if trimmed == CUSTOM_ID {
-            bail!("{}", i18n::t(Msg::NeedCustomId));
         }
         // Bukan preset dan bukan custom: laporkan dengan saran kandidat
         // terdekat dari katalog. Cabang `Ok` tidak mungkin (id sudah
@@ -670,17 +722,24 @@ fn pick_target(
         return Err(anyhow!(message));
     }
 
+    // Tanpa --provider: nama/base URL yang diberikan berarti endpoint custom.
+    if options.name.is_some() || options.base_url.is_some() {
+        let spec = resolve_custom(None, options, presets, installed, interactive)?;
+        return Ok(Some(PickedTarget::custom(spec)));
+    }
+
     if !interactive {
         bail!("{}", i18n::t(Msg::NeedProviderFlag));
     }
 
-    let options_list: Vec<Choice> = presets
-        .iter()
-        .map(|preset| Choice {
-            id: preset.id.clone(),
-            label: provider_label(preset, installed),
-        })
-        .collect();
+    let mut options_list = vec![Choice {
+        id: CUSTOM_ID.to_string(),
+        label: i18n::t(Msg::CustomChoice).to_string(),
+    }];
+    options_list.extend(presets.iter().map(|preset| Choice {
+        id: preset.id.clone(),
+        label: provider_label(preset, installed),
+    }));
 
     let picked = ask(
         inquire::Select::new(i18n::t(Msg::PickProvider), options_list)
@@ -689,12 +748,184 @@ fn pick_target(
             .prompt(),
     )?;
 
+    if picked.id.eq_ignore_ascii_case(CUSTOM_ID) {
+        let spec = resolve_custom(None, options, presets, installed, true)?;
+        return Ok(Some(PickedTarget::custom(spec)));
+    }
+
     let preset = presets
         .iter()
         .find(|preset| preset.id == picked.id)
         .ok_or_else(|| anyhow!("provider '{}' vanished from the catalog", picked.id))?;
 
-    Ok(Some(Target::Preset(Box::new(preset.clone()))))
+    Ok(Some(PickedTarget::preset(preset)))
+}
+
+/// Tipe API yang bisa ditawarkan wizard untuk endpoint custom.
+const CUSTOM_APIS: &[&str] = &[
+    "openai-completions",
+    "openai-responses",
+    "anthropic-messages",
+    "google-generative-ai",
+];
+
+/// Lengkapi identitas provider custom.
+///
+/// `explicit_id` = id dari `--provider`. Tanpa itu, id diturunkan dari nama:
+/// huruf kecil, spasi/simbol menjadi satu `-`. Kalau id itu sudah dipakai
+/// preset, provider terpasang, atau sentinel `custom`, beri akhiran 5 karakter
+/// acak (huruf kecil + angka) alih-alih menolak.
+fn resolve_custom(
+    explicit_id: Option<String>,
+    options: &AddOptions,
+    presets: &[ProviderPreset],
+    installed: &[String],
+    interactive: bool,
+) -> Result<CustomSpec> {
+    let name = match options
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) => value.to_string(),
+        None if interactive => ask_custom_text(Msg::CustomNamePrompt, None, Msg::CustomNeedsName)?,
+        None => bail!("{}", i18n::t(Msg::CustomNeedsName)),
+    };
+
+    let base_url = match options
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) => value.to_string(),
+        None if interactive => ask_custom_text(
+            Msg::CustomBaseUrlPrompt,
+            Some(Msg::CustomBaseUrlHint),
+            Msg::CustomNeedsBaseUrl,
+        )?,
+        None => bail!("{}", i18n::t(Msg::CustomNeedsBaseUrl)),
+    };
+
+    let api = match options
+        .api
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Some(value) => value.to_string(),
+        None if interactive => {
+            ask(inquire::Select::new(i18n::t(Msg::CustomApiPrompt), CUSTOM_APIS.to_vec()).prompt())?
+                .to_string()
+        }
+        None => draft::DEFAULT_API.to_string(),
+    };
+
+    let id = match explicit_id {
+        Some(id) => id,
+        None => unique_custom_id(&slugify(&name), presets, installed),
+    };
+
+    // Validasi yang sama dengan jalur flag: nama/base URL wajib, URL http(s),
+    // id tidak boleh sentinel `custom`.
+    let draft = draft::draft_custom(
+        &id,
+        Some(&name),
+        Some(&base_url),
+        Some(&api),
+        None,
+        options.key_mode,
+        Vec::new(),
+    )
+    .map_err(|error| anyhow!(error))?;
+
+    Ok(CustomSpec {
+        id: draft.id,
+        name: draft.name,
+        base_url: draft.base_url,
+        api: draft.api,
+    })
+}
+
+fn ask_custom_text(prompt: Msg, hint: Option<Msg>, empty: Msg) -> Result<String> {
+    let mut question = inquire::Text::new(i18n::t(prompt));
+    if let Some(hint) = hint {
+        question = question.with_help_message(i18n::t(hint));
+    }
+    let value = ask(question.prompt())?;
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        bail!("{}", i18n::t(empty));
+    }
+    Ok(value)
+}
+
+/// `My GW (prod)` -> `my-gw-prod`. Selalu menghasilkan sesuatu yang tidak
+/// kosong supaya id tidak pernah berupa string kosong.
+fn slugify(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut dash = false;
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+            dash = false;
+        } else if !out.is_empty() && !dash {
+            out.push('-');
+            dash = true;
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        "provider".to_string()
+    } else {
+        out
+    }
+}
+
+/// 5 karakter huruf kecil + angka. Cukup acak untuk membedakan id; bukan
+/// kredensial, jadi tidak perlu CSPRNG.
+fn random_suffix(len: usize) -> String {
+    use std::hash::{BuildHasher, Hasher};
+
+    const ALPHABET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u128(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_nanos())
+            .unwrap_or(0),
+    );
+    let mut out = String::with_capacity(len);
+    for index in 0..len {
+        hasher.write_usize(index);
+        let value = hasher.finish();
+        out.push(ALPHABET[(value % ALPHABET.len() as u64) as usize] as char);
+    }
+    out
+}
+
+fn custom_id_taken(id: &str, presets: &[ProviderPreset], installed: &[String]) -> bool {
+    id.eq_ignore_ascii_case(CUSTOM_ID)
+        || installed.iter().any(|other| other.eq_ignore_ascii_case(id))
+        || presets
+            .iter()
+            .any(|preset| preset.id.eq_ignore_ascii_case(id))
+}
+
+fn unique_custom_id(base: &str, presets: &[ProviderPreset], installed: &[String]) -> String {
+    if !custom_id_taken(base, presets, installed) {
+        return base.to_string();
+    }
+    for _ in 0..32 {
+        let candidate = format!("{base}-{}", random_suffix(5));
+        if !custom_id_taken(&candidate, presets, installed) {
+            return candidate;
+        }
+    }
+    format!("{base}-{}", random_suffix(16))
 }
 
 fn provider_label(preset: &ProviderPreset, installed: &[String]) -> String {
@@ -841,6 +1072,7 @@ fn continue_after_failed_test(interactive: bool, yes: bool, explicit: bool) -> R
 fn pick_models_with_key_source(
     options: &AddOptions,
     target: &Target,
+    custom: Option<&CustomSpec>,
     harness: &str,
     key: Option<&str>,
     interactive: bool,
@@ -861,7 +1093,7 @@ fn pick_models_with_key_source(
     }
 
     if wants_sync(options, preset, key, interactive, stored_key)? {
-        match sync_models(target, options, harness, key) {
+        match sync_models(target, options, custom, harness, key) {
             Ok(live) if !live.is_empty() => {
                 let models = draft::models_from_sync(live, preset);
                 return if interactive {
@@ -964,10 +1196,11 @@ fn wants_sync(
 fn sync_models(
     target: &Target,
     options: &AddOptions,
+    custom: Option<&CustomSpec>,
     harness: &str,
     key: Option<&str>,
 ) -> Result<Vec<hakonfig_core::api::ModelOption>> {
-    let (base_url, api_name) = endpoint(target, options);
+    let (base_url, api_name) = endpoint(target, options, custom);
     block_on(api::fetch_models(
         base_url,
         api_name,
@@ -1007,23 +1240,26 @@ fn ask_models(models: &[ModelDraft]) -> Result<Vec<ModelDraft>> {
 
 fn build_draft(
     target: &Target,
+    custom: Option<&CustomSpec>,
     key: Option<&str>,
     mode: KeyMode,
     models: Vec<ModelDraft>,
-    options: &AddOptions,
 ) -> Result<ProviderDraft> {
     match target {
         Target::Preset(preset) => Ok(draft::draft_from_preset(preset, key, mode, models)),
-        Target::Custom { id } => draft::draft_custom(
-            id,
-            options.name.as_deref(),
-            options.base_url.as_deref(),
-            options.api.as_deref(),
-            key,
-            mode,
-            models,
-        )
-        .map_err(|error| anyhow!(error)),
+        Target::Custom { id } => {
+            let spec = custom.ok_or_else(|| anyhow!("custom provider identity missing"))?;
+            draft::draft_custom(
+                id,
+                Some(&spec.name),
+                Some(&spec.base_url),
+                Some(&spec.api),
+                key,
+                mode,
+                models,
+            )
+            .map_err(|error| anyhow!(error))
+        }
     }
 }
 
@@ -1047,16 +1283,23 @@ fn target_id(target: &Target) -> &str {
 }
 
 /// Endpoint yang akan dipakai: dari preset, atau dari flag untuk custom.
-fn endpoint(target: &Target, options: &AddOptions) -> (String, String) {
+fn endpoint(
+    target: &Target,
+    options: &AddOptions,
+    custom: Option<&CustomSpec>,
+) -> (String, String) {
     match target {
         Target::Preset(preset) => (preset.base_url.clone(), preset.api.clone()),
-        Target::Custom { .. } => (
-            options.base_url.clone().unwrap_or_default(),
-            options
-                .api
-                .clone()
-                .unwrap_or_else(|| draft::DEFAULT_API.to_string()),
-        ),
+        Target::Custom { .. } => match custom {
+            Some(spec) => (spec.base_url.clone(), spec.api.clone()),
+            None => (
+                options.base_url.clone().unwrap_or_default(),
+                options
+                    .api
+                    .clone()
+                    .unwrap_or_else(|| draft::DEFAULT_API.to_string()),
+            ),
+        },
     }
 }
 

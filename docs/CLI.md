@@ -334,7 +334,7 @@ Non-interactive contract:
 | Flag | Effect |
 |---|---|
 | `--harness <id>` | Target harness. Optional when unambiguous. |
-| `--provider <id>` | Catalog provider id, or your own id for a custom endpoint. |
+| `--provider <id>` | Catalog provider id. Optional for a custom endpoint: with `custom`, or omitted entirely, the id is derived from `--name`. |
 | `--name <NAME>` | Display name (required for a custom provider). |
 | `--base-url <URL>` | Base URL (required for a custom provider). |
 | `--api <TYPE>` | API type for a custom provider. Default `openai-completions`. |
@@ -350,6 +350,19 @@ Non-interactive contract:
 | `--no-test` | Skip the connection test. |
 | `--dry-run` | Show the preview only, write nothing. |
 | `--yes`, `-y` | Do not ask for confirmation (only relevant in a terminal). |
+
+Custom endpoint (OpenAI-compatible) without touching `--provider`:
+
+```bash
+hakonfig-cli add --harness pi --name "My GW" \
+  --base-url https://api.example.com/v1 --models m1,m2
+```
+
+The provider id is derived from the name: lowercase, spaces and symbols become
+a single `-` (`My GW` → `my-gw`). When that id is already used by a preset, an
+installed provider, or the `custom` sentinel, a 5-character random lowercase
+alphanumeric suffix is appended (`my-gw-7k2fa`) instead of refusing the add.
+An explicit `--provider my-id` still wins over the derived id.
 
 Idempotent: running the same `add` twice writes nothing the second time.
 A backup is created automatically before any overwrite.

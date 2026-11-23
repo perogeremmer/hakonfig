@@ -305,6 +305,148 @@ fn add_custom_provider_uses_its_own_base_url() {
     );
 }
 
+fn assert_random_suffix(id: &str, base: &str) {
+    let suffix = id
+        .strip_prefix(base)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .unwrap_or_else(|| panic!("{id} tidak diawali {base}-"));
+    assert_eq!(suffix.len(), 5, "akhiran harus 5 karakter: {id}");
+    assert!(
+        suffix
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit()),
+        "akhiran harus huruf kecil/angka tanpa simbol: {id}"
+    );
+}
+
+#[test]
+fn add_custom_without_provider_derives_id_from_name() {
+    let root = sandbox("add-custom-derive");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--name",
+            "Toko  Saya!!",
+            "--base-url",
+            "https://api.toko.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk-toko\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    assert_eq!(models["providers"]["toko-saya"]["name"], "Toko  Saya!!");
+    assert_eq!(
+        models["providers"]["toko-saya"]["baseUrl"],
+        "https://api.toko.test/v1"
+    );
+}
+
+#[test]
+fn add_custom_sentinel_provider_derives_id_from_name() {
+    let root = sandbox("add-custom-sentinel");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "custom",
+            "--name",
+            "My GW",
+            "--base-url",
+            "https://api.gw.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk-gw\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    assert!(models["providers"]["my-gw"].is_object());
+}
+
+#[test]
+fn add_custom_derived_id_gets_random_suffix_when_taken() {
+    let root = sandbox("add-custom-suffix");
+    let args = [
+        "add",
+        "--harness",
+        "pi",
+        "--name",
+        "Dup GW",
+        "--base-url",
+        "https://api.dup.test/v1",
+        "--key-stdin",
+        "--models",
+        "m1",
+        "--no-test",
+    ];
+    let first = run_stdin(&root, &args, "sk-dup\n");
+    assert!(first.status.success(), "{}", stderr(&first));
+    let second = run_stdin(&root, &args, "sk-dup\n");
+    assert!(
+        second.status.success(),
+        "provider kedua tidak boleh ditolak: {}",
+        stderr(&second)
+    );
+
+    let models = read_json(&models_path(&root));
+    let providers = models["providers"].as_object().expect("providers object");
+    assert!(providers.contains_key("dup-gw"));
+    let generated = providers
+        .keys()
+        .find(|id| id.starts_with("dup-gw-") && *id != "dup-gw")
+        .expect("id kedua harus memakai akhiran acak");
+    assert_random_suffix(generated, "dup-gw");
+}
+
+#[test]
+fn add_custom_name_matching_a_preset_gets_a_suffix() {
+    let root = sandbox("add-custom-preset-id");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--name",
+            "Groq",
+            "--base-url",
+            "https://gw.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk-gw\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    let providers = models["providers"].as_object().expect("providers object");
+    assert!(
+        !providers.contains_key("groq"),
+        "id preset tidak boleh ditimpa endpoint custom"
+    );
+    let generated = providers
+        .keys()
+        .find(|id| id.starts_with("groq-"))
+        .expect("harus ada id groq-<acak>");
+    assert_random_suffix(generated, "groq");
+}
+
 #[test]
 fn add_creates_a_backup_when_overwriting_an_existing_file() {
     let root = sandbox("add-backup");
