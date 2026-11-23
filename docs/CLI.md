@@ -380,6 +380,21 @@ Where the model list comes from, in order:
 4. Nothing available — interactive asks for a comma separated list, and
    non-interactive exits with "this provider has no model list yet".
 
+After the ids are chosen, every model is enriched before writing:
+
+- `reasoning` is detected from the harness catalog (`models-store.json`),
+  then the preset, then the model-id pattern — the same source the desktop
+  app's **Detect reasoning** button uses. Pi gets `thinkingLevelMap`
+  automatically for every reasoning model; OpenCode and Oh My Pi get
+  `reasoning: true`.
+- Models that already exist in the config keep their `contextWindow`,
+  `maxTokens`, and `reasoning` when the new source does not carry a value.
+  So `add ... --models m1` and `set models` never erase numbers that were
+  correct before.
+
+In the wizard, the model picker labels each row with `ctx` and `thinking`
+when known.
+
 With `--json`, `add` prints an `AddReport`:
 
 ```json

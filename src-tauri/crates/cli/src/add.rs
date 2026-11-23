@@ -12,7 +12,8 @@ use std::io::{IsTerminal, Read};
 use anyhow::{anyhow, bail, Result};
 use hakonfig_core::api;
 use hakonfig_core::engine::model::{
-    ApplyResult, EditOp, HarnessInfo, KeyMode, ModelDraft, ProviderDraft, ProviderPreset,
+    ApplyResult, EditOp, HarnessInfo, KeyMode, ModelDraft, ModelSummary, ProviderDraft,
+    ProviderPreset, ProviderSummary,
 };
 
 use crate::draft::{self, CUSTOM_ID};
@@ -240,8 +241,11 @@ pub fn run(options: AddOptions) -> Result<()> {
         custom.as_ref(),
         &harness,
         key.as_deref(),
+        ModelSource {
+            existing: existing.as_ref(),
+            stored_key: options.keep_key && stored_key.is_some(),
+        },
         interactive,
-        options.keep_key && stored_key.is_some(),
     )?;
 
     // Draft dibangun ulang penuh di sini (validasi custom sudah dijalankan
@@ -545,8 +549,11 @@ fn run_existing_action(
                 None,
                 harness,
                 key.as_deref(),
+                ModelSource {
+                    existing: Some(existing),
+                    stored_key: stored,
+                },
                 interactive,
-                stored,
             )?;
             EditOp::SetModels {
                 provider_id: provider_id.clone(),
@@ -1067,16 +1074,21 @@ fn continue_after_failed_test(interactive: bool, yes: bool, explicit: bool) -> R
     Ok(proceed)
 }
 
-/// `stored_key` = key datang dari config provider ini, bukan yang baru diketik,
-/// supaya petunjuk prompt-nya jujur.
+/// Konteks tambahan saat memilih model: metadata lama (untuk mempertahankan
+/// angka yang sudah ada) dan asal key (untuk petunjuk prompt sync).
+struct ModelSource<'a> {
+    existing: Option<&'a ProviderSummary>,
+    stored_key: bool,
+}
+
 fn pick_models_with_key_source(
     options: &AddOptions,
     target: &Target,
     custom: Option<&CustomSpec>,
     harness: &str,
     key: Option<&str>,
+    source: ModelSource<'_>,
     interactive: bool,
-    stored_key: bool,
 ) -> Result<Vec<ModelDraft>> {
     let preset = match target {
         Target::Preset(preset) => Some(preset.as_ref()),
@@ -1089,18 +1101,16 @@ fn pick_models_with_key_source(
         if models.is_empty() {
             bail!("{}", i18n::t(Msg::ModelsFlagEmpty));
         }
-        return Ok(models);
+        // `--models` non-interaktif tidak boleh berhenti di sini: metadata
+        // (reasoning dari katalog/pola, context lama) tetap dilengkapi.
+        return finish_models(models, target, source.existing, false);
     }
 
-    if wants_sync(options, preset, key, interactive, stored_key)? {
+    if wants_sync(options, preset, key, interactive, source.stored_key)? {
         match sync_models(target, options, custom, harness, key) {
             Ok(live) if !live.is_empty() => {
                 let models = draft::models_from_sync(live, preset);
-                return if interactive {
-                    ask_models(&models)
-                } else {
-                    Ok(models)
-                };
+                return finish_models(models, target, source.existing, interactive);
             }
             Ok(_) => {
                 // Endpoint hidup tapi tidak mengembalikan model. Interaktif
@@ -1134,11 +1144,7 @@ fn pick_models_with_key_source(
     if let Some(preset) = preset {
         if !preset.models.is_empty() {
             let models = draft::models_from_preset(preset);
-            return if interactive {
-                ask_models(&models)
-            } else {
-                Ok(models)
-            };
+            return finish_models(models, target, source.existing, interactive);
         }
     }
 
@@ -1154,7 +1160,68 @@ fn pick_models_with_key_source(
     if models.is_empty() {
         bail!("{}", i18n::t(Msg::ModelsEmpty));
     }
-    Ok(models)
+    finish_models(models, target, source.existing, true)
+}
+
+/// Lengkapi metadata model sebelum ditulis (atau dipilih di wizard).
+///
+/// `reasoning` diambil dari `api::reasoning_hints` — katalog harness lebih dulu,
+/// lalu preset, lalu pola id — sama dengan tombol "Detect reasoning" di GUI.
+/// Untuk model yang sudah ada di config, `contextWindow`/`maxTokens`/`reasoning`
+/// lama dipertahankan bila sumber baru tidak membawanya: `--models` dan tulis
+/// ulang tidak boleh menghapus angka yang sudah benar.
+fn finish_models(
+    models: Vec<ModelDraft>,
+    target: &Target,
+    existing: Option<&ProviderSummary>,
+    interactive: bool,
+) -> Result<Vec<ModelDraft>> {
+    let mut models = models;
+    enrich_models(&mut models, target_id(target), existing);
+    if interactive {
+        ask_models(&models)
+    } else {
+        Ok(models)
+    }
+}
+
+fn enrich_models(models: &mut [ModelDraft], provider_id: &str, existing: Option<&ProviderSummary>) {
+    use std::collections::BTreeMap;
+
+    let ids: Vec<String> = models.iter().map(|model| model.id.clone()).collect();
+    let hints: BTreeMap<String, bool> = api::reasoning_hints(provider_id.to_string(), ids)
+        .unwrap_or_default()
+        .into_iter()
+        .map(|hint| (hint.id, hint.reasoning))
+        .collect();
+    let previous: BTreeMap<&str, &ModelSummary> = existing
+        .map(|provider| {
+            provider
+                .models
+                .iter()
+                .map(|model| (model.id.as_str(), model))
+                .collect()
+        })
+        .unwrap_or_default();
+
+    for model in models.iter_mut() {
+        // Hanya menyalakan: config yang sudah menandai reasoning tidak dimatikan
+        // hanya karena id-nya tidak cocok dengan pola mana pun.
+        if hints.get(&model.id).copied().unwrap_or(false) {
+            model.reasoning = true;
+        }
+        if let Some(old) = previous.get(model.id.as_str()) {
+            if model.context_window.is_none() {
+                model.context_window = old.context_window;
+            }
+            if model.max_tokens.is_none() {
+                model.max_tokens = old.max_tokens;
+            }
+            if !model.reasoning {
+                model.reasoning = old.reasoning;
+            }
+        }
+    }
 }
 
 /// Perlu ambil daftar model dari endpoint?
@@ -1218,9 +1285,15 @@ fn ask_models(models: &[ModelDraft]) -> Result<Vec<ModelDraft>> {
         .iter()
         .map(|model| Choice {
             id: model.id.clone(),
-            label: match model.context_window {
-                Some(window) => format!("{}  ·  {} ctx", model.id, window),
-                None => model.id.clone(),
+            label: {
+                let mut label = model.id.clone();
+                if let Some(window) = model.context_window {
+                    label.push_str(&format!("  ·  {window} ctx"));
+                }
+                if model.reasoning {
+                    label.push_str("  ·  thinking");
+                }
+                label
             },
         })
         .collect();
