@@ -10,6 +10,7 @@
 
 mod app;
 mod data;
+mod logos;
 mod net;
 mod palette;
 mod state;
@@ -30,7 +31,7 @@ const FONT_MONO_BOLD: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Bold
 fn main() {
     app::PROCESS_START.get_or_init(Instant::now);
 
-    let app = gpui_kit::application().with_assets(gpui_kit::assets::Assets);
+    let app = gpui_kit::application().with_assets(logos::Assets);
 
     app.run(move |cx| {
         gpui_kit::init(cx);

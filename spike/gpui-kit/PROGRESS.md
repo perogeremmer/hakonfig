@@ -59,6 +59,23 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-23 23:52 · repo · logo asli harness & provider
+- Kerja: monogram dua huruf diganti logo asli dari `web/assets/providers/`
+  (folder yang sama dengan GUI web, di-embed lewat `rust-embed`). Sidebar,
+  modal picker, header harness, dan kartu provider semuanya memakai
+  `logos::logo`. Id tanpa file memakai `custom.svg` (mark OpenAI-compatible).
+  Varian `-dark` (pi, hermes, ollama) dipilih otomatis di tema gelap; daftar
+  id/ekstensi/varian dihitung dari isi folder, bukan tabel manual.
+- File: `src/logos.rs` (baru), `src/main.rs`, `src/app.rs`,
+  `src/views/providers.rs`, `src/data.rs`, `Cargo.toml`.
+- Verifikasi: `cargo build` hijau; tema terang & gelap: Pi (hitam/putih), OMP
+  bergradien penuh, OpenCode, Hermes, Groq, DeepSeek, custom tampil di
+  sidebar/picker/kartu. Screenshot dokumentasi dibuat ulang.
+- Kendala: elemen `svg()` GPUI merender alpha mask lalu mewarnai seluruh glyph
+  dengan satu warna, jadi logo bergradien (OMP) jadi kotak putih. Solusi:
+  rasterkan SVG lewat `cx.svg_renderer()` ke `RenderImage`, cache per
+  (berkas, ukuran), lalu tampilkan dengan `img()`.
+
 ### 2026-11-23 23:26 · repo · kotak teks seragam + ikon
 - Kerja: semua `Input` (cari provider, cari preset/model, API key, empat field
   provider custom) sekarang lewat `palette::text_input`: tinggi 36 px (dari

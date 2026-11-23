@@ -117,20 +117,6 @@ pub fn load_all(added: &[String]) -> (Vec<HarnessEntry>, u128) {
     (entries, started.elapsed().as_millis())
 }
 
-/// Dua huruf pertama dari nama/id — pengganti logo provider di spike.
-pub fn monogram(name: &str, id: &str) -> String {
-    let source = name
-        .chars()
-        .filter(|c| c.is_alphanumeric())
-        .collect::<String>();
-    let source = if source.is_empty() {
-        id.to_string()
-    } else {
-        source
-    };
-    source.chars().take(2).collect::<String>().to_uppercase()
-}
-
 /// Ringkasan hasil load terakhir, dibagikan ke view lain lewat setter
 /// (`SettingsView::set_metrics`) alih-alih global GPUI.
 #[derive(Clone, Copy, Default)]

@@ -16,7 +16,8 @@ use gpui_kit::prelude::*;
 use gpui_kit::*;
 use hakonfig_core::engine::model::{Notice, ProviderSummary};
 
-use crate::data::{catalog, load_all, load_notices, monogram, probe_versions, HarnessEntry, Metrics};
+use crate::data::{catalog, load_all, load_notices, probe_versions, HarnessEntry, Metrics};
+use crate::logos;
 use crate::palette::{self, Palette};
 use crate::state;
 use crate::views::{
@@ -499,6 +500,7 @@ impl App {
     }
 
     fn sidebar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let dark = palette::dark(cx);
         let mut items = v_flex().gap(px(2.)).px(px(10.)).pb(px(4.));
         for (ix, entry) in self.entries.iter().enumerate() {
             let selected = ix == self.selected;
@@ -522,10 +524,7 @@ impl App {
                             .flex_shrink_0()
                             .rounded(px(6.))
                             .bg(if selected { p.brand_soft } else { p.neutral_bg })
-                            .text_color(if selected { p.brand_text } else { p.ink_muted })
-                            .text_size(px(10.))
-                            .font_weight(FontWeight::BOLD)
-                            .child(monogram(&entry.name, &entry.id)),
+                            .child(logos::logo(cx, dark, &entry.id, 15.)),
                     )
                     .child(
                         v_flex()
@@ -676,6 +675,7 @@ impl App {
     /// yang sudah terpasang ditandai, yang sudah ada di sidebar tidak
     /// diduplikasi saat diklik.
     fn picker_overlay(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let dark = palette::dark(cx);
         let mut options = v_flex().gap(px(4.));
         for info in catalog() {
             let id = info.id.clone();
@@ -713,10 +713,7 @@ impl App {
                             .flex_shrink_0()
                             .rounded(px(7.))
                             .bg(if selected { p.brand_soft } else { p.neutral_bg })
-                            .text_color(if selected { p.brand_text } else { p.ink_muted })
-                            .text_size(px(10.5))
-                            .font_weight(FontWeight::BOLD)
-                            .child(monogram(&info.name, &info.id)),
+                            .child(logos::logo(cx, dark, &info.id, 18.)),
                     )
                     .child(
                         v_flex()

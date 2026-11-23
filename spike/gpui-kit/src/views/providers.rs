@@ -15,7 +15,8 @@ use gpui_kit::prelude::*;
 use gpui_kit::*;
 use hakonfig_core::engine::model::ProviderSummary;
 
-use crate::data::{monogram, HarnessEntry};
+use crate::data::HarnessEntry;
+use crate::logos;
 use crate::app::{App, Nav};
 use crate::palette::{self, Palette};
 
@@ -478,6 +479,7 @@ fn harness_header(
     entry: &HarnessEntry,
     cx: &mut Context<App>,
 ) -> impl IntoElement {
+    let dark = palette::dark(cx);
     v_flex()
         .gap(px(3.))
         .child(
@@ -492,10 +494,7 @@ fn harness_header(
                         .size(px(36.))
                         .rounded(px(10.))
                         .bg(p.brand_soft)
-                        .text_color(p.brand_text)
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::BOLD)
-                        .child(monogram(&entry.name, &entry.id)),
+                        .child(logos::logo(cx, dark, &entry.id, 26.)),
                 )
                 .child(
                     h_flex()
@@ -827,6 +826,7 @@ fn provider_card(
     cx: &mut Context<App>,
 ) -> impl IntoElement {
     let _ = app;
+    let dark = palette::dark(cx);
     let key_mode_env = provider.key_mode == "env";
     let enabled = provider.enabled;
 
@@ -870,10 +870,7 @@ fn provider_card(
                         .flex_shrink_0()
                         .rounded(px(8.))
                         .bg(p.brand_soft)
-                        .text_color(p.brand_text)
-                        .text_size(px(10.))
-                        .font_weight(FontWeight::BOLD)
-                        .child(monogram(&provider.name, &provider.id)),
+                        .child(logos::logo(cx, dark, &provider.id, 20.)),
                 )
                 .child(
                     v_flex()
