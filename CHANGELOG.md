@@ -6,6 +6,8 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+## [0.7.5]
+
 ### Added
 
 - CLI: `add` punya entri **Custom endpoint (OpenAI-compatible)** di wizard dan
