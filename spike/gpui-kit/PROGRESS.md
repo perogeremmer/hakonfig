@@ -59,6 +59,21 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-23 23:26 · repo · kotak teks seragam + ikon
+- Kerja: semua `Input` (cari provider, cari preset/model, API key, empat field
+  provider custom) sekarang lewat `palette::text_input`: tinggi 36 px (dari
+  24 px `.small()`), latar putih kartu, garis `p.line`, radius 9, teks 12,5 px,
+  dan ikon kiri (Search / Asterisk / SquareTerminal / CircleUser / Globe /
+  Network). Token tema `t.input` juga dibetulkan dari `p.surface` (putih, jadi
+  garis input tak terlihat) menjadi `p.line`.
+- File: `src/palette.rs`, `src/views/add.rs`, `src/views/providers.rs`.
+- Verifikasi: `cargo build` hijau; screenshot tema terang & gelap: kotak cari
+  provider/preset/model, API key, dan form custom semuanya berlatar putih
+  dengan garis dan ikon; screenshot dokumentasi dibuat ulang.
+- Kendala: latar input gpui-kit di tema terang memakai `theme.background`
+  (kanvas krem), bukan `theme.input`, jadi hanya `t.input` tidak cukup —
+  latar harus ditimpa per elemen.
+
 ### 2026-11-23 21:58 · repo · instalasi baru kosong + picker harness
 - Kerja: sidebar tidak lagi menampilkan keempat adapter tanpa syarat. Yang
   tampil hanya harness yang punya config/binary atau yang pernah dipilih lewat

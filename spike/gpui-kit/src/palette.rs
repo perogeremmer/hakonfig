@@ -5,6 +5,8 @@
 //! menyimpan preferensi tema sebagai global GPUI supaya view mana pun bisa
 //! mengubahnya tanpa harus menembus state `App`.
 
+use gpui_kit::assets::IconName;
+use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::{Theme, ThemeMode};
 use gpui_kit::*;
 
@@ -138,7 +140,7 @@ pub fn apply_theme(p: Palette, dark_mode: bool, cx: &mut App) {
         t.background = p.canvas;
         t.foreground = p.ink;
         t.border = p.line;
-        t.input = p.surface;
+        t.input = p.line;
         t.primary = p.brand;
         t.primary_hover = p.brand_hover;
         t.primary_active = p.brand_hover;
@@ -219,4 +221,26 @@ pub fn soft_button(p: &Palette, id: &'static str, label: &'static str) -> Statef
         .cursor_pointer()
         .hover(|s| s.bg(p.surface_muted).border_color(p.line_strong))
         .child(label.to_string())
+}
+
+/// Kotak teks dengan bentuk yang sama di semua layar.
+///
+/// Default gpui-kit memakai tinggi 24 px (`.small()`) dan latar
+/// `theme.background` — di tema terang itu krem, jadi kotak menyatu dengan
+/// kanvas dan tidak terbaca sebagai input. Di sini latarnya putih kartu,
+/// garisnya `p.line`, tingginya 36 px, dan ikon kiri memberi petunjuk isi.
+pub fn text_input(p: &Palette, state: &Entity<InputState>, icon: IconName) -> Input {
+    Input::new(state)
+        .h(px(36.))
+        .text_size(px(12.5))
+        .rounded(px(9.))
+        .bg(p.surface)
+        .border_1()
+        .border_color(p.line)
+        .prefix(
+            div()
+                .text_size(px(13.))
+                .text_color(p.ink_muted)
+                .child(icon),
+        )
 }

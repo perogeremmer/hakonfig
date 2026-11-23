@@ -6,7 +6,6 @@ use gpui_kit::component::{
     Sizable,
     button::Button,
     h_flex,
-    input::Input,
     switch::Switch,
     v_flex,
     WindowExt as _,
@@ -262,7 +261,13 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
                     .child(entry.provider_count.to_string()),
             )
             .child(div().flex_1())
-            .child(div().w(px(280.)).child(Input::new(&app.query).small())),
+            .child(
+                div().w(px(280.)).child(palette::text_input(
+                    p,
+                    &app.query,
+                    IconName::Search,
+                )),
+            ),
     );
 
     let mut chips = h_flex().gap(px(6.)).items_center().pb(px(2.));

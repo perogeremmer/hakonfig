@@ -5,11 +5,11 @@
 
 use std::collections::HashSet;
 
+use gpui_kit::assets::IconName;
 use gpui_kit::component::{
     h_flex,
     input::{Input, InputEvent, InputState},
     v_flex,
-    Sizable,
 };
 use gpui_kit::prelude::*;
 use gpui_kit::*;
@@ -430,7 +430,11 @@ impl AddView {
                 h_flex()
                     .gap(px(8.))
                     .items_center()
-                    .child(div().w(px(300.)).child(Input::new(&self.search).small()))
+                    .child(
+                        div()
+                            .w(px(300.))
+                            .child(palette::text_input(p, &self.search, IconName::Search)),
+                    )
                     .child(chip(
                         p,
                         format!("{shown} preset"),
@@ -541,10 +545,26 @@ impl AddView {
                         .font_weight(FontWeight::BOLD)
                         .child("Provider custom"),
                 )
-                .child(field(p, "ID provider", Input::new(&self.custom_id).small()))
-                .child(field(p, "Nama", Input::new(&self.custom_name).small()))
-                .child(field(p, "Base URL", Input::new(&self.custom_base).small()))
-                .child(field(p, "Jenis API", Input::new(&self.custom_api).small()));
+                .child(field(
+                    p,
+                    "ID provider",
+                    palette::text_input(p, &self.custom_id, IconName::SquareTerminal),
+                ))
+                .child(field(
+                    p,
+                    "Nama",
+                    palette::text_input(p, &self.custom_name, IconName::CircleUser),
+                ))
+                .child(field(
+                    p,
+                    "Base URL",
+                    palette::text_input(p, &self.custom_base, IconName::Globe),
+                ))
+                .child(field(
+                    p,
+                    "Jenis API",
+                    palette::text_input(p, &self.custom_api, IconName::Network),
+                ));
         } else if let Some(pr) = self.picked.and_then(|ix| self.presets.get(ix)) {
             col = col.child(
                 v_flex()
@@ -700,7 +720,11 @@ impl AddView {
                     )),
             );
         } else {
-            col = col.child(field(p, "API key", Input::new(&self.key_input).small()));
+            col = col.child(field(
+                p,
+                "API key",
+                palette::text_input(p, &self.key_input, IconName::Asterisk),
+            ));
             if !self.key_text.trim().is_empty() {
                 col = col.child(
                     div()
@@ -854,7 +878,13 @@ impl AddView {
                     p.neutral_text,
                 ))
                 .child(div().flex_1())
-                .child(div().w(px(220.)).child(Input::new(&self.model_query_input).small())),
+                .child(
+                    div().w(px(220.)).child(palette::text_input(
+                        p,
+                        &self.model_query_input,
+                        IconName::Search,
+                    )),
+                ),
         );
 
         if rows.is_empty() {
