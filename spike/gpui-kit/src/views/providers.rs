@@ -11,12 +11,13 @@ use gpui_kit::component::{
     v_flex,
     WindowExt as _,
 };
+use gpui_kit::assets::IconName;
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use hakonfig_core::engine::model::ProviderSummary;
 
-use crate::app::App;
 use crate::data::{monogram, HarnessEntry};
+use crate::app::{App, Nav};
 use crate::palette::{self, Palette};
 
 /// Filter cepat di atas grid provider.
@@ -84,6 +85,7 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
     }
 
     column = column.child(config_files_card(entry, p, cx));
+    column = column.child(actions_card(app, p, cx));
 
     if !app.notices.is_empty() {
         let mut list = v_flex().gap(px(4.));
@@ -302,6 +304,98 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
                 .overflow_y_scroll()
                 .child(column),
         )
+}
+
+/// Kotak aksi: tiga layar lain dibuka dari sini, bukan dari sidebar atau tab
+/// di atas. Sidebar tetap khusus memilih harness.
+fn actions_card(_app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement {
+    let rows: [(Nav, IconName, &'static str, &'static str); 3] = [
+        (
+            Nav::Add,
+            IconName::Plus,
+            "Tambah provider",
+            "preset → key → model → pratinjau diff",
+        ),
+        (
+            Nav::Diff,
+            IconName::FileText,
+            "Diff",
+            "pratinjau perubahan per berkas, read-only",
+        ),
+        (
+            Nav::History,
+            IconName::Undo,
+            "Riwayat",
+            "daftar backup config beserta waktunya",
+        ),
+    ];
+
+    let mut card = v_flex()
+        .gap(px(2.))
+        .p(px(8.))
+        .rounded(px(12.))
+        .bg(p.surface)
+        .border_1()
+        .border_color(p.line)
+        .child(
+            div()
+                .px(px(8.))
+                .pt(px(4.))
+                .pb(px(6.))
+                .text_size(px(10.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(p.ink_muted)
+                .child("AKSI"),
+        );
+
+    for (nav, icon, label, hint) in rows {
+        card = card.child(
+            h_flex()
+                .id(ElementId::Name(format!("act-{}", nav.label()).into()))
+                .gap(px(9.))
+                .px(px(8.))
+                .py(px(7.))
+                .rounded(px(9.))
+                .items_center()
+                .cursor_pointer()
+                .hover(|s| s.bg(p.canvas))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(24.))
+                        .flex_shrink_0()
+                        .rounded(px(7.))
+                        .bg(p.brand_soft)
+                        .text_color(p.brand_text)
+                        .text_size(px(13.))
+                        .child(icon),
+                )
+                .child(
+                    v_flex()
+                        .flex_1()
+                        .min_w_0()
+                        .child(div().text_size(px(12.5)).child(label))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(10.5))
+                                .text_color(p.ink_muted)
+                                .child(hint),
+                        ),
+                )
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .text_color(p.ink_muted)
+                        .child("›"),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| this.set_nav(nav, cx))),
+        );
+    }
+
+    card
 }
 
 fn harness_header(

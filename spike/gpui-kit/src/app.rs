@@ -5,14 +5,13 @@ use std::sync::OnceLock;
 use std::time::Instant;
 
 use gpui_kit::component::{
-    Sizable,
-    button::Button,
     h_flex,
     input::{InputEvent, InputState},
     notification::Notification,
     v_flex,
     WindowExt as _,
 };
+use gpui_kit::assets::IconName;
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use hakonfig_core::engine::model::{Notice, ProviderSummary};
@@ -40,14 +39,6 @@ pub enum Nav {
 }
 
 impl Nav {
-    pub const ALL: [Nav; 5] = [
-        Nav::Providers,
-        Nav::Add,
-        Nav::Diff,
-        Nav::History,
-        Nav::Settings,
-    ];
-
     /// Label tab. Layar dan harness sengaja dipisah: tab di atas, harness di
     /// sidebar kiri — dua daftar di kolom yang sama bikin bingung.
     pub fn label(self) -> &'static str {
@@ -60,7 +51,8 @@ impl Nav {
         }
     }
 
-    fn slug(self) -> &'static str {
+    #[allow(dead_code)] // dipakai view lain untuk id elemen
+    pub fn slug(self) -> &'static str {
         match self {
             Nav::Providers => "providers",
             Nav::Add => "add",
@@ -313,61 +305,67 @@ impl Render for App {
             .bg(p.canvas)
             .text_color(p.ink)
             .child(self.topbar(&p, cx))
-            .child(self.nav_tabs(&p, cx))
             .child(
                 h_flex()
                     .flex_1()
                     .min_h_0()
                     .items_stretch()
                     .child(self.sidebar(&p, cx))
-                    .child(body),
+                    .child(
+                        v_flex()
+                            .flex_1()
+                            .min_w_0()
+                            .min_h_0()
+                            .when(self.nav != Nav::Providers, |s| {
+                                s.child(self.back_bar(&p, cx))
+                            })
+                            .child(body),
+                    ),
             )
     }
 }
 
 impl App {
-    /// Navigasi layar: satu baris tab di bawah top bar, bukan di sidebar.
-    /// Sidebar dipakai khusus untuk memilih harness.
-    fn nav_tabs(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
-        let mut bar = h_flex()
+    /// Layar selain Providers dibuka dari kotak aksi di layar Providers atau
+    /// dari ikon cog (Pengaturan), jadi jalan pulangnya harus selalu ada.
+    fn back_bar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        h_flex()
             .flex_shrink_0()
-            .px(px(14.))
-            .py(px(7.))
-            .gap(px(3.))
+            .px(px(20.))
+            .pt(px(12.))
+            .gap(px(8.))
             .items_center()
-            .bg(p.surface)
-            .border_b_1()
-            .border_color(p.line);
-        for nav in Nav::ALL {
-            let active = self.nav == nav;
-            bar = bar.child(
+            .child(
                 h_flex()
-                    .id(ElementId::Name(format!("tab-{}", nav.slug()).into()))
-                    .px(px(11.))
-                    .py(px(6.))
-                    .rounded(px(8.))
-                    .text_size(px(12.))
-                    .items_center()
-                    .when(active, |s| {
-                        s.bg(p.brand_soft)
-                            .text_color(p.brand_text)
-                            .font_weight(FontWeight::SEMIBOLD)
-                    })
-                    .when(!active, |s| {
-                        s.text_color(p.ink_secondary).hover(|s| s.bg(p.canvas))
-                    })
-                    .child(nav.label())
-                    .on_click(cx.listener(move |this, _, _, cx| this.set_nav(nav, cx))),
-            );
-        }
-        bar.child(div().flex_1()).child(
-            div()
-                .pr(px(6.))
-                .text_size(px(11.))
-                .text_color(p.ink_muted)
-                .child(active_hint(self.nav)),
-        )
+                    .id("back-providers")
+                    .gap(px(5.))
+                    .px(px(9.))
+                    .py(px(4.))
+                    .rounded(px(7.))
+                    .cursor_pointer()
+                    .text_size(px(11.5))
+                    .text_color(p.ink_secondary)
+                    .hover(|s| s.bg(p.surface_muted).text_color(p.ink))
+                    .child(IconName::ArrowLeft)
+                    .child("Providers")
+                    .on_click(cx.listener(|this, _, _, cx| this.set_nav(Nav::Providers, cx))),
+            )
+            .child(
+                div()
+                    .text_size(px(11.))
+                    .text_color(p.ink_muted)
+                    .child(format!("· {}", self.nav.label())),
+            )
+            .child(div().flex_1())
+            .child(
+                div()
+                    .pr(px(4.))
+                    .text_size(px(10.5))
+                    .text_color(p.ink_muted)
+                    .child(active_hint(self.nav)),
+            )
     }
+
     fn topbar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .flex_shrink_0()
@@ -421,23 +419,24 @@ impl App {
                     )),
             )
             .child(
-                palette::brand_button(p, "add", "+ Tambah provider").on_click(cx.listener(
-                    |this, _, _, cx| this.set_nav(Nav::Add, cx),
-                )),
-            )
-            .child(
-                Button::new("theme")
-                    .small()
-                    .label(if palette::dark(cx) {
-                        "Tema terang"
+                div()
+                    .id("open-settings")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(30.))
+                    .rounded(px(8.))
+                    .cursor_pointer()
+                    .text_size(px(16.))
+                    .text_color(if self.nav == Nav::Settings {
+                        p.brand_text
                     } else {
-                        "Tema gelap"
+                        p.ink_secondary
                     })
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        palette::toggle_dark(cx);
-                        this.sync_views(cx);
-                        cx.notify();
-                    })),
+                    .when(self.nav == Nav::Settings, |s| s.bg(p.brand_soft))
+                    .when(self.nav != Nav::Settings, |s| s.hover(|s| s.bg(p.canvas)))
+                    .child(IconName::Settings)
+                    .on_click(cx.listener(|this, _, _, cx| this.set_nav(Nav::Settings, cx))),
             )
     }
 

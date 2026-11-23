@@ -176,6 +176,7 @@ pub fn set_dark(want: bool, cx: &mut App) {
     apply_theme(Palette::of(want), want, cx);
 }
 
+#[allow(dead_code)] // seam: dipakai kalau toggle tema pindah ke top bar lagi
 pub fn toggle_dark(cx: &mut App) {
     let next = !dark(cx);
     set_dark(next, cx);

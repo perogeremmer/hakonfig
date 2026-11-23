@@ -1,45 +1,61 @@
 #!/usr/bin/env bash
-# Ambil ulang semua screenshot dokumentasi (butuh X11, ImageMagick, xdotool).
+# Tangkap ulang screenshot dokumentasi.
 #
-# Pakai: ./shot.sh            # dari binary debug
-#        BIN=./target/release/hakonfig-spike ./shot.sh
+#   ./shot.sh                 # config asli di $HOME, tema terang
+#   ./shot.sh --dark          # config asli, tema gelap (Providers + Pengaturan)
+#   ./shot.sh --fresh         # HOME kosong: tampilan instalasi baru, semua layar
+#   ./shot.sh --fresh --dark  # instalasi baru, tema gelap
+#
+# Navigasi: ikon gear kanan atas (1160 26) membuka Pengaturan, kotak AKSI di
+# layar Providers membuka Tambah/Diff/Riwayat, tombol "‹ Providers" di (300 68)
+# untuk kembali.
 set -euo pipefail
 cd "$(dirname "$0")"
 
-BIN="${BIN:-./target/debug/hakonfig-spike}"
-[[ -x "$BIN" ]] || { echo "binary tidak ada: $BIN (jalankan cargo build dulu)"; exit 1; }
+FRESH=0; DARK=0; HOME_DIR=""
+for arg in "$@"; do
+  case "$arg" in
+    --fresh) FRESH=1; HOME_DIR=$(mktemp -d) ;;
+    --dark)  DARK=1 ;;
+    *) echo "argumen tidak dikenal: $arg" >&2; exit 2 ;;
+  esac
+done
 
+cargo build -j 6 >/dev/null
 pkill -x hakonfig-spike 2>/dev/null || true
 sleep 0.4
-"$BIN" >/tmp/shot-run.log 2>&1 &
-PID=$!
-sleep 4
 
-W=$(xdotool search --pid "$PID" | tail -1)
-[[ -n "$W" ]] || { echo "jendela tidak muncul (lihat /tmp/shot-run.log)"; kill "$PID"; exit 1; }
-xdotool windowactivate "$W"
-sleep 0.4
+DARK_ENV=(); [ "$DARK" = 1 ] && DARK_ENV=(SPIKE_DARK=1)
+if [ -n "$HOME_DIR" ]; then
+  env HOME="$HOME_DIR" "${DARK_ENV[@]}" ./target/debug/hakonfig-spike >/tmp/shot-app.log 2>&1 &
+else
+  env "${DARK_ENV[@]}" ./target/debug/hakonfig-spike >/tmp/shot-app.log 2>&1 &
+fi
+sleep 5
 
-shot() { import -window "$W" "docs/$1.png"; echo "  docs/$1.png"; }
-# Tab layar ada di baris atas (y=74): Providers 51 · Tambah 151 · Diff 236
-# · Riwayat 293 · Pengaturan 374. Tombol aksi utama di kanan bawah (1130,784).
-click() { xdotool mousemove --window "$W" "$1" "$2"; sleep 0.25; xdotool click 1; sleep 1.3; }
+WIN=$(xdotool search --name "spike gpui-kit" | tail -1)
+OUT="docs"; PREFIX=""
+if [ "$FRESH" = 1 ]; then OUT="docs/fresh-install"; PREFIX="fresh-"; fi
+SUFFIX=""; [ "$DARK" = 1 ] && SUFFIX="-dark"
+mkdir -p "$OUT"
 
-shot ui-light
-click 1140 26; shot ui-dark          # tombol tema di top bar
-click 1140 26
+click() { xdotool mousemove --window "$WIN" "$1" "$2"; sleep 0.3; xdotool click 1; sleep 1.5; }
+grab()  { import -window "$WIN" "$OUT/$PREFIX$1$SUFFIX.png"; echo "$OUT/$PREFIX$1$SUFFIX.png"; }
 
-click 151 74; shot ui-add-1          # langkah 1: preset
-click 372 296; shot ui-add-2         # langkah 2: key
-click 1130 784; shot ui-add-3        # langkah 3: model
-click 1130 784                       # Pratinjau diff
-sleep 1.5; shot ui-add-4
+xdotool windowactivate "$WIN"; sleep 0.6
+grab providers
 
-click 236 74; sleep 1.5; shot ui-diff
-click 293 74; shot ui-history
-click 374 74; shot ui-settings
-click 1140 26; shot ui-settings-dark
+if [ "$FRESH" = 0 ] && [ "$DARK" = 1 ]; then
+  click 1160 26; grab settings     # tema gelap cukup dua layar ini
+  exit 0
+fi
 
-kill "$PID" 2>/dev/null || true
-wait "$PID" 2>/dev/null || true
-echo "selesai"
+click 400 360; grab add-1          # kotak AKSI → Tambah provider
+click 400 300; grab add-2          # pilih preset
+click 1130 784; grab add-3         # lanjut ke model
+click 300 68                       # ‹ Providers
+click 400 412; grab diff
+click 300 68
+click 400 465; grab history
+click 300 68
+click 1160 26; grab settings

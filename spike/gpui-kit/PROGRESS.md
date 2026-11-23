@@ -162,6 +162,31 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
   tema bawaan, bukan `ThemeColor` yang ditimpa — hasilnya hitam, bukan maroon.
   Solusi sementara: `palette::brand_button()`.
 
+### 2026-11-23 09:10 · repo · navigasi pindah ke kotak provider + ikon cog
+- Masalah (dari pengguna): dua daftar navigasi di kiri (layar + harness) membingungkan,
+  dan tombol "+ Tambah provider" / "Tema gelap" memakan ruang top bar.
+- Kerja: tab layar dihapus dari top bar. Top bar kini hanya brand, statistik, dan ikon
+  gear (`IconName::Settings`) yang membuka Pengaturan. Sidebar tinggal daftar harness.
+  Layar Tambah/Diff/Riwayat dibuka dari kotak **AKSI** di layar Providers; setiap
+  layar lain punya tombol `‹ Providers` di kiri atas (`App::back_bar`).
+- Seam baru: `SPIKE_DARK=1` memulai aplikasi dalam tema gelap (dipakai skrip
+  screenshot, bukan perilaku normal).
+- File: `src/app.rs`, `src/views/providers.rs`, `src/main.rs`, `src/palette.rs`,
+  `shot.sh`, `README.md`, `FEATURES.md`, `docs/*.png`, `docs/fresh-install/*.png`.
+- Verifikasi: `cargo build -j 6` hijau tanpa warning aplikasi. Klik terverifikasi
+  lewat delta piksel (bukan tebakan): cog → Pengaturan 4475 px, AKSI baris 1/2/3 →
+  4451/4394/4798 px, `‹ Providers` mengembalikan layar ke delta **0**.
+  Instalasi baru: `HOME=$(mktemp -d)` → 4 harness "belum terpasang", 0 provider,
+  0 model, config siap 188 ms, frame pertama 188 ms.
+- Temuan ikon: `gpui_kit::assets::Assets` hanya memuat ikon di
+  `default-icons.txt`, bukan 1.830 berkas di paketnya. `cog`, `file-diff`, dan
+  `clock` **tidak** ada di daftar itu sehingga svg-nya kosong tanpa error. Ikon
+  yang dipakai harus dari daftar tersebut: `settings` (gear), `file-text`,
+  `undo`, `plus`, `arrow-left`.
+- Catatan: langkah ke-4 form Tambah tidak lagi diambil sebagai screenshot terpisah
+  (delta hanya 634 px — tombol sama, layar tidak berpindah); dokumentasi memakai 3
+  langkah sampai pratinjau.
+
 ### 2026-11-22 23:55 · repo · spike dipecah jadi modul
 - Kerja: `src/{app,data,palette}.rs` + `src/views/{providers,add,diff,settings}.rs`.
   Placeholder untuk tiga layar disiapkan supaya bisa dikerjakan paralel.

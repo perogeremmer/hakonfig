@@ -40,8 +40,11 @@ fn main() {
                 Cow::Borrowed(FONT_MONO_BOLD as &[u8]),
             ])
             .ok();
-        cx.set_global(palette::UiPrefs::default());
-        palette::apply_theme(palette::Palette::light(), false, cx);
+        // SPIKE_DARK=1 memulai aplikasi dalam tema gelap: dipakai skrip
+        // screenshot, tidak mengubah perilaku normal.
+        let dark = std::env::var_os("SPIKE_DARK").is_some();
+        cx.set_global(palette::UiPrefs { dark });
+        palette::apply_theme(palette::Palette::of(dark), dark, cx);
 
         let bounds = WindowBounds::centered(size(px(1200.), px(820.)), cx);
         let options = WindowOptions {

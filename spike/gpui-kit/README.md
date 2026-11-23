@@ -12,10 +12,14 @@ Tujuannya menjawab dua pertanyaan dengan bukti, bukan opini:
 | | |
 |---|---|
 | ![Providers](docs/ui-light.png) | ![Tema gelap](docs/ui-dark.png) |
-| ![Diff](docs/ui-diff.png) | ![Pengaturan](docs/ui-settings.png) |
 | ![Tambah 1](docs/ui-add-1.png) | ![Tambah 2](docs/ui-add-2.png) |
-| ![Tambah 3](docs/ui-add-3.png) | ![Pratinjau](docs/ui-add-4.png) |
-| ![Riwayat](docs/ui-history.png) | ![Pengaturan gelap](docs/ui-settings-dark.png) |
+| ![Tambah 3](docs/ui-add-3.png) | ![Diff](docs/ui-diff.png) |
+| ![Riwayat](docs/ui-history.png) | ![Pengaturan](docs/ui-settings.png) |
+
+Tampilan instalasi baru (HOME kosong, belum ada config tool apa pun):
+`docs/fresh-install/` — `fresh-providers.png`, `fresh-add-1..3.png`,
+`fresh-diff.png`, `fresh-history.png`, `fresh-settings.png`, dan versi `-dark`
+dari semuanya. Dibuat ulang dengan `./shot.sh --fresh` (tambah `--dark`).
 
 ## Jalankan
 

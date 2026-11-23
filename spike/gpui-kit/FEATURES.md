@@ -24,9 +24,11 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 
 | ID | Fitur | Status | File |
 |----|-------|--------|------|
-| F0a | Top bar: brand, statistik tool/provider/model, tombol tema | [x] | `src/app.rs` |
+| F0a | Top bar: brand, statistik tool/provider/model, ikon cog → Pengaturan | [x] | `src/app.rs` |
 | F0b | Sidebar: daftar harness + jumlah provider/key, penanda aktif | [x] | `src/app.rs` |
-| F0c | Navigasi layar: Providers / Tambah provider / Diff / Riwayat / Pengaturan | [x] | `src/app.rs` |
+| F0c | Navigasi layar: kotak AKSI di Providers (Tambah/Diff/Riwayat) + cog (Pengaturan) + tombol kembali `‹ Providers` | [x] | `src/app.rs`, `src/views/providers.rs` |
+| F0e | Kotak AKSI: tiga baris berikon dengan judul + keterangan singkat, hover, klik membuka layar | [x] | `src/views/providers.rs` |
+| F0f | Tangkapan layar instalasi baru (HOME kosong) terang + gelap, lewat `./shot.sh --fresh` / `--dark` | [x] | `shot.sh`, `docs/fresh-install/` |
 | F0d | Font bundel (Plus Jakarta Sans, JetBrains Mono) + palet terang/gelap | [x] | `src/palette.rs` |
 | F0e | Load config di background supaya frame pertama < 200 ms | [x] | `src/app.rs` |
 
