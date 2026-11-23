@@ -305,6 +305,269 @@ fn add_custom_provider_uses_its_own_base_url() {
     );
 }
 
+fn assert_random_suffix(id: &str, base: &str) {
+    let suffix = id
+        .strip_prefix(base)
+        .and_then(|rest| rest.strip_prefix('-'))
+        .unwrap_or_else(|| panic!("{id} tidak diawali {base}-"));
+    assert_eq!(suffix.len(), 5, "akhiran harus 5 karakter: {id}");
+    assert!(
+        suffix
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit()),
+        "akhiran harus huruf kecil/angka tanpa simbol: {id}"
+    );
+}
+
+#[test]
+fn add_custom_without_provider_derives_id_from_name() {
+    let root = sandbox("add-custom-derive");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--name",
+            "Toko  Saya!!",
+            "--base-url",
+            "https://api.toko.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk-toko\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    assert_eq!(models["providers"]["toko-saya"]["name"], "Toko  Saya!!");
+    assert_eq!(
+        models["providers"]["toko-saya"]["baseUrl"],
+        "https://api.toko.test/v1"
+    );
+}
+
+#[test]
+fn add_custom_sentinel_provider_derives_id_from_name() {
+    let root = sandbox("add-custom-sentinel");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "custom",
+            "--name",
+            "My GW",
+            "--base-url",
+            "https://api.gw.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk-gw\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    assert!(models["providers"]["my-gw"].is_object());
+}
+
+#[test]
+fn add_custom_derived_id_gets_random_suffix_when_taken() {
+    let root = sandbox("add-custom-suffix");
+    let args = [
+        "add",
+        "--harness",
+        "pi",
+        "--name",
+        "Dup GW",
+        "--base-url",
+        "https://api.dup.test/v1",
+        "--key-stdin",
+        "--models",
+        "m1",
+        "--no-test",
+    ];
+    let first = run_stdin(&root, &args, "sk-dup\n");
+    assert!(first.status.success(), "{}", stderr(&first));
+    let second = run_stdin(&root, &args, "sk-dup\n");
+    assert!(
+        second.status.success(),
+        "provider kedua tidak boleh ditolak: {}",
+        stderr(&second)
+    );
+
+    let models = read_json(&models_path(&root));
+    let providers = models["providers"].as_object().expect("providers object");
+    assert!(providers.contains_key("dup-gw"));
+    let generated = providers
+        .keys()
+        .find(|id| id.starts_with("dup-gw-") && *id != "dup-gw")
+        .expect("id kedua harus memakai akhiran acak");
+    assert_random_suffix(generated, "dup-gw");
+}
+
+#[test]
+fn add_custom_name_matching_a_preset_gets_a_suffix() {
+    let root = sandbox("add-custom-preset-id");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--name",
+            "Groq",
+            "--base-url",
+            "https://gw.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk-gw\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    let providers = models["providers"].as_object().expect("providers object");
+    assert!(
+        !providers.contains_key("groq"),
+        "id preset tidak boleh ditimpa endpoint custom"
+    );
+    let generated = providers
+        .keys()
+        .find(|id| id.starts_with("groq-"))
+        .expect("harus ada id groq-<acak>");
+    assert_random_suffix(generated, "groq");
+}
+
+#[test]
+fn add_detects_reasoning_and_thinking_variants_for_custom_models() {
+    let root = sandbox("add-reasoning");
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--name",
+            "Think GW",
+            "--base-url",
+            "https://x.test/v1",
+            "--key-stdin",
+            "--models",
+            "claude-sonnet-5-5,m1",
+            "--no-test",
+        ],
+        "sk\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    let list = models["providers"]["think-gw"]["models"]
+        .as_array()
+        .expect("models array");
+    let claude = list
+        .iter()
+        .find(|model| model["id"] == "claude-sonnet-5-5")
+        .expect("model reasoning harus ada");
+    assert_eq!(claude["reasoning"], true, "{claude}");
+    assert!(
+        claude["thinkingLevelMap"].is_object(),
+        "Pi harus mendapat varian thinking: {claude}"
+    );
+    let plain = list
+        .iter()
+        .find(|model| model["id"] == "m1")
+        .expect("model biasa harus ada");
+    assert!(
+        plain.get("reasoning").is_none(),
+        "id tanpa pola reasoning tidak boleh ditandai: {plain}"
+    );
+}
+
+#[test]
+fn add_everything_preserves_existing_model_metadata() {
+    let root = sandbox("add-preserve-meta");
+    std::fs::create_dir_all(root.join("pi/agent")).expect("buat direktori config");
+    std::fs::write(
+        models_path(&root),
+        r#"{"providers":{"gw":{"name":"GW","baseUrl":"https://x.test/v1",
+        "api":"openai-completions","models":[
+        {"id":"m1","contextWindow":1234,"maxTokens":56}]}}}"#,
+    )
+    .expect("tulis config awal");
+
+    let output = run_stdin(
+        &root,
+        &[
+            "add",
+            "--harness",
+            "pi",
+            "--provider",
+            "gw",
+            "--everything",
+            "--name",
+            "GW",
+            "--base-url",
+            "https://x.test/v1",
+            "--key-stdin",
+            "--models",
+            "m1",
+            "--no-test",
+        ],
+        "sk\n",
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["gw"]["models"][0]["contextWindow"],
+        1234
+    );
+    assert_eq!(models["providers"]["gw"]["models"][0]["maxTokens"], 56);
+}
+
+#[test]
+fn set_models_preserves_existing_context_window() {
+    let root = sandbox("set-models-context");
+    std::fs::create_dir_all(root.join("pi/agent")).expect("buat direktori config");
+    std::fs::write(
+        models_path(&root),
+        r#"{"providers":{"gw":{"name":"GW","baseUrl":"https://x.test/v1",
+        "api":"openai-completions","models":[
+        {"id":"m1","contextWindow":1000000}]}}}"#,
+    )
+    .expect("tulis config awal");
+
+    let output = run(
+        &root,
+        &[
+            "set",
+            "models",
+            "--harness",
+            "pi",
+            "--provider",
+            "gw",
+            "--models",
+            "m1",
+        ],
+    );
+
+    assert!(output.status.success(), "{}", stderr(&output));
+    let models = read_json(&models_path(&root));
+    assert_eq!(
+        models["providers"]["gw"]["models"][0]["contextWindow"], 1000000,
+        "context window lama tidak boleh hilang"
+    );
+}
+
 #[test]
 fn add_creates_a_backup_when_overwriting_an_existing_file() {
     let root = sandbox("add-backup");

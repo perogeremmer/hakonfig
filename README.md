@@ -198,6 +198,7 @@ hakonfig-cli --home /var/lib/openbot providers   # manage an agent's own home
 hakonfig-cli --target openbot providers     # same, by username
 hakonfig-cli --as-user openbot providers    # same, switching user via sudo so files stay owned by openbot
 hakonfig-cli add --harness pi --provider groq --key-stdin
+hakonfig-cli add --harness pi --name "My GW" --base-url https://api.example.com/v1 --key-stdin --sync
 hakonfig-cli set key --harness pi --provider groq           # rotate the key only
 hakonfig-cli set models --harness pi --provider groq --sync  # sync pakai key tersimpan
 hakonfig-cli set default --harness pi --provider groq --model llama-3.3-70b
@@ -212,7 +213,11 @@ Rules it holds since day one:
 
 - Default output is English; `--lang id` or `HAKONFIG_LANG=id` for Bahasa Indonesia.
 - Any flag or `--json` means fully non-interactive: it never prompts (safe for scripts and servers).
-- In a terminal without flags, `add` runs as a wizard.
+- In a terminal without flags, `add` runs as a wizard, including a
+  **Custom endpoint (OpenAI-compatible)** entry.
+- A custom endpoint does not need `--provider`: the id is derived from `--name`
+  (lowercase, spaces become `-`); if that id is already used, a 5-character
+  random lowercase alphanumeric suffix is appended instead of rejecting it.
 - An explicit `--test` that fails aborts with a non-zero exit code and writes nothing.
 - Read-only commands (`list`, `show`, `providers`, `paths`, `doctor`) never touch files
   unless `doctor --fix` is passed, and `doctor` only uses the network with `--online`.
