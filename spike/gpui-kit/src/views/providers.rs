@@ -722,10 +722,12 @@ fn default_model_card(
                 .when_some(default, |s, (provider, model)| {
                     s.child(
                         div()
-                            .text_size(px(12.5))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(p.brand_text)
-                            .child(provider.clone()),
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .flex_shrink_0()
+                            .size(px(18.))
+                            .child(logos::logo(cx, palette::dark(cx), provider, 16.)),
                     )
                     .child(
                         div()
