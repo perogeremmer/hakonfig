@@ -1391,12 +1391,23 @@ impl App {
                             .items_center()
                             .child(
                                 div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(24.))
+                                    .flex_shrink_0()
+                                    .rounded(px(7.))
+                                    .bg(p.brand_soft)
+                                    .child(logos::logo(cx, palette::dark(cx), &provider_id, 16.)),
+                            )
+                            .child(
+                                div()
                                     .flex_1()
                                     .min_w_0()
                                     .truncate()
                                     .text_size(px(14.))
                                     .font_weight(FontWeight::BOLD)
-                                    .child(format!("{provider_name} · {provider_id}")),
+                                    .child(provider_name.clone()),
                             )
                             .child(
                                 div()
