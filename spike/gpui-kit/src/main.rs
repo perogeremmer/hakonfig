@@ -13,6 +13,7 @@ mod data;
 mod logos;
 mod net;
 mod palette;
+mod picker;
 mod state;
 mod views;
 

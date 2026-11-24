@@ -1126,21 +1126,13 @@ impl App {
         let mut shown = 0usize;
         if let Some(snapshot) = snapshot {
             for provider in &snapshot.providers {
-                if let Some(filter) = &self.model_provider {
-                    if &provider.id != filter {
-                        continue;
-                    }
-                }
                 for model in &provider.models {
-                    let hay = format!(
-                        "{} {} {} {}",
-                        provider.id,
-                        provider.name,
-                        model.id,
-                        model.name.clone().unwrap_or_default()
-                    )
-                    .to_lowercase();
-                    if !query.is_empty() && !hay.contains(&query) {
+                    if !crate::picker::default_model_candidate(
+                        provider,
+                        model,
+                        self.model_provider.as_deref(),
+                        &query,
+                    ) {
                         continue;
                     }
                     shown += 1;
@@ -1569,3 +1561,4 @@ fn active_hint(nav: Nav) -> &'static str {
         Nav::Settings => "tema & bahasa tersimpan di sesi",
     }
 }
+
