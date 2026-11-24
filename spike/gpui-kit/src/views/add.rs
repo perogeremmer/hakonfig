@@ -1762,17 +1762,7 @@ impl Render for AddView {
                                     }),
                             ),
                     )
-                    .child(div().flex_1())
-                    .child(chip(
-                        &p,
-                        if self.harness.is_empty() {
-                            "tanpa harness".to_string()
-                        } else {
-                            format!("→ {}", self.harness)
-                        },
-                        p.brand_soft,
-                        p.brand_text,
-                    )),
+                    .child(div().flex_1()),
             )
             .child(self.stepper(&p, cx))
             .child(
