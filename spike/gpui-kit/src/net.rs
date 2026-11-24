@@ -40,3 +40,22 @@ pub fn test_connection(
         provider_id,
     ))
 }
+
+/// Daftar model dari endpoint (jalur yang sama dengan `--sync` di CLI dan
+/// tombol Sync models di GUI web).
+#[allow(dead_code)] // dipakai view Tambah provider
+pub fn fetch_models(
+    base_url: String,
+    api_type: String,
+    key: String,
+    harness_id: Option<String>,
+    provider_id: Option<String>,
+) -> Result<Vec<api::ModelOption>, String> {
+    block_on(api::fetch_models(
+        base_url,
+        api_type,
+        key,
+        harness_id,
+        provider_id,
+    ))
+}

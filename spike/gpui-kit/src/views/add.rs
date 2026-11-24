@@ -3,7 +3,7 @@
 //! READ-ONLY: hanya memanggil `api::list_presets` dan `api::preview_edit`.
 //! Tidak pernah memanggil `apply_edit` / `restore_backup` / `fix_notice`.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{
@@ -128,6 +128,11 @@ pub struct AddView {
     test: Option<Result<TestResult, String>>,
     testing: bool,
     _test_task: Option<Task<()>>,
+    /// Hasil "Sync model" dari endpoint; mengalahkan daftar preset/terpasang.
+    synced: Vec<ModelDraft>,
+    syncing: bool,
+    sync_error: Option<String>,
+    _sync_task: Option<Task<()>>,
 
     selected_models: HashSet<String>,
     preview: Option<Result<(usize, usize, Vec<String>), String>>,
@@ -204,6 +209,10 @@ impl AddView {
             test: None,
             testing: false,
             _test_task: None,
+            synced: Vec::new(),
+            syncing: false,
+            sync_error: None,
+            _sync_task: None,
             selected_models: HashSet::new(),
             preview: None,
             _preview_task: None,
@@ -272,6 +281,9 @@ impl AddView {
         self.step = step.clamp(2, 3);
         self.test = None;
         self.testing = false;
+        self.synced.clear();
+        self.syncing = false;
+        self.sync_error = None;
         self.preview = None;
         self.pending_op = None;
         self.applying = false;
@@ -318,6 +330,9 @@ impl AddView {
     /// Daftar model untuk langkah 3: model terpasang (saat edit), preset,
     /// lalu fallback ke hasil tes koneksi.
     fn model_rows(&self) -> Vec<ModelDraft> {
+        if !self.synced.is_empty() {
+            return self.synced.clone();
+        }
         if let Some(editing) = &self.editing {
             let mut rows = self.edit_models.clone();
             if let Some(preset) = self.presets.iter().find(|preset| &preset.id == editing) {
@@ -404,6 +419,9 @@ impl AddView {
     fn reset_flow(&mut self) {
         self.test = None;
         self.testing = false;
+        self.synced.clear();
+        self.syncing = false;
+        self.sync_error = None;
         self.preview = None;
         self.pending_op = None;
         self.editing = None;
@@ -444,6 +462,85 @@ impl AddView {
             this.update(cx, |this, cx| {
                 this.test = Some(result);
                 this.testing = false;
+                cx.notify();
+            })
+            .ok();
+        }));
+        cx.notify();
+    }
+
+    /// Ambil daftar model langsung dari endpoint provider yang sedang diisi.
+    /// Metadata preset (nama/max token/reasoning) tetap dipakai untuk id yang
+    /// dikenal; context window dari endpoint selalu menang.
+    fn run_sync(&mut self, cx: &mut Context<Self>) {
+        if self.syncing {
+            return;
+        }
+        let Some((id, _name, base_url, api_kind)) = self.provider_meta(cx) else {
+            self.sync_error = Some("Lengkapi dulu identitas provider.".to_string());
+            cx.notify();
+            return;
+        };
+        let harness = (!self.harness.is_empty()).then(|| self.harness.clone());
+        let key = if self.key_mode_env {
+            std::env::var(env_var_name(&id)).unwrap_or_default()
+        } else if !self.key_text.trim().is_empty() {
+            self.key_text.trim().to_string()
+        } else {
+            // Mode kelola model: key tidak diketik ulang, jadi pakai yang
+            // tersimpan di config harness.
+            match harness.clone() {
+                Some(h) => api::stored_key(h, id.clone()).unwrap_or_default(),
+                None => String::new(),
+            }
+        };
+        let preset = self.presets.iter().find(|p| p.id == id).cloned();
+        let provider_id = id.clone();
+        self.syncing = true;
+        self.sync_error = None;
+        self._sync_task = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move {
+                    let live = crate::net::fetch_models(
+                        base_url,
+                        api_kind,
+                        key,
+                        harness,
+                        Some(provider_id.clone()),
+                    )?;
+                    let ids: Vec<String> = live.iter().map(|m| m.id.clone()).collect();
+                    let hints = api::reasoning_hints(provider_id, ids).unwrap_or_default();
+                    Ok::<_, String>((live, hints))
+                })
+                .await;
+            this.update(cx, |this, cx| {
+                this.syncing = false;
+                match result {
+                    Ok((live, hints)) => {
+                        let hint_map: HashMap<String, bool> =
+                            hints.into_iter().map(|h| (h.id, h.reasoning)).collect();
+                        let mut rows = Vec::with_capacity(live.len());
+                        for option in live {
+                            let known = preset.as_ref().and_then(|preset| {
+                                preset.models.iter().find(|model| model.id == option.id)
+                            });
+                            rows.push(ModelDraft {
+                                id: option.id.clone(),
+                                name: known.and_then(|model| model.name.clone()),
+                                context_window: option.context_window.or_else(|| {
+                                    known.and_then(|model| model.context_window)
+                                }),
+                                max_tokens: known.and_then(|model| model.max_tokens),
+                                reasoning: known.map(|model| model.reasoning).unwrap_or(false)
+                                    || hint_map.get(&option.id).copied().unwrap_or(false),
+                            });
+                        }
+                        this.selected_models = rows.iter().map(|m| m.id.clone()).collect();
+                        this.synced = rows;
+                        this.test = None;
+                    }
+                    Err(error) => this.sync_error = Some(error),
+                }
                 cx.notify();
             })
             .ok();
@@ -1270,6 +1367,19 @@ impl AddView {
                         }),
                     ),
                 )
+                .child(
+                    crate::palette::soft_button(
+                        p,
+                        "sync-models",
+                        if self.syncing {
+                            "Menyinkron…"
+                        } else {
+                            "Sync model"
+                        },
+                    )
+                    .when(self.syncing, |s| s.opacity(0.5))
+                    .on_click(cx.listener(|this, _, _, cx| this.run_sync(cx))),
+                )
                 .child(chip(
                     p,
                     format!("{} / {} dipilih", self.selected_models.len(), rows.len()),
@@ -1285,6 +1395,15 @@ impl AddView {
                     )),
                 ),
         );
+
+        if let Some(error) = &self.sync_error {
+            col = col.child(
+                div()
+                    .text_size(px(10.5))
+                    .text_color(p.warn_text)
+                    .child(format!("Sync gagal: {error}")),
+            );
+        }
 
         if rows.is_empty() {
             col = col.child(
@@ -1303,8 +1422,8 @@ impl AddView {
                             .text_size(px(11.))
                             .text_color(p.ink_muted)
                             .child(
-                                "Jalankan “Test & find models” di langkah 2 untuk mengambil \
-                                 contoh model dari endpoint.",
+                                "Tekan “Sync model” untuk mengambil daftar dari endpoint, \
+                                 atau “Test & find models” di langkah 2.",
                             ),
                     ),
             );
