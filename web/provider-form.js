@@ -91,3 +91,32 @@ export function keyEnvName(provider) {
 export function keyFromEnv(provider) {
   return keyModeFor(provider) === "env";
 }
+
+/**
+ * Placeholder API key sesuai bentuk key provider, supaya pengguna tahu
+ * gambaran key yang harus ditempel (bukan teks generik "Paste your API key").
+ *
+ * Hanya awalan yang memang baku yang disebut; provider dengan key acak tanpa
+ * awalan jatuh ke `sk-...` sebagai gambaran umum endpoint OpenAI-compatible.
+ */
+const KEY_PLACEHOLDERS = {
+  openai: "sk-...",
+  anthropic: "sk-ant-...",
+  gemini: "AIza...",
+  "google-generative-ai": "AIza...",
+  groq: "gsk_...",
+  openrouter: "sk-or-v1-...",
+  xai: "xai-...",
+  deepseek: "sk-...",
+  cerebras: "csk-...",
+  nvidia: "nvapi-...",
+  fireworks: "fw_...",
+  commandcode: "sk-...",
+};
+
+export function keyPlaceholder(provider) {
+  const id = String(typeof provider === "string" ? provider : (provider?.id ?? ""))
+    .trim()
+    .toLowerCase();
+  return KEY_PLACEHOLDERS[id] ?? "sk-...";
+}

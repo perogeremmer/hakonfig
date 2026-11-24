@@ -99,7 +99,6 @@ export default {
   "add.title": "Tambah {name}",
   "add.subtitle": "Cukup tempel API key, sisanya kami urus.",
   "add.keyLabel": "API key kamu",
-  "add.keyPlaceholder": "Tempel API key di sini",
   "add.getKey": "Belum punya key? Ambil di",
   "add.show": "Lihat",
   "add.hide": "Sembunyikan",

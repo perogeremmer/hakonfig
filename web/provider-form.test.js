@@ -13,6 +13,7 @@ import {
   keyEnvName,
   keyFromEnv,
   keyModeFor,
+  keyPlaceholder,
   normalizeValue,
   registeredApi,
 } from "./provider-form.js";
@@ -129,4 +130,17 @@ test("older summaries without keyMode still work through keyDisplay", () => {
   assert.equal(keyModeFor({ keyDisplay: "sk-…1234" }), "inline");
   assert.equal(keyModeFor({}), "inline");
   assert.equal(keyEnvName({}), null);
+});
+
+test("key placeholder shows the provider's key shape", () => {
+  assert.equal(keyPlaceholder({ id: "groq" }), "gsk_...");
+  assert.equal(keyPlaceholder({ id: "openai" }), "sk-...");
+  assert.equal(keyPlaceholder({ id: "anthropic" }), "sk-ant-...");
+  assert.equal(keyPlaceholder("OpenRouter"), "sk-or-v1-...");
+});
+
+test("unknown and custom providers get a generic OpenAI-compatible hint", () => {
+  assert.equal(keyPlaceholder({ id: "my-gateway" }), "sk-...");
+  assert.equal(keyPlaceholder(undefined), "sk-...");
+  assert.equal(keyPlaceholder({}), "sk-...");
 });

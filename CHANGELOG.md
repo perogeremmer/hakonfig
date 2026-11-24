@@ -6,6 +6,14 @@ file oleh `scripts/version.mjs`.
 
 ## [Unreleased]
 
+### Fixed
+
+- GUI: placeholder API key mengikuti bentuk key provider (`gsk_...` untuk Groq,
+  `sk-ant-...` Anthropic, `AIza...` Gemini, `sk-or-v1-...` OpenRouter, dan
+  `sk-...` untuk provider custom), bukan lagi teks generik. Padding kiri input
+  key juga dilonggarkan supaya teks tidak menempel di border pada zoom webview
+  pecahan.
+
 ## [0.7.5]
 
 ### Added

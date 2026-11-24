@@ -418,6 +418,9 @@ select option {
 }
 .hk-key-wrap .hk-input {
   height: 3rem;
+  /* Sedikit lebih lega dari input biasa: teks mono 14px sempat terlihat
+     menempel di border kiri pada zoom webview pecahan. */
+  padding-left: 0.9375rem;
   padding-right: 5.5rem;
   font-family: var(--font-mono);
   font-size: 0.875rem;

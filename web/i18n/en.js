@@ -106,7 +106,6 @@ export default {
   "add.title": "Add {name}",
   "add.subtitle": "Just paste your API key. We handle the rest.",
   "add.keyLabel": "Your API key",
-  "add.keyPlaceholder": "Paste your API key",
   "add.getKey": "Need a key? Get one at",
   "add.show": "Show",
   "add.hide": "Hide",

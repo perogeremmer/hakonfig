@@ -13,6 +13,7 @@ import {
   keyEnvName,
   keyFromEnv,
   keyModeFor,
+  keyPlaceholder,
   registeredApi,
 } from "./provider-form.js";
 import {
@@ -1835,7 +1836,7 @@ function openAddFlow(preset) {
           <label class="hk-label">${esc(t("add.keyLabel"))}</label>
           <div class="hk-key-wrap">
             <input data-key type="password" class="hk-input" autocomplete="off" spellcheck="false"
-              placeholder="${esc(t("add.keyPlaceholder"))}" />
+              placeholder="${esc(keyPlaceholder(preset))}" />
             <button data-action data-toggle-key class="hk-key-toggle">${esc(t("add.show"))}</button>
           </div>
           ${
@@ -2232,7 +2233,7 @@ function renderProviderForm(mode, provider) {
           </h3>
           <div class="hk-key-wrap">
             <input data-field="key" type="password" value="" autocomplete="off" spellcheck="false"
-              placeholder="${esc(isEdit ? t("advanced.keyReplace") : t("add.keyPlaceholder"))}" class="hk-input" />
+              placeholder="${esc(isEdit ? t("advanced.keyReplace") : keyPlaceholder(provider))}" class="hk-input" />
             <button data-action data-toggle-key class="hk-key-toggle">${esc(t("add.show"))}</button>
           </div>
           ${
