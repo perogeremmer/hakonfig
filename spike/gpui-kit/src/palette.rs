@@ -239,6 +239,7 @@ pub fn text_input(p: &Palette, state: &Entity<InputState>, icon: IconName) -> In
         .border_color(p.line)
         .prefix(
             div()
+                .pr(px(2.))
                 .text_size(px(13.))
                 .text_color(p.ink_muted)
                 .child(icon),

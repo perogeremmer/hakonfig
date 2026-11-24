@@ -27,6 +27,21 @@ fn env_var_name(id: &str) -> String {
     format!("{}_API_KEY", id.to_uppercase().replace('-', "_"))
 }
 
+/// Bentuk API key yang lazim untuk provider ini, untuk placeholder.
+fn key_placeholder(provider_id: &str) -> &'static str {
+    match provider_id.trim().to_ascii_lowercase().as_str() {
+        "anthropic" => "sk-ant-...",
+        "gemini" | "google-generative-ai" => "AIza...",
+        "groq" => "gsk_...",
+        "openrouter" => "sk-or-v1-...",
+        "xai" => "xai-...",
+        "cerebras" => "csk-...",
+        "nvidia" => "nvapi-...",
+        "fireworks" => "fw_...",
+        _ => "sk-...",
+    }
+}
+
 fn mask_key(key: &str) -> String {
     let tail: String = key.chars().rev().take(4).collect::<Vec<_>>().into_iter().rev().collect();
     format!("••••{tail}")
@@ -263,6 +278,7 @@ impl AddView {
             .update(cx, |state, cx| state.set_value(api, window, cx));
         self.key_input
             .update(cx, |state, cx| state.set_value("", window, cx));
+        self.sync_key_placeholder(window, cx);
         cx.notify();
     }
 
@@ -337,18 +353,37 @@ impl AddView {
         Vec::new()
     }
 
-    fn pick_preset(&mut self, ix: usize) {
+    /// Placeholder field key mengikuti bentuk key provider yang dipilih,
+    /// supaya pengguna tahu gambaran key-nya (mis. `gsk_...`, `sk-ant-...`).
+    fn sync_key_placeholder(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let hint = if self.custom {
+            let id = self.custom_id.read(cx).value().trim().to_string();
+            key_placeholder(&id)
+        } else {
+            self.picked
+                .and_then(|ix| self.presets.get(ix))
+                .map(|preset| key_placeholder(&preset.id))
+                .unwrap_or("sk-...")
+        };
+        let text = format!("Tempel API key… ({hint})");
+        self.key_input
+            .update(cx, |state, cx| state.set_placeholder(text, window, cx));
+    }
+
+    fn pick_preset(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.picked = Some(ix);
         self.custom = false;
         self.reset_flow();
         self.step = 2;
+        self.sync_key_placeholder(window, cx);
     }
 
-    fn pick_custom(&mut self) {
+    fn pick_custom(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.picked = None;
         self.custom = true;
         self.reset_flow();
         self.step = 2;
+        self.sync_key_placeholder(window, cx);
     }
 
     fn reset_flow(&mut self) {
@@ -688,8 +723,8 @@ impl AddView {
                         .text_color(p.ink_muted)
                         .child("Isi sendiri id, base URL, dan jenis API."),
                 )
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.pick_custom();
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.pick_custom(window, cx);
                     cx.notify();
                 })),
         );
@@ -805,8 +840,8 @@ impl AddView {
                         s.child(chip(p, "tanpa key".to_string(), p.ok_bg, p.ok_text))
                     }),
             )
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.pick_preset(ix);
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.pick_preset(ix, window, cx);
                 cx.notify();
             }))
     }
@@ -1544,5 +1579,19 @@ impl Render for AddView {
             root = root.child(self.confirm_overlay(&p, cx));
         }
         root
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::key_placeholder;
+
+    #[test]
+    fn key_placeholder_follows_provider_shape() {
+        assert_eq!(key_placeholder("groq"), "gsk_...");
+        assert_eq!(key_placeholder("Anthropic"), "sk-ant-...");
+        assert_eq!(key_placeholder("gemini"), "AIza...");
+        assert_eq!(key_placeholder("openrouter"), "sk-or-v1-...");
+        assert_eq!(key_placeholder("my-gateway"), "sk-...");
     }
 }
