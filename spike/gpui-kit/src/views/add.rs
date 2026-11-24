@@ -252,8 +252,23 @@ impl AddView {
             })
             .collect();
         self.selected_models = provider.models.iter().map(|m| m.id.clone()).collect();
-        self.picked = None;
-        self.custom = true;
+        // Provider yang ada di katalog ditampilkan sebagai kartu preset (identitas
+        // read-only), sama seperti saat menambah. Hanya provider custom yang
+        // memakai field, dan itu pun tanpa ID/nama yang bisa diubah.
+        match self
+            .presets
+            .iter()
+            .position(|preset| preset.id == provider.id)
+        {
+            Some(ix) => {
+                self.picked = Some(ix);
+                self.custom = false;
+            }
+            None => {
+                self.picked = None;
+                self.custom = true;
+            }
+        }
         self.step = step.clamp(2, 3);
         self.test = None;
         self.testing = false;
@@ -657,6 +672,11 @@ impl AddView {
                         })
                         .child(format!("{n}. {label}"))
                         .on_click(cx.listener(move |this, _, _, cx| {
+                            // Saat edit, langkah 1 (pilih provider) dikunci:
+                            // identitas provider tidak boleh berganti.
+                            if this.editing.is_some() && n == 1 {
+                                return;
+                            }
                             if n < this.step {
                                 this.step = n;
                                 cx.notify();
@@ -856,23 +876,73 @@ impl AddView {
         let mut col = v_flex().gap(px(12.)).max_w(px(560.));
 
         if self.custom {
+            let editing = self.editing.is_some();
+            if editing {
+                // ID dan nama provider yang sudah ada tidak boleh berubah:
+                // key/backup dan referensi model memakai id itu.
+                let id = self.custom_id.read(cx).value().to_string();
+                let name = self.custom_name.read(cx).value().to_string();
+                let name = if name.trim().is_empty() {
+                    id.clone()
+                } else {
+                    name
+                };
+                col = col.child(
+                    h_flex()
+                        .gap(px(8.))
+                        .items_center()
+                        .p(px(13.))
+                        .rounded(px(12.))
+                        .bg(p.surface)
+                        .border_1()
+                        .border_color(p.line)
+                        .shadow_2xs()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .size(px(32.))
+                                .flex_shrink_0()
+                                .rounded(px(8.))
+                                .bg(p.neutral_bg)
+                                .child(logos::logo(cx, dark, &id, 22.)),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(13.5))
+                                .font_weight(FontWeight::BOLD)
+                                .child(name),
+                        )
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(10.5))
+                                .font_family(palette::MONO)
+                                .text_color(p.ink_muted)
+                                .child(id),
+                        ),
+                );
+            } else {
+                col = col
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .font_weight(FontWeight::BOLD)
+                            .child("Provider custom"),
+                    )
+                    .child(field(
+                        p,
+                        "ID provider",
+                        palette::text_input(p, &self.custom_id, IconName::SquareTerminal),
+                    ))
+                    .child(field(
+                        p,
+                        "Nama",
+                        palette::text_input(p, &self.custom_name, IconName::CircleUser),
+                    ));
+            }
             col = col
-                .child(
-                    div()
-                        .text_size(px(13.))
-                        .font_weight(FontWeight::BOLD)
-                        .child("Provider custom"),
-                )
-                .child(field(
-                    p,
-                    "ID provider",
-                    palette::text_input(p, &self.custom_id, IconName::SquareTerminal),
-                ))
-                .child(field(
-                    p,
-                    "Nama",
-                    palette::text_input(p, &self.custom_name, IconName::CircleUser),
-                ))
                 .child(field(
                     p,
                     "Base URL",
@@ -1437,7 +1507,7 @@ impl AddView {
             .flex_shrink_0()
             .gap(px(8.))
             .items_center()
-            .when(step > 1, |s| {
+            .when(step > 1 && self.editing.is_none(), |s| {
                 s.child(
                     crate::palette::soft_button(p, "add-back", "Kembali").on_click(
                         cx.listener(|this, _, _, cx| {
