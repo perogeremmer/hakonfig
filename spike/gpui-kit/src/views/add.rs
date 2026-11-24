@@ -19,6 +19,7 @@ use hakonfig_core::engine::model::{
 };
 use hakonfig_core::engine::model::ProviderPreset;
 
+use crate::logos;
 use crate::palette::{self, Palette};
 
 /// Aturan core: `<PROVIDER_ID>_API_KEY`, huruf besar, `-` → `_`.
@@ -633,6 +634,7 @@ impl AddView {
     }
 
     fn step1(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let dark = palette::dark(cx);
         let q = self.search_text.trim().to_lowercase();
         let mut grid = h_flex().flex_wrap().gap(px(10.)).items_start();
         let mut shown = 0usize;
@@ -659,10 +661,26 @@ impl AddView {
                 .shadow_2xs()
                 .hover(|s| s.border_color(p.line_strong))
                 .child(
-                    div()
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .child("Custom…"),
+                    h_flex()
+                        .gap(px(6.))
+                        .items_center()
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .size(px(30.))
+                                .flex_shrink_0()
+                                .rounded(px(8.))
+                                .bg(p.neutral_bg)
+                                .child(logos::logo(cx, dark, "custom", 20.)),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(12.5))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .child("Custom…"),
+                        ),
                 )
                 .child(
                     div()
@@ -720,6 +738,7 @@ impl AddView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let selected = !self.custom && self.picked == Some(ix);
+        let dark = palette::dark(cx);
         let (badge_bg, badge_fg) = match pr.badge.as_deref() {
             Some("free") => (p.ok_bg, p.ok_text),
             Some("local") => (p.brand_soft, p.brand_text),
@@ -740,6 +759,17 @@ impl AddView {
                 h_flex()
                     .gap(px(6.))
                     .items_center()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(30.))
+                            .flex_shrink_0()
+                            .rounded(px(8.))
+                            .bg(p.neutral_bg)
+                            .child(logos::logo(cx, dark, &pr.id, 20.)),
+                    )
                     .child(
                         div()
                             .truncate()
@@ -787,6 +817,7 @@ impl AddView {
         meta: Option<&(String, String, String, String)>,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        let dark = palette::dark(cx);
         let mut col = v_flex().gap(px(12.)).max_w(px(560.));
 
         if self.custom {
@@ -831,6 +862,17 @@ impl AddView {
                         h_flex()
                             .gap(px(8.))
                             .items_center()
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(32.))
+                                    .flex_shrink_0()
+                                    .rounded(px(8.))
+                                    .bg(p.neutral_bg)
+                                    .child(logos::logo(cx, dark, &pr.id, 22.)),
+                            )
                             .child(
                                 div()
                                     .text_size(px(13.5))

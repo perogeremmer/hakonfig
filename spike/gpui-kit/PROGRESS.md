@@ -59,6 +59,17 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-24 15:15 · repo · logo di form tambah/edit provider
+- Kerja: kartu preset di langkah 1, ringkasan provider di langkah 2, dan kartu
+  Custom memakai `logos::logo` — sebelumnya hanya teks. `logos::logo` dibuat
+  generik atas context view (`Deref<Target = App>`) supaya bisa dipanggil dari
+  `Context<AddView>`, bukan hanya `Context<App>`.
+- File: `src/views/add.rs`, `src/logos.rs`, screenshot `ui-add-*`,
+  `fresh-add-*`.
+- Verifikasi: `cargo build` hijau; langkah 1 menampilkan logo Groq, Gemini,
+  Cerebras, DeepSeek, OpenRouter, Mistral, dst.; langkah 2 menampilkan logo
+  provider yang dipilih; tema terang & gelap.
+
 ### 2026-11-24 15:00 · repo · aksi provider benar-benar menulis
 - Kerja: layar Providers sekarang mengubah config lewat `api::apply_edit`
   (backup otomatis), bukan state lokal. Yang aktif: edit provider (form

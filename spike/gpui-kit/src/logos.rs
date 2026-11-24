@@ -11,8 +11,6 @@ use std::sync::{Arc, LazyLock, Mutex};
 
 use gpui_kit::*;
 
-use crate::app::App as HakonfigApp;
-
 #[derive(rust_embed::RustEmbed)]
 #[folder = "../../web/assets/providers"]
 #[include = "*.svg"]
@@ -100,7 +98,15 @@ fn svg_image(cx: &gpui_kit::App, file: &str, size_px: u32) -> Option<Arc<RenderI
 
 /// Elemen logo berukuran `size` persegi. `dark` memilih varian `-dark` untuk
 /// mark yang glyph-nya gelap (pi, hermes, ollama).
-pub fn logo(cx: &mut Context<HakonfigApp>, dark: bool, id: &str, size: f32) -> AnyElement {
+///
+/// Menerima context view mana pun (`Context<App>`, `Context<AddView>`, …)
+/// karena renderer SVG diambil dari `App`.
+pub fn logo<C: std::ops::Deref<Target = gpui_kit::App>>(
+    cx: &C,
+    dark: bool,
+    id: &str,
+    size: f32,
+) -> AnyElement {
     let asset = if INDEX.known.contains(id) { id } else { "custom" };
     let is_png = INDEX.png.contains(asset);
     let use_dark = dark && INDEX.dual.contains(asset);
