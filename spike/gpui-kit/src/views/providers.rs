@@ -446,7 +446,7 @@ fn actions_card(_app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElem
                         ),
                 )
                 .flex_1()
-                .on_click(cx.listener(move |this, _, _, cx| this.set_nav(nav, cx))),
+                .on_click(cx.listener(move |this, _, window, cx| this.set_nav(nav, window, cx))),
         );
     }
 

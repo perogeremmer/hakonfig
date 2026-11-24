@@ -99,6 +99,8 @@ pub struct App {
     pub model_query_text: String,
     /// Pesan yang menunggu ditampilkan sebagai toast di render berikutnya.
     toast: Option<String>,
+    /// Toast ini peringatan (kuning), bukan sukses.
+    toast_warn: bool,
     first_frame: bool,
     pub add: Entity<AddView>,
     pub history: Entity<HistoryView>,
@@ -211,6 +213,7 @@ impl App {
             model_query,
             model_query_text: String::new(),
             toast: None,
+            toast_warn: false,
             first_frame: false,
             add,
             history,
@@ -290,6 +293,18 @@ impl App {
         if ix == self.selected {
             return;
         }
+        // Ganti harness akan mereset form Tambah/Edit. Jangan biarkan pengguna
+        // terlempar ke langkah 1 tanpa sadar kehilangan key/model yang dipilih.
+        if self.nav == Nav::Add && self.add.read(cx).has_pending_work(cx) {
+            self.toast = Some(
+                "Form provider belum selesai — selesaikan dulu, atau klik Providers \
+                 untuk membatalkannya."
+                    .to_string(),
+            );
+            self.toast_warn = true;
+            cx.notify();
+            return;
+        }
         self.selected = ix;
         self.query_text.clear();
         self.sync_views(cx);
@@ -311,6 +326,16 @@ impl App {
     /// dipilih; yang belum ada ditambahkan ke daftar dan ke state.
     pub fn add_harness(&mut self, id: String, cx: &mut Context<Self>) {
         self.picker = false;
+        if self.nav == Nav::Add && self.add.read(cx).has_pending_work(cx) {
+            self.toast = Some(
+                "Form provider belum selesai — selesaikan dulu, atau klik Providers \
+                 untuk membatalkannya."
+                    .to_string(),
+            );
+            self.toast_warn = true;
+            cx.notify();
+            return;
+        }
         let known = self.entries.iter().any(|e| e.id == id);
         let name = catalog()
             .into_iter()
@@ -360,7 +385,12 @@ impl App {
         cx.notify();
     }
 
-    pub fn set_nav(&mut self, nav: Nav, cx: &mut Context<Self>) {
+    pub fn set_nav(&mut self, nav: Nav, window: &mut Window, cx: &mut Context<Self>) {
+        // Meninggalkan form Tambah lewat tombol Providers = membatalkan form,
+        // supaya tidak ada key/model setengah jadi yang tertinggal.
+        if nav == Nav::Providers && self.nav == Nav::Add {
+            self.add.update(cx, |view, cx| view.abandon(window, cx));
+        }
         self.nav = nav;
         cx.notify();
     }
@@ -601,7 +631,13 @@ impl Render for App {
         // Toast diantre dari event handler (yang tidak punya &mut App), lalu
         // dipush di sini karena `push_notification` butuh window + App.
         if let Some(msg) = self.toast.take() {
-            window.push_notification(Notification::success(msg), cx);
+            let note = if self.toast_warn {
+                self.toast_warn = false;
+                Notification::warning(msg)
+            } else {
+                Notification::success(msg)
+            };
+            window.push_notification(note, cx);
         }
         let p = palette::palette(cx);
         let body = match self.nav {
@@ -679,7 +715,7 @@ impl App {
                     .hover(|s| s.bg(p.surface_muted).text_color(p.ink))
                     .child(IconName::ArrowLeft)
                     .child("Providers")
-                    .on_click(cx.listener(|this, _, _, cx| this.set_nav(Nav::Providers, cx))),
+                    .on_click(cx.listener(|this, _, window, cx| this.set_nav(Nav::Providers, window, cx))),
             )
             .child(
                 div()
@@ -767,7 +803,7 @@ impl App {
                     .when(self.nav == Nav::Settings, |s| s.bg(p.brand_soft))
                     .when(self.nav != Nav::Settings, |s| s.hover(|s| s.bg(p.canvas)))
                     .child(IconName::Settings)
-                    .on_click(cx.listener(|this, _, _, cx| this.set_nav(Nav::Settings, cx))),
+                    .on_click(cx.listener(|this, _, window, cx| this.set_nav(Nav::Settings, window, cx))),
             )
     }
 

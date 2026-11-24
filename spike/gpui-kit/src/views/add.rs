@@ -234,6 +234,53 @@ impl AddView {
         }
     }
 
+    /// True bila form berisi pekerjaan yang akan hilang kalau harness berganti.
+    pub fn has_pending_work(&self, _cx: &App) -> bool {
+        self.editing.is_some()
+            || self.step >= 3
+            || !self.selected_models.is_empty()
+            || !self.synced.is_empty()
+            || !self.key_text.trim().is_empty()
+    }
+
+    /// Buang seluruh isi form; dipakai saat pengguna keluar ke Providers.
+    pub fn abandon(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.step = 1;
+        self.picked = None;
+        self.custom = false;
+        self.editing = None;
+        self.edit_models.clear();
+        self.test = None;
+        self.testing = false;
+        self.synced.clear();
+        self.syncing = false;
+        self.sync_error = None;
+        self.preview = None;
+        self.pending_op = None;
+        self.applying = false;
+        self.confirming = false;
+        self.key_mode_env = false;
+        self.key_text.clear();
+        self.selected_models.clear();
+        self.search_text.clear();
+        self.model_query.clear();
+        self.key_input
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.custom_id
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.custom_name
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.custom_base
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.custom_api
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.search
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        self.model_query_input
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        cx.notify();
+    }
+
     /// True saat form dipakai untuk provider yang sudah ada.
     pub fn is_editing(&self) -> bool {
         self.editing.is_some()
