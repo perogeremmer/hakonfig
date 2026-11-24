@@ -23,7 +23,6 @@ use crate::palette::{self, Palette};
 use crate::state;
 use crate::views::{
     add::{AddEvent, AddView},
-    diff::DiffView,
     history::HistoryView,
     providers::{self, Filter},
     settings::SettingsView,
@@ -36,7 +35,6 @@ pub static PROCESS_START: OnceLock<Instant> = OnceLock::new();
 pub enum Nav {
     Providers,
     Add,
-    Diff,
     History,
     Settings,
 }
@@ -48,7 +46,6 @@ impl Nav {
         match self {
             Nav::Providers => "Providers",
             Nav::Add => "Tambah provider",
-            Nav::Diff => "Diff",
             Nav::History => "Riwayat",
             Nav::Settings => "Pengaturan",
         }
@@ -59,7 +56,6 @@ impl Nav {
         match self {
             Nav::Providers => "providers",
             Nav::Add => "add",
-            Nav::Diff => "diff",
             Nav::History => "history",
             Nav::Settings => "settings",
         }
@@ -105,7 +101,6 @@ pub struct App {
     toast: Option<String>,
     first_frame: bool,
     pub add: Entity<AddView>,
-    pub diff: Entity<DiffView>,
     pub history: Entity<HistoryView>,
     pub settings: Entity<SettingsView>,
     _subs: Vec<Subscription>,
@@ -162,7 +157,6 @@ impl App {
         // tidak bisa membuat `InputState` (kotak teks) karena konstruktornya
         // butuh window. Kontrak: `XView::new(window, cx)`.
         let add = cx.new(|cx| AddView::new(window, cx));
-        let diff = cx.new(|cx| DiffView::new(window, cx));
         let history = cx.new(|cx| HistoryView::new(window, cx));
         let settings = cx.new(|cx| SettingsView::new(window, cx));
         _subs.push(cx.subscribe(&add, |this, _, event: &AddEvent, cx| {
@@ -219,7 +213,6 @@ impl App {
             toast: None,
             first_frame: false,
             add,
-            diff,
             history,
             settings,
             _subs,
@@ -288,7 +281,6 @@ impl App {
             .update(cx, |v, cx| v.set_metrics(metrics, cx));
         let id = self.active_id();
         self.add.update(cx, |v, cx| v.set_harness(id.clone(), cx));
-        self.diff.update(cx, |v, cx| v.set_harness(id.clone(), cx));
         self.history
             .update(cx, |v, cx| v.set_harness(id.clone(), cx));
         self.settings.update(cx, |v, cx| v.set_harness(id, cx));
@@ -615,7 +607,6 @@ impl Render for App {
         let body = match self.nav {
             Nav::Providers => providers::render(self, &p, cx).into_any_element(),
             Nav::Add => self.add.clone().into_any_element(),
-            Nav::Diff => self.diff.clone().into_any_element(),
             Nav::History => self.history.clone().into_any_element(),
             Nav::Settings => self.settings.clone().into_any_element(),
         };
@@ -1574,7 +1565,6 @@ fn active_hint(nav: Nav) -> &'static str {
     match nav {
         Nav::Providers => "klik … pada kartu untuk aksi",
         Nav::Add => "3 langkah · pratinjau lalu tulis",
-        Nav::Diff => "hanya pratinjau · tidak menulis",
         Nav::History => "restore belum aktif",
         Nav::Settings => "tema & bahasa tersimpan di sesi",
     }

@@ -11,7 +11,6 @@
 //! state `App` (daftar provider adalah inti layar ini).
 
 pub mod add;
-pub mod diff;
 pub mod history;
 pub mod providers;
 pub mod settings;

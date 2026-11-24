@@ -372,29 +372,23 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
 /// Kotak aksi: tiga layar lain dibuka dari sini, bukan dari sidebar atau tab
 /// di atas. Sidebar tetap khusus memilih harness.
 fn actions_card(_app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement {
-    let rows: [(Nav, IconName, &'static str, &'static str); 3] = [
+    let rows: [(Nav, IconName, &'static str, &'static str); 2] = [
         (
             Nav::Add,
             IconName::Plus,
             "Tambah provider",
-            "preset → key → model → pratinjau diff",
-        ),
-        (
-            Nav::Diff,
-            IconName::FileText,
-            "Diff",
-            "pratinjau perubahan per berkas, read-only",
+            "preset → key → model → diff",
         ),
         (
             Nav::History,
             IconName::Undo,
             "Riwayat",
-            "daftar backup config beserta waktunya",
+            "backup config beserta waktunya",
         ),
     ];
 
-    let mut card = v_flex()
-        .gap(px(2.))
+    let card = v_flex()
+        .gap(px(4.))
         .p(px(8.))
         .rounded(px(12.))
         .bg(p.surface)
@@ -402,19 +396,22 @@ fn actions_card(_app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElem
         .border_color(p.line)
         .child(
             div()
-                .px(px(8.))
-                .pt(px(4.))
-                .pb(px(6.))
+                .px(px(6.))
+                .pt(px(2.))
                 .text_size(px(10.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(p.ink_muted)
                 .child("AKSI"),
         );
 
+    // Dua aksi berdampingan supaya tidak memakan tinggi layar.
+    let mut row = h_flex().gap(px(6.)).items_stretch();
     for (nav, icon, label, hint) in rows {
-        card = card.child(
+        row = row.child(
             h_flex()
                 .id(ElementId::Name(format!("act-{}", nav.label()).into()))
+                .flex_1()
+                .min_w_0()
                 .gap(px(9.))
                 .px(px(8.))
                 .py(px(7.))
@@ -448,17 +445,12 @@ fn actions_card(_app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElem
                                 .child(hint),
                         ),
                 )
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(p.ink_muted)
-                        .child("›"),
-                )
+                .flex_1()
                 .on_click(cx.listener(move |this, _, _, cx| this.set_nav(nav, cx))),
         );
     }
 
-    card
+    card.child(row)
 }
 
 fn harness_header(
