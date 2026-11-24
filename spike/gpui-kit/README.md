@@ -14,6 +14,7 @@ Tujuannya menjawab dua pertanyaan dengan bukti, bukan opini:
 | ![Providers](docs/ui-light.png) | ![Tema gelap](docs/ui-dark.png) |
 | ![Tambah 1](docs/ui-add-1.png) | ![Tambah 2](docs/ui-add-2.png) |
 | ![Tambah 3](docs/ui-add-3.png) | ![Diff](docs/ui-diff.png) |
+| ![Aksi provider](docs/ui-actions.png) | ![Edit provider](docs/ui-edit.png) |
 | ![Riwayat](docs/ui-history.png) | ![Pengaturan](docs/ui-settings.png) |
 
 Tampilan instalasi baru (HOME kosong, belum ada config tool apa pun): kolom
@@ -58,14 +59,16 @@ background, frame pertama turun dari 1.178 ms (layar kosong) ke 236–387 ms
 | Layar | Status | File |
 |---|---|---|
 | Providers: kartu, cari, filter, toggle, menu aksi | selesai | `src/views/providers.rs` |
+| Aksi provider: edit, kelola model, default, toggle, lupakan key, hapus (`apply_edit` + backup) | selesai | `src/views/providers.rs`, `src/app.rs` |
+| Picker model default dengan pencarian | selesai | `src/app.rs` |
 | Berkas config + tombol buka folder | selesai | `src/views/providers.rs` |
 | Notice/temuan dari `api::list_notices` | selesai | `src/views/providers.rs` |
 | Riwayat backup + dialog restore | selesai | `src/views/history.rs` |
-| Tambah provider: preset → key → model → pratinjau | selesai | `src/views/add.rs` |
+| Tambah/edit provider: preset → key → model → pratinjau → Terapkan | selesai | `src/views/add.rs` |
 | Diff per file: tab, gutter, warna, masking, Apply nonaktif | selesai | `src/views/diff.rs` |
 | Pengaturan: tema, bahasa (ID/EN), diagnostik, tentang | selesai | `src/views/settings.rs` |
 
-Rincian 38 butir + status: [`FEATURES.md`](FEATURES.md). Log kerja: [`PROGRESS.md`](PROGRESS.md).
+Rincian butir + status: [`FEATURES.md`](FEATURES.md). Log kerja: [`PROGRESS.md`](PROGRESS.md).
 
 ## Struktur
 

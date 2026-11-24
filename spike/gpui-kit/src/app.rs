@@ -14,14 +14,15 @@ use gpui_kit::component::{
 use gpui_kit::assets::IconName;
 use gpui_kit::prelude::*;
 use gpui_kit::*;
-use hakonfig_core::engine::model::{Notice, ProviderSummary};
+use hakonfig_core::api;
+use hakonfig_core::engine::model::{EditOp, Notice, ProviderSummary};
 
 use crate::data::{catalog, load_all, load_notices, probe_versions, HarnessEntry, Metrics};
 use crate::logos;
 use crate::palette::{self, Palette};
 use crate::state;
 use crate::views::{
-    add::AddView,
+    add::{AddEvent, AddView},
     diff::DiffView,
     history::HistoryView,
     providers::{self, Filter},
@@ -65,6 +66,16 @@ impl Nav {
     }
 }
 
+/// Dialog konfirmasi berbasis overlay milik `App`. Dialog bawaan gpui-kit
+/// butuh root `Root`, sementara spike membuka `App` langsung sebagai root.
+pub struct ConfirmState {
+    pub title: String,
+    pub body: String,
+    pub ok_text: &'static str,
+    pub success: &'static str,
+    pub op: EditOp,
+}
+
 pub struct App {
     pub entries: Vec<HarnessEntry>,
     pub selected: usize,
@@ -74,15 +85,22 @@ pub struct App {
     pub added: Vec<String>,
     /// Picker "Tambah harness baru" sedang terbuka.
     pub picker: bool,
+    /// Menu aksi provider: (id, nama).
+    pub actions: Option<(String, String)>,
+    pub confirm: Option<ConfirmState>,
     pub query: Entity<InputState>,
     pub query_text: String,
     pub filter: Filter,
     /// Notice milik harness aktif saja (dibaca di background).
     pub notices: Vec<Notice>,
-    /// Berapa status provider yang diubah lokal (spike tidak menulis file).
-    pub dirty: usize,
     pub load_ms: u128,
     pub data_ready_ms: Option<u128>,
+    /// Picker model default sedang terbuka; `model_provider` membatasi ke satu
+    /// provider (dipakai dari menu kartu provider).
+    pub model_picker: bool,
+    pub model_provider: Option<String>,
+    pub model_query: Entity<InputState>,
+    pub model_query_text: String,
     /// Pesan yang menunggu ditampilkan sebagai toast di render berikutnya.
     toast: Option<String>,
     first_frame: bool,
@@ -93,6 +111,7 @@ pub struct App {
     _subs: Vec<Subscription>,
     _load: Option<Task<()>>,
     _load_notices: Option<Task<()>>,
+    _apply: Option<Task<()>>,
 }
 
 impl App {
@@ -106,15 +125,27 @@ impl App {
         // Sebelumnya semuanya di background: data baru muncul di 884 ms, jadi
         // pengguna melihat layar kosong lebih lama daripada menunggu 34 ms.
         let query = cx.new(|cx| InputState::new(window, cx).placeholder("Cari provider…"));
-        let _subs = vec![cx.subscribe_in(&query, window, {
-            let query = query.clone();
-            move |this, _, ev: &InputEvent, _, cx| {
-                if matches!(ev, InputEvent::Change) {
-                    this.query_text = query.read(cx).value().to_string();
-                    cx.notify();
+        let model_query = cx.new(|cx| InputState::new(window, cx).placeholder("Cari model…"));
+        let mut _subs = vec![
+            cx.subscribe_in(&query, window, {
+                let query = query.clone();
+                move |this, _, ev: &InputEvent, _, cx| {
+                    if matches!(ev, InputEvent::Change) {
+                        this.query_text = query.read(cx).value().to_string();
+                        cx.notify();
+                    }
                 }
-            }
-        })];
+            }),
+            cx.subscribe_in(&model_query, window, {
+                let model_query = model_query.clone();
+                move |this, _, ev: &InputEvent, _, cx| {
+                    if matches!(ev, InputEvent::Change) {
+                        this.model_query_text = model_query.read(cx).value().to_string();
+                        cx.notify();
+                    }
+                }
+            }),
+        ];
 
         let added = state::added();
         let (entries, load_ms) = load_all(&added);
@@ -134,6 +165,13 @@ impl App {
         let diff = cx.new(|cx| DiffView::new(window, cx));
         let history = cx.new(|cx| HistoryView::new(window, cx));
         let settings = cx.new(|cx| SettingsView::new(window, cx));
+        _subs.push(cx.subscribe(&add, |this, _, event: &AddEvent, cx| {
+            let AddEvent::Applied { message } = event;
+            this.toast = Some(message.clone());
+            this.nav = Nav::Providers;
+            this.reload(cx);
+            cx.notify();
+        }));
 
         let ids: Vec<String> = entries.iter().map(|e| e.id.clone()).collect();
         let _load = Some(cx.spawn(async move |this, cx| {
@@ -166,13 +204,18 @@ impl App {
             nav: Nav::Providers,
             added,
             picker: false,
+            actions: None,
+            confirm: None,
             query,
             query_text: String::new(),
             filter: Filter::All,
             notices: Vec::new(),
-            dirty: 0,
             load_ms,
             data_ready_ms,
+            model_picker: false,
+            model_provider: None,
+            model_query,
+            model_query_text: String::new(),
             toast: None,
             first_frame: false,
             add,
@@ -182,6 +225,7 @@ impl App {
             _subs,
             _load,
             _load_notices: None,
+            _apply: None,
         }
     }
 
@@ -262,6 +306,7 @@ impl App {
 
     pub fn open_picker(&mut self, cx: &mut Context<Self>) {
         self.picker = true;
+        self.model_picker = false;
         cx.notify();
     }
 
@@ -304,7 +349,6 @@ impl App {
     }
 
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
-        self.dirty = 0;
         self.data_ready_ms = None;
         let added = self.added.clone();
         let task = cx.spawn(async move |this, cx| {
@@ -327,6 +371,228 @@ impl App {
     pub fn set_nav(&mut self, nav: Nav, cx: &mut Context<Self>) {
         self.nav = nav;
         cx.notify();
+    }
+
+    /// Baca ulang config setelah menulis, tanpa kehilangan harness terpilih.
+    pub fn reload(&mut self, cx: &mut Context<Self>) {
+        let keep = self.active_id();
+        let added = self.added.clone();
+        let versions: Vec<(String, Option<String>, u128)> = self
+            .entries
+            .iter()
+            .map(|entry| (entry.id.clone(), entry.version.clone(), entry.timings.1))
+            .collect();
+        let (mut entries, ms) = load_all(&added);
+        for entry in &mut entries {
+            if let Some((_, version, probe_ms)) =
+                versions.iter().find(|(id, _, _)| id == &entry.id)
+            {
+                entry.version = version.clone();
+                entry.timings.1 = *probe_ms;
+            }
+        }
+        self.entries = entries;
+        self.load_ms = ms;
+        self.data_ready_ms = PROCESS_START.get().map(|s| s.elapsed().as_millis());
+        self.selected = self
+            .entries
+            .iter()
+            .position(|entry| entry.id == keep)
+            .unwrap_or(0);
+        self.sync_views(cx);
+        cx.notify();
+    }
+
+    /// Tulis satu `EditOp` di background. Core membuat backup sebelum menulis,
+    /// jadi setiap aksi di sini tetap bisa di-restore lewat layar Riwayat.
+    pub fn apply_op(&mut self, op: EditOp, success: &'static str, cx: &mut Context<Self>) {
+        let harness = self.active_id();
+        if harness.is_empty() {
+            return;
+        }
+        self._apply = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move { api::apply_edit(harness, op) })
+                .await;
+            this.update(cx, |this, cx| match result {
+                Ok(applied) => {
+                    let mut message =
+                        format!("{success} · {} file ditulis", applied.files_written.len());
+                    if !applied.warnings.is_empty() {
+                        message.push_str(&format!(" · {} peringatan", applied.warnings.len()));
+                    }
+                    this.toast = Some(message);
+                    this.reload(cx);
+                }
+                Err(error) => {
+                    this.toast = Some(format!("Gagal: {error}"));
+                    cx.notify();
+                }
+            })
+            .ok();
+        }));
+        cx.notify();
+    }
+
+    /// Tampilkan konfirmasi overlay untuk aksi yang menghapus data.
+    pub fn confirm_op(
+        &mut self,
+        title: String,
+        body: String,
+        ok_text: &'static str,
+        op: EditOp,
+        success: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        self.actions = None;
+        self.confirm = Some(ConfirmState {
+            title,
+            body,
+            ok_text,
+            success,
+            op,
+        });
+        cx.notify();
+    }
+
+    /// Buka picker model default; `provider` membatasi daftar ke satu provider.
+    pub fn open_model_picker(
+        &mut self,
+        provider: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.picker = false;
+        self.model_picker = true;
+        self.model_provider = provider;
+        self.model_query_text.clear();
+        self.model_query
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        cx.notify();
+    }
+
+    pub fn close_model_picker(&mut self, cx: &mut Context<Self>) {
+        self.model_picker = false;
+        cx.notify();
+    }
+
+    pub fn choose_default_model(
+        &mut self,
+        provider_id: String,
+        model_id: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.model_picker = false;
+        self.apply_op(
+            EditOp::SetDefault {
+                provider_id,
+                model_id,
+            },
+            "Model default diperbarui",
+            cx,
+        );
+    }
+
+    /// Masuk ke form Tambah provider dengan data provider yang sudah ada.
+    pub fn edit_provider(
+        &mut self,
+        provider: &ProviderSummary,
+        step: u8,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.add
+            .update(cx, |view, cx| view.begin_edit(provider, step, window, cx));
+        self.nav = Nav::Add;
+        cx.notify();
+    }
+
+    /// Buka menu aksi untuk satu provider (overlay shell, bukan dialog gpui).
+    pub fn open_provider_actions(&mut self, provider: &ProviderSummary, cx: &mut Context<Self>) {
+        self.actions = Some((provider.id.clone(), provider.name.clone()));
+        cx.notify();
+    }
+
+    /// Dispatcher untuk baris menu kartu provider di layar Providers.
+    pub fn provider_action(
+        &mut self,
+        provider_id: String,
+        code: u8,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(provider) = self
+            .active()
+            .and_then(|entry| entry.snapshot.as_ref())
+            .and_then(|snapshot| {
+                snapshot
+                    .providers
+                    .iter()
+                    .find(|provider| provider.id == provider_id)
+            })
+            .cloned()
+        else {
+            return;
+        };
+        self.actions = None;
+        match code {
+            0 => self.edit_provider(&provider, 2, window, cx),
+            1 => self.edit_provider(&provider, 3, window, cx),
+            2 => self.open_model_picker(Some(provider.id.clone()), window, cx),
+            3 if provider.can_toggle => {
+                let success = if provider.enabled {
+                    "Provider dinonaktifkan"
+                } else {
+                    "Provider diaktifkan"
+                };
+                self.apply_op(
+                    EditOp::SetEnabled {
+                        provider_id: provider.id.clone(),
+                        enabled: !provider.enabled,
+                    },
+                    success,
+                    cx,
+                );
+            }
+            4 => {
+                let title = format!("Lupakan kredensial {}", provider.name);
+                let body = format!(
+                    "Kredensial tersimpan untuk `{}` akan dihapus. Harness berhenti \
+                     menawarkan provider ini bila tidak ada sumber key lain. File \
+                     config tetap di-backup.",
+                    provider.id
+                );
+                self.confirm_op(
+                    title,
+                    body,
+                    "Lupakan",
+                    EditOp::ForgetKey {
+                        provider_id: provider.id.clone(),
+                    },
+                    "Kredensial dilupakan",
+                    cx,
+                );
+            }
+            5 => {
+                let title = format!("Hapus {}", provider.name);
+                let body = format!(
+                    "Entry provider `{}` beserta modelnya akan dihapus dari config. \
+                     Backup dibuat sebelum penulisan.",
+                    provider.id
+                );
+                self.confirm_op(
+                    title,
+                    body,
+                    "Hapus",
+                    EditOp::Remove {
+                        provider_id: provider.id.clone(),
+                    },
+                    "Provider dihapus",
+                    cx,
+                );
+            }
+            _ => {}
+        }
     }
 }
 
@@ -380,6 +646,15 @@ impl Render for App {
         if self.picker {
             root = root.child(self.picker_overlay(&p, cx));
         }
+        if self.model_picker {
+            root = root.child(self.model_picker_overlay(&p, cx));
+        }
+        if let Some((provider_id, provider_name)) = self.actions.clone() {
+            root = root.child(self.actions_overlay(provider_id, provider_name, &p, cx));
+        }
+        if self.confirm.is_some() {
+            root = root.child(self.confirm_overlay(&p, cx));
+        }
         root
     }
 }
@@ -388,6 +663,12 @@ impl App {
     /// Layar selain Providers dibuka dari kotak aksi di layar Providers atau
     /// dari ikon cog (Pengaturan), jadi jalan pulangnya harus selalu ada.
     fn back_bar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let editing = self.nav == Nav::Add && self.add.read(cx).is_editing();
+        let label = if editing {
+            "Ubah provider"
+        } else {
+            self.nav.label()
+        };
         h_flex()
             .flex_shrink_0()
             .px(px(20.))
@@ -413,7 +694,7 @@ impl App {
                 div()
                     .text_size(px(11.))
                     .text_color(p.ink_muted)
-                    .child(format!("· {}", self.nav.label())),
+                    .child(format!("· {label}")),
             )
             .child(div().flex_1())
             .child(
@@ -666,7 +947,7 @@ impl App {
                         div()
                             .text_size(px(10.))
                             .text_color(p.ink_muted)
-                            .child("read-only spike"),
+                            .child("config manager · backup otomatis"),
                     ),
             )
     }
@@ -834,15 +1115,467 @@ impl App {
                     .child(options),
             )
     }
+
+    /// Overlay pemilih model default. Daftar diambil dari snapshot harness
+    /// aktif, jadi yang bisa dipilih hanya model yang benar-benar ada di config.
+    fn model_picker_overlay(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let query = self.model_query_text.trim().to_lowercase();
+        let snapshot = self.active().and_then(|entry| entry.snapshot.as_ref());
+        let current = snapshot.and_then(|s| s.default_provider.clone().zip(s.default_model.clone()));
+        let filter_name = self.model_provider.as_ref().and_then(|id| {
+            snapshot.and_then(|s| {
+                s.providers
+                    .iter()
+                    .find(|provider| &provider.id == id)
+                    .map(|provider| provider.name.clone())
+            })
+        });
+
+        let mut rows = v_flex().gap(px(1.));
+        let mut shown = 0usize;
+        if let Some(snapshot) = snapshot {
+            for provider in &snapshot.providers {
+                if let Some(filter) = &self.model_provider {
+                    if &provider.id != filter {
+                        continue;
+                    }
+                }
+                for model in &provider.models {
+                    let hay = format!(
+                        "{} {} {} {}",
+                        provider.id,
+                        provider.name,
+                        model.id,
+                        model.name.clone().unwrap_or_default()
+                    )
+                    .to_lowercase();
+                    if !query.is_empty() && !hay.contains(&query) {
+                        continue;
+                    }
+                    shown += 1;
+                    let is_current = current
+                        .as_ref()
+                        .is_some_and(|(default_provider, default_model)| {
+                            default_provider == &provider.id && default_model == &model.id
+                        });
+                    let provider_id = provider.id.clone();
+                    let model_id = model.id.clone();
+                    rows = rows.child(
+                        h_flex()
+                            .id(ElementId::Name(
+                                format!("pick-model-{}-{}", provider.id, model.id).into(),
+                            ))
+                            .px(px(10.))
+                            .py(px(6.))
+                            .gap(px(8.))
+                            .items_center()
+                            .rounded(px(8.))
+                            .cursor_pointer()
+                            .when(is_current, |s| s.bg(p.brand_soft))
+                            .when(!is_current, |s| s.hover(|s| s.bg(p.canvas)))
+                            .child(
+                                div()
+                                    .w(px(118.))
+                                    .flex_shrink_0()
+                                    .truncate()
+                                    .text_size(px(11.))
+                                    .text_color(p.ink_muted)
+                                    .child(provider.name.clone()),
+                            )
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .child(
+                                        div()
+                                            .truncate()
+                                            .text_size(px(12.))
+                                            .font_family(palette::MONO)
+                                            .child(model.id.clone()),
+                                    )
+                                    .when_some(model.name.clone(), |s, name| {
+                                        s.child(
+                                            div()
+                                                .truncate()
+                                                .text_size(px(9.5))
+                                                .text_color(p.ink_muted)
+                                                .child(name),
+                                        )
+                                    }),
+                            )
+                            .when(is_current, |s| {
+                                s.child(
+                                    div()
+                                        .text_size(px(12.))
+                                        .text_color(p.brand_text)
+                                        .child(IconName::Check),
+                                )
+                            })
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.choose_default_model(
+                                    provider_id.clone(),
+                                    model_id.clone(),
+                                    cx,
+                                )
+                            })),
+                    );
+                }
+            }
+        }
+
+        if shown == 0 {
+            rows = rows.child(
+                v_flex()
+                    .py(px(24.))
+                    .items_center()
+                    .gap(px(3.))
+                    .child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child("Tidak ada model yang cocok."),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.5))
+                            .text_color(p.ink_muted)
+                            .child("Kosongkan pencarian atau pilih provider lain."),
+                    ),
+            );
+        }
+
+        let title = match &filter_name {
+            Some(name) => format!("Model default · {name}"),
+            None => "Pilih model default".to_string(),
+        };
+
+        div()
+            .id("model-picker-backdrop")
+            .absolute()
+            .top(px(0.))
+            .left(px(0.))
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(black().opacity(0.4))
+            .on_click(cx.listener(|this, _, _, cx| this.close_model_picker(cx)))
+            .child(
+                v_flex()
+                    .id("model-picker-card")
+                    .w(px(520.))
+                    .gap(px(10.))
+                    .p(px(14.))
+                    .rounded(px(14.))
+                    .bg(p.surface)
+                    .border_1()
+                    .border_color(p.line)
+                    .shadow_lg()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        h_flex()
+                            .gap(px(8.))
+                            .items_start()
+                            .child(
+                                v_flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .gap(px(2.))
+                                    .child(
+                                        div()
+                                            .text_size(px(14.))
+                                            .font_weight(FontWeight::BOLD)
+                                            .child(title),
+                                    )
+                                    .child(
+                                        div()
+                                            .text_size(px(10.5))
+                                            .text_color(p.ink_muted)
+                                            .child(
+                                                "Model ini yang dipakai harness saat tidak \
+                                                 ada model yang ditentukan per sesi.",
+                                            ),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .id("model-picker-close")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(24.))
+                                    .rounded(px(7.))
+                                    .cursor_pointer()
+                                    .text_color(p.ink_muted)
+                                    .hover(|s| s.bg(p.canvas).text_color(p.ink))
+                                    .child(IconName::Close)
+                                    .on_click(
+                                        cx.listener(|this, _, _, cx| this.close_model_picker(cx)),
+                                    ),
+                            ),
+                    )
+                    .child(palette::text_input(
+                        p,
+                        &self.model_query,
+                        IconName::Search,
+                    ))
+                    .child(
+                        v_flex()
+                            .id("model-picker-scroll")
+                            .max_h(px(420.))
+                            .overflow_y_scroll()
+                            .child(rows),
+                    ),
+            )
+    }
+
+    /// Overlay menu aksi provider. Barisnya sama dengan `provider_actions`,
+    /// dipakai bersama dispatcher agar tidak ada aksi yang hanya tampil.
+    fn actions_overlay(
+        &self,
+        provider_id: String,
+        provider_name: String,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let provider = self
+            .active()
+            .and_then(|entry| entry.snapshot.as_ref())
+            .and_then(|snapshot| {
+                snapshot
+                    .providers
+                    .iter()
+                    .find(|provider| provider.id == provider_id)
+            })
+            .cloned();
+
+        let mut rows = v_flex().gap(px(2.));
+        if let Some(provider) = &provider {
+            for (code, label, hint) in provider_actions(provider) {
+                let id = provider_id.clone();
+                rows = rows.child(
+                    v_flex()
+                        .id(ElementId::Name(format!("action-{code}-{id}").into()))
+                        .px(px(9.))
+                        .py(px(6.))
+                        .rounded(px(8.))
+                        .cursor_pointer()
+                        .hover(|s| s.bg(p.canvas))
+                        .child(div().text_size(px(12.5)).child(label))
+                        .child(
+                            div()
+                                .text_size(px(9.5))
+                                .font_family(palette::MONO)
+                                .text_color(p.ink_muted)
+                                .child(hint),
+                        )
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.provider_action(id.clone(), code, window, cx)
+                        })),
+                );
+            }
+        }
+
+        div()
+            .id("actions-backdrop")
+            .absolute()
+            .top(px(0.))
+            .left(px(0.))
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(black().opacity(0.4))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.actions = None;
+                cx.notify();
+            }))
+            .child(
+                v_flex()
+                    .id("actions-card")
+                    .w(px(430.))
+                    .gap(px(6.))
+                    .p(px(14.))
+                    .rounded(px(14.))
+                    .bg(p.surface)
+                    .border_1()
+                    .border_color(p.line)
+                    .shadow_lg()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        h_flex()
+                            .gap(px(8.))
+                            .items_center()
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(px(14.))
+                                    .font_weight(FontWeight::BOLD)
+                                    .child(format!("{provider_name} · {provider_id}")),
+                            )
+                            .child(
+                                div()
+                                    .id("actions-close")
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(24.))
+                                    .rounded(px(7.))
+                                    .cursor_pointer()
+                                    .text_color(p.ink_muted)
+                                    .hover(|s| s.bg(p.canvas).text_color(p.ink))
+                                    .child(IconName::Close)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.actions = None;
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(10.5))
+                            .text_color(p.ink_muted)
+                            .child(
+                                "Aksi langsung menulis config; backup dibuat \
+                                 otomatis sebelum penulisan.",
+                            ),
+                    )
+                    .child(rows),
+            )
+    }
+
+    /// Overlay konfirmasi untuk aksi destruktif.
+    fn confirm_overlay(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let Some(state) = &self.confirm else {
+            return div().into_any_element();
+        };
+        let title = state.title.clone();
+        let body = state.body.clone();
+        let ok_text = state.ok_text;
+        let success = state.success;
+        let op = state.op.clone();
+
+        div()
+            .id("confirm-backdrop")
+            .absolute()
+            .top(px(0.))
+            .left(px(0.))
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(black().opacity(0.4))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.confirm = None;
+                cx.notify();
+            }))
+            .child(
+                v_flex()
+                    .id("confirm-card")
+                    .w(px(440.))
+                    .gap(px(10.))
+                    .p(px(14.))
+                    .rounded(px(14.))
+                    .bg(p.surface)
+                    .border_1()
+                    .border_color(p.line)
+                    .shadow_lg()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .font_weight(FontWeight::BOLD)
+                            .child(title),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(p.ink_secondary)
+                            .child(body),
+                    )
+                    .child(
+                        h_flex()
+                            .gap(px(8.))
+                            .justify_end()
+                            .child(
+                                palette::soft_button(p, "confirm-cancel", "Batal").on_click(
+                                    cx.listener(|this, _, _, cx| {
+                                        this.confirm = None;
+                                        cx.notify();
+                                    }),
+                                ),
+                            )
+                            .child(
+                                palette::brand_button(p, "confirm-ok", ok_text).on_click(
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.confirm = None;
+                                        this.apply_op(op.clone(), success, cx);
+                                    }),
+                                ),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+}
+
+/// Baris menu yang tersedia untuk satu provider. Dipakai overlay aksi supaya
+/// aksi yang tidak relevan (mis. key env tidak bisa dilupakan) tidak muncul.
+fn provider_actions(provider: &ProviderSummary) -> Vec<(u8, String, String)> {
+    let mut actions: Vec<(u8, String, String)> = vec![
+        (
+            0,
+            "Edit provider".into(),
+            "nama, endpoint, key, dan model".into(),
+        ),
+        (
+            1,
+            "Kelola model".into(),
+            format!("{} model terpasang", provider.models.len()),
+        ),
+    ];
+    if !provider.models.is_empty() {
+        actions.push((
+            2,
+            "Jadikan model default".into(),
+            "pilih model default harness".into(),
+        ));
+    }
+    if provider.can_toggle {
+        actions.push((
+            3,
+            if provider.enabled {
+                "Nonaktifkan".to_string()
+            } else {
+                "Aktifkan".to_string()
+            },
+            "EditOp::SetEnabled · reversible".into(),
+        ));
+    }
+    if provider.key_stored {
+        actions.push((
+            4,
+            "Lupakan kredensial".into(),
+            "hapus key tersimpan · backup dulu".into(),
+        ));
+    }
+    actions.push((
+        5,
+        "Hapus provider".into(),
+        "hapus entry dari config · backup dulu".into(),
+    ));
+    actions
 }
 
 /// Petunjuk singkat di kanan tab: apa yang bisa dilakukan di layar itu.
 fn active_hint(nav: Nav) -> &'static str {
     match nav {
         Nav::Providers => "klik … pada kartu untuk aksi",
-        Nav::Add => "3 langkah · berakhir di pratinjau",
-        Nav::Diff => "read-only · Apply nonaktif",
-        Nav::History => "dialog restore tidak menulis apa pun",
+        Nav::Add => "3 langkah · pratinjau lalu tulis",
+        Nav::Diff => "hanya pratinjau · tidak menulis",
+        Nav::History => "restore belum aktif",
         Nav::Settings => "tema & bahasa tersimpan di sesi",
     }
 }

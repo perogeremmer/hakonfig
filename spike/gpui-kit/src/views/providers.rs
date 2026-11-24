@@ -8,12 +8,11 @@ use gpui_kit::component::{
     h_flex,
     switch::Switch,
     v_flex,
-    WindowExt as _,
 };
 use gpui_kit::assets::IconName;
 use gpui_kit::prelude::*;
 use gpui_kit::*;
-use hakonfig_core::engine::model::ProviderSummary;
+use hakonfig_core::engine::model::{EditOp, ProviderSummary};
 
 use crate::data::HarnessEntry;
 use crate::logos;
@@ -234,11 +233,11 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
         );
     }
 
-    if let Some(provider) = entry.snapshot.as_ref().and_then(|s| s.default_provider.clone()) {
-        if let Some(model) = entry.snapshot.as_ref().and_then(|s| s.default_model.clone()) {
-            column = column.child(default_model_card(p, &provider, &model));
-        }
-    }
+    let default = entry
+        .snapshot
+        .as_ref()
+        .and_then(|s| s.default_provider.clone().zip(s.default_model.clone()));
+    column = column.child(default_model_card(p, default.as_ref(), cx));
 
     let providers = app.visible_providers();
     column = column.child(
@@ -347,18 +346,7 @@ pub fn render(app: &App, p: &Palette, cx: &mut Context<App>) -> impl IntoElement
             .items_center()
             .text_size(px(10.5))
             .text_color(p.ink_muted)
-            .child("Spike read-only — tidak ada file yang ditulis.")
-            .when(app.dirty > 0, |s| {
-                s.child(
-                    div()
-                        .px(px(6.))
-                        .py(px(1.))
-                        .rounded_full()
-                        .bg(p.warn_bg)
-                        .text_color(p.warn_text)
-                        .child(format!("{} perubahan lokal", app.dirty)),
-                )
-            }),
+            .child("Setiap perubahan menulis config dan membuat backup otomatis."),
     );
 
     // Seluruh halaman yang menggulir. Sebelumnya hanya grid provider yang
@@ -684,89 +672,15 @@ fn config_files_card(
 }
 
 impl App {
-    /// Daftar aksi per provider. Semua baris sengaja tidak menulis apa pun:
-    /// spike ini read-only, tapi nama aksi + panggilan core-nya dicantumkan
-    /// supaya jelas apa yang harus diimplementasikan nanti.
-    fn show_actions(&self, window: &mut Window, cx: &mut Context<Self>, provider: &ProviderSummary) {
-        let p = palette::palette(cx);
-        let name = provider.name.clone();
-        let id = provider.id.clone();
-        let models = provider.models.len();
-        let has_stored_key = provider.key_stored;
-        let enabled = provider.enabled;
-
-        let actions: Vec<(String, String)> = vec![
-            (
-                "Edit provider".into(),
-                format!("api::preview_edit → EditOp::Upsert ({} model)", models),
-            ),
-            (
-                "Kelola model".into(),
-                "api::preview_edit → EditOp::SetModels".into(),
-            ),
-            (
-                "Jadikan default".into(),
-                "api::preview_edit → EditOp::SetDefault".into(),
-            ),
-            (
-                if enabled {
-                    "Nonaktifkan".to_string()
-                } else {
-                    "Aktifkan".to_string()
-                },
-                "api::preview_edit → EditOp::SetEnabled".into(),
-            ),
-            (
-                "Lupakan kredensial".into(),
-                if has_stored_key {
-                    "api::preview_edit → EditOp::ForgetKey".into()
-                } else {
-                    "tidak ada kredensial tersimpan".to_string()
-                },
-            ),
-            (
-                "Hapus provider".into(),
-                "api::preview_edit → EditOp::Remove".into(),
-            ),
-        ];
-        window.open_dialog(cx, move |dialog, _, _| {
-            // Closure dialog bisa dipanggil lebih dari sekali, jadi elemen
-            // dibangun ulang di dalam — jangan pindahkan `Div` keluar.
-            let mut rows = v_flex().gap(px(2.));
-            for (label, hint) in &actions {
-                rows = rows.child(
-                    v_flex()
-                        .px(px(8.))
-                        .py(px(5.))
-                        .rounded(px(7.))
-                        .hover(|s| s.bg(p.surface_muted))
-                        .child(div().text_size(px(12.5)).child(label.clone()))
-                        .child(
-                            div()
-                                .text_size(px(9.5))
-                                .font_family(palette::MONO)
-                                .text_color(p.ink_muted)
-                                .child(hint.clone()),
-                        ),
-                );
-            }
-
-            dialog.title(format!("{name} · {id}")).child(
-                v_flex()
-                    .gap(px(6.))
-                    .w(px(420.))
-                    .child(
-                        div()
-                            .text_size(px(11.))
-                            .text_color(p.ink_muted)
-                            .child(
-                                "Aksi di bawah belum aktif: spike read-only, tidak ada file yang ditulis. \
-                                 Baris kecil menunjukkan panggilan core yang akan dipakai.",
-                            ),
-                    )
-                    .child(rows),
-            )
-        });
+    /// Menu aksi provider dirender sebagai overlay di `App` (dialog bawaan
+    /// gpui-kit butuh root `Root`, sementara spike memasang `App` langsung).
+    fn show_actions(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+        provider: &ProviderSummary,
+    ) {
+        self.open_provider_actions(provider, cx);
     }
 }
 
@@ -780,7 +694,12 @@ fn open_folder(dir: &str) {
     let _ = std::process::Command::new(cmd).arg(dir).spawn();
 }
 
-fn default_model_card(p: &Palette, provider: &str, model: &str) -> impl IntoElement {
+fn default_model_card(
+    p: &Palette,
+    default: Option<&(String, String)>,
+    cx: &mut Context<App>,
+) -> impl IntoElement {
+    let has_default = default.is_some();
     v_flex()
         .gap(px(3.))
         .p(px(14.))
@@ -800,20 +719,41 @@ fn default_model_card(p: &Palette, provider: &str, model: &str) -> impl IntoElem
             h_flex()
                 .gap(px(8.))
                 .items_center()
+                .when_some(default, |s, (provider, model)| {
+                    s.child(
+                        div()
+                            .text_size(px(12.5))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(p.brand_text)
+                            .child(provider.clone()),
+                    )
+                    .child(
+                        div()
+                            .truncate()
+                            .text_size(px(12.5))
+                            .font_family(palette::MONO)
+                            .text_color(p.ink_secondary)
+                            .child(model.clone()),
+                    )
+                })
+                .when(!has_default, |s| {
+                    s.child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(p.ink_muted)
+                            .child("Belum diatur — pilih model yang dipakai harness."),
+                    )
+                })
+                .child(div().flex_1())
                 .child(
-                    div()
-                        .text_size(px(12.5))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(p.brand_text)
-                        .child(provider.to_string()),
-                )
-                .child(
-                    div()
-                        .text_size(px(12.5))
-                        .font_family(palette::MONO)
-                        .text_color(p.ink_secondary)
-                        .truncate()
-                        .child(model.to_string()),
+                    palette::soft_button(
+                        p,
+                        "default-change",
+                        if has_default { "Ganti" } else { "Pilih" },
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_model_picker(None, window, cx)
+                    })),
                 ),
         )
 }
@@ -930,18 +870,28 @@ fn provider_card(
                     Switch::new(("sw", ix))
                         .small()
                         .checked(enabled)
-                        .on_change(cx.listener(move |this, checked: &bool, _, cx| {
-                            if let Some(snap) = this
-                                .entries
-                                .get_mut(this.selected)
-                                .and_then(|e| e.snapshot.as_mut())
-                            {
-                                if let Some(target) = snap.providers.get_mut(ix) {
-                                    target.enabled = *checked;
-                                    this.dirty += 1;
+                        .when(!provider.can_toggle, |s| s.opacity(0.4))
+                        .on_change(cx.listener({
+                            let provider_id = provider.id.clone();
+                            let can_toggle = provider.can_toggle;
+                            move |this, checked: &bool, _, cx| {
+                                if !can_toggle {
+                                    return;
                                 }
+                                let success = if *checked {
+                                    "Provider diaktifkan"
+                                } else {
+                                    "Provider dinonaktifkan"
+                                };
+                                this.apply_op(
+                                    EditOp::SetEnabled {
+                                        provider_id: provider_id.clone(),
+                                        enabled: *checked,
+                                    },
+                                    success,
+                                    cx,
+                                );
                             }
-                            cx.notify();
                         })),
                 ),
         )

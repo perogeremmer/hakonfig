@@ -14,7 +14,9 @@ use gpui_kit::component::{
 use gpui_kit::prelude::*;
 use gpui_kit::*;
 use hakonfig_core::api;
-use hakonfig_core::engine::model::{EditOp, KeyMode, ModelDraft, ProviderDraft, TestResult};
+use hakonfig_core::engine::model::{
+    EditOp, KeyMode, ModelDraft, ProviderDraft, ProviderSummary, TestResult,
+};
 use hakonfig_core::engine::model::ProviderPreset;
 
 use crate::palette::{self, Palette};
@@ -68,12 +70,26 @@ fn field(p: &Palette, label: &str, input: Input) -> impl IntoElement {
         .child(input)
 }
 
+/// Dipancarkan setelah `apply_edit` berhasil, supaya `App` memuat ulang
+/// config dan menampilkan toast tanpa view ini perlu tahu tentang `App`.
+#[derive(Clone, Debug)]
+pub enum AddEvent {
+    Applied { message: String },
+}
+
 pub struct AddView {
     pub harness: String,
     step: u8,
     presets: Vec<ProviderPreset>,
     picked: Option<usize>,
     custom: bool,
+    /// Diisi saat form dibuka untuk provider yang sudah ada.
+    editing: Option<String>,
+    edit_models: Vec<ModelDraft>,
+    pending_op: Option<EditOp>,
+    applying: bool,
+    confirming: bool,
+    _apply_task: Option<Task<()>>,
 
     search: Entity<InputState>,
     _search_sub: Subscription,
@@ -101,6 +117,8 @@ pub struct AddView {
     preview: Option<Result<(usize, usize, Vec<String>), String>>,
     _preview_task: Option<Task<()>>,
 }
+
+impl EventEmitter<AddEvent> for AddView {}
 
 impl AddView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -147,6 +165,12 @@ impl AddView {
             presets: api::list_presets(),
             picked: None,
             custom: false,
+            editing: None,
+            edit_models: Vec::new(),
+            pending_op: None,
+            applying: false,
+            confirming: false,
+            _apply_task: None,
             search,
             _search_sub: search_sub,
             search_text: String::new(),
@@ -175,8 +199,70 @@ impl AddView {
             self.harness = harness;
             self.test = None;
             self.preview = None;
+            self.pending_op = None;
+            self.editing = None;
+            self.edit_models.clear();
+            self.applying = false;
+            self.confirming = false;
+            self.step = 1;
             cx.notify();
         }
+    }
+
+    /// True saat form dipakai untuk provider yang sudah ada.
+    pub fn is_editing(&self) -> bool {
+        self.editing.is_some()
+    }
+
+    /// Buka form dalam mode edit: field custom diisi data provider yang sudah
+    /// ada, model terpasang dipilih, dan key hanya diganti kalau diisi ulang.
+    pub fn begin_edit(
+        &mut self,
+        provider: &ProviderSummary,
+        step: u8,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.editing = Some(provider.id.clone());
+        self.edit_models = provider
+            .models
+            .iter()
+            .map(|model| ModelDraft {
+                id: model.id.clone(),
+                name: model.name.clone(),
+                context_window: model.context_window,
+                max_tokens: model.max_tokens,
+                reasoning: model.reasoning,
+            })
+            .collect();
+        self.selected_models = provider.models.iter().map(|m| m.id.clone()).collect();
+        self.picked = None;
+        self.custom = true;
+        self.step = step.clamp(2, 3);
+        self.test = None;
+        self.testing = false;
+        self.preview = None;
+        self.pending_op = None;
+        self.applying = false;
+        self.confirming = false;
+        self.key_text.clear();
+        self.key_mode_env = provider.key_mode == "env";
+
+        let id = provider.id.clone();
+        let name = provider.name.clone();
+        let base_url = provider.base_url.clone().unwrap_or_default();
+        let api = provider.api.clone().unwrap_or_default();
+        self.custom_id
+            .update(cx, |state, cx| state.set_value(id, window, cx));
+        self.custom_name
+            .update(cx, |state, cx| state.set_value(name, window, cx));
+        self.custom_base
+            .update(cx, |state, cx| state.set_value(base_url, window, cx));
+        self.custom_api
+            .update(cx, |state, cx| state.set_value(api, window, cx));
+        self.key_input
+            .update(cx, |state, cx| state.set_value("", window, cx));
+        cx.notify();
     }
 
     /// (id, name, base_url, api) — dari preset yang dipilih atau field Custom.
@@ -197,8 +283,26 @@ impl AddView {
         }
     }
 
-    /// Daftar model untuk langkah 3: preset dulu, fallback ke hasil tes koneksi.
+    /// Daftar model untuk langkah 3: model terpasang (saat edit), preset,
+    /// lalu fallback ke hasil tes koneksi.
     fn model_rows(&self) -> Vec<ModelDraft> {
+        if let Some(editing) = &self.editing {
+            let mut rows = self.edit_models.clone();
+            if let Some(preset) = self.presets.iter().find(|preset| &preset.id == editing) {
+                for model in &preset.models {
+                    if !rows.iter().any(|row| row.id == model.id) {
+                        rows.push(ModelDraft {
+                            id: model.id.clone(),
+                            name: model.name.clone(),
+                            context_window: model.context_window,
+                            max_tokens: model.max_tokens,
+                            reasoning: model.reasoning,
+                        });
+                    }
+                }
+            }
+            return rows;
+        }
         if !self.custom {
             if let Some(pr) = self.picked.and_then(|ix| self.presets.get(ix)) {
                 if !pr.models.is_empty() {
@@ -250,6 +354,11 @@ impl AddView {
         self.test = None;
         self.testing = false;
         self.preview = None;
+        self.pending_op = None;
+        self.editing = None;
+        self.edit_models.clear();
+        self.applying = false;
+        self.confirming = false;
         self.key_mode_env = false;
         self.selected_models.clear();
     }
@@ -327,6 +436,7 @@ impl AddView {
         };
         let harness = self.harness.clone();
         self.preview = None;
+        self.pending_op = Some(EditOp::Upsert(draft.clone()));
         self._preview_task = Some(cx.spawn(async move |this, cx| {
             let result = cx
                 .background_spawn(async move {
@@ -336,6 +446,148 @@ impl AddView {
                 .await;
             this.update(cx, |this, cx| {
                 this.preview = Some(result);
+                cx.notify();
+            })
+            .ok();
+        }));
+        cx.notify();
+    }
+
+    /// Konfirmasi sebelum menulis. Overlay dirender view ini karena dialog
+    /// bawaan gpui-kit butuh root `Root`.
+    fn confirm_apply(&mut self, cx: &mut Context<Self>) {
+        if self.pending_op.is_none() || !matches!(self.preview, Some(Ok(_))) {
+            return;
+        }
+        self.confirming = true;
+        cx.notify();
+    }
+
+    fn confirm_overlay(&self, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let Some(op) = self.pending_op.clone() else {
+            return div().into_any_element();
+        };
+        let Some(Ok((create, modify, warnings))) = self.preview.clone() else {
+            return div().into_any_element();
+        };
+
+        let mut warn_rows = v_flex().gap(px(3.));
+        for warning in &warnings {
+            warn_rows = warn_rows.child(
+                div()
+                    .px(px(8.))
+                    .py(px(4.))
+                    .rounded(px(6.))
+                    .bg(p.warn_bg)
+                    .text_color(p.warn_text)
+                    .text_size(px(10.5))
+                    .child(warning.clone()),
+            );
+        }
+
+        div()
+            .id("apply-backdrop")
+            .absolute()
+            .top(px(0.))
+            .left(px(0.))
+            .size_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(black().opacity(0.4))
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.confirming = false;
+                cx.notify();
+            }))
+            .child(
+                v_flex()
+                    .id("apply-card")
+                    .w(px(440.))
+                    .gap(px(10.))
+                    .p(px(14.))
+                    .rounded(px(14.))
+                    .bg(p.surface)
+                    .border_1()
+                    .border_color(p.line)
+                    .shadow_lg()
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .font_weight(FontWeight::BOLD)
+                            .child("Terapkan perubahan"),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(11.5))
+                            .text_color(p.ink_secondary)
+                            .child(format!(
+                                "{create} file baru, {modify} file diubah. Backup dibuat \
+                                 sebelum penulisan."
+                            )),
+                    )
+                    .when(!warnings.is_empty(), |s| s.child(warn_rows))
+                    .child(
+                        h_flex()
+                            .gap(px(8.))
+                            .justify_end()
+                            .child(
+                                palette::soft_button(p, "apply-cancel", "Batal").on_click(
+                                    cx.listener(|this, _, _, cx| {
+                                        this.confirming = false;
+                                        cx.notify();
+                                    }),
+                                ),
+                            )
+                            .child(
+                                palette::brand_button(p, "apply-ok", "Terapkan").on_click(
+                                    cx.listener(move |this, _, _, cx| {
+                                        this.confirming = false;
+                                        this.apply_now(op.clone(), cx);
+                                    }),
+                                ),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn apply_now(&mut self, op: EditOp, cx: &mut Context<Self>) {
+        if self.harness.is_empty() || self.applying {
+            return;
+        }
+        self.applying = true;
+        let harness = self.harness.clone();
+        self._apply_task = Some(cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_spawn(async move { api::apply_edit(harness, op) })
+                .await;
+            this.update(cx, |this, cx| {
+                this.applying = false;
+                match result {
+                    Ok(applied) => {
+                        this.step = 1;
+                        this.editing = None;
+                        this.edit_models.clear();
+                        this.pending_op = None;
+                        this.preview = None;
+                        this.selected_models.clear();
+                        this.test = None;
+                        this.key_text.clear();
+                        let mut message =
+                            format!("{} file ditulis", applied.files_written.len());
+                        if !applied.warnings.is_empty() {
+                            message.push_str(&format!(
+                                " · {} peringatan",
+                                applied.warnings.len()
+                            ));
+                        }
+                        cx.emit(AddEvent::Applied { message });
+                    }
+                    Err(error) => {
+                        this.preview = Some(Err(error));
+                    }
+                }
                 cx.notify();
             })
             .ok();
@@ -936,7 +1188,7 @@ impl AddView {
                         div()
                             .text_size(px(10.5))
                             .text_color(p.ink_muted)
-                            .child("Spike read-only — tidak ada file yang ditulis."),
+                            .child("Pratinjau dulu; penulisan lewat tombol Terapkan."),
                     ),
             );
         col
@@ -1014,6 +1266,7 @@ impl AddView {
         &self,
         p: &Palette,
         res: &Result<(usize, usize, Vec<String>), String>,
+        cx: &mut Context<Self>,
     ) -> impl IntoElement {
         match res {
             Ok((create, modify, warnings)) => v_flex()
@@ -1046,13 +1299,33 @@ impl AddView {
                             format!("{modify} file diubah"),
                             p.warn_bg,
                             p.warn_text,
-                        )),
+                        ))
+                        .child(div().flex_1())
+                        .child(
+                            palette::brand_button(
+                                p,
+                                "add-apply",
+                                if self.applying {
+                                    "Menulis…"
+                                } else {
+                                    "Terapkan"
+                                },
+                            )
+                            .when(!self.applying, |s| {
+                                s.on_click(
+                                    cx.listener(|this, _, _, cx| this.confirm_apply(cx)),
+                                )
+                            }),
+                        ),
                 )
                 .child(
                     div()
                         .text_size(px(10.5))
                         .text_color(p.ink_muted)
-                        .child("Read-only: apply_edit tidak dipanggil dari spike ini."),
+                        .child(
+                            "Pratinjau tidak menulis apa pun. Terapkan menulis config \
+                             setelah dialog konfirmasi; backup dibuat otomatis.",
+                        ),
                 )
                 .when(!warnings.is_empty(), |s| {
                     s.child(
@@ -1143,8 +1416,9 @@ impl Render for AddView {
             2 => self.step2(&p, meta.as_ref(), cx).into_any_element(),
             _ => self.step3(&p, cx).into_any_element(),
         };
+        let editing = self.editing.is_some();
 
-        v_flex()
+        let content = v_flex()
             .flex_1()
             .min_h_0()
             .min_w_0()
@@ -1162,13 +1436,17 @@ impl Render for AddView {
                                     .text_size(px(10.))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(p.ink_muted)
-                                    .child("TAMBAH PROVIDER"),
+                                    .child(if editing { "EDIT PROVIDER" } else { "TAMBAH PROVIDER" }),
                             )
                             .child(
                                 div()
                                     .text_size(px(18.))
                                     .font_weight(FontWeight::BOLD)
-                                    .child("Form tiga langkah"),
+                                    .child(if editing {
+                                        "Ubah provider"
+                                    } else {
+                                        "Form tiga langkah"
+                                    }),
                             ),
                     )
                     .child(div().flex_1())
@@ -1207,11 +1485,22 @@ impl Render for AddView {
                                 div()
                                     .flex_shrink_0()
                                     .pt(px(6.))
-                                    .child(self.preview_panel(&p, res)),
+                                    .child(self.preview_panel(&p, res, cx)),
                             )
                         },
                     ),
             )
-            .child(self.nav(&p, meta.is_some(), cx))
+            .child(self.nav(&p, meta.is_some(), cx));
+
+        let mut root = v_flex()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .min_w_0()
+            .child(content);
+        if self.confirming {
+            root = root.child(self.confirm_overlay(&p, cx));
+        }
+        root
     }
 }

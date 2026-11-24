@@ -59,6 +59,32 @@ xdotool search --name "spike gpui-kit" | tail -1 | xargs -I{} import -window {} 
 
 ## Log
 
+### 2026-11-24 15:00 · repo · aksi provider benar-benar menulis
+- Kerja: layar Providers sekarang mengubah config lewat `api::apply_edit`
+  (backup otomatis), bukan state lokal. Yang aktif: edit provider (form
+  terisi, key kosong mempertahankan key lama, model terpasang terpilih),
+  kelola model, jadikan/ ganti model default (picker dengan pencarian),
+  toggle aktif/nonaktif, lupakan kredensial, dan hapus provider. Aksi
+  destruktif memakai overlay konfirmasi; form Tambah/Edit punya tombol
+  Terapkan setelah pratinjau. Setelah tulis, config dibaca ulang, versi tool
+  yang sudah diprobe dipertahankan, dan hasilnya muncul sebagai toast.
+- File: `src/app.rs`, `src/views/providers.rs`, `src/views/add.rs`,
+  `FEATURES.md`, `PROGRESS.md`.
+- Verifikasi (HOME sandbox berisi config pi): set default → 1 file ditulis,
+  kartu default berubah; toggle → toast "Provider dinonaktifkan", config
+  dibaca ulang; edit provider → 105 model terpilih, hapus satu model,
+  pratinjau "1 file diubah", Terapkan + konfirmasi → 332 model, toast "1 file
+  ditulis · 3 peringatan"; menu Hapus menampilkan overlay konfirmasi dan
+  Batal tidak menulis.
+- Kendala: dialog bawaan gpui-kit (`window.open_dialog`) tidak muncul karena
+  aplikasi tidak dibungkus root `Root`. Menu aksi dan konfirmasi dibuat
+  sebagai overlay milik `App`/`AddView`. Form edit juga butuh tinggi pasti:
+  root view harus rantai `v_flex().flex_1().min_h_0()`, bukan `div().size_full()`,
+  kalau tidak nav bar terdorong keluar jendela saat daftar model panjang.
+- Catatan: satu percobaan klik tidak sengaja men-toggle provider di HOME asli;
+  config dipulihkan dari backup `20261124-150336-252` dan diverifikasi ulang
+  (pi: 5 provider, 333 model). Pengujian berikutnya memakai HOME salinan.
+
 ### 2026-11-23 23:52 · repo · logo asli harness & provider
 - Kerja: monogram dua huruf diganti logo asli dari `web/assets/providers/`
   (folder yang sama dengan GUI web, di-embed lewat `rust-embed`). Sidebar,

@@ -8,9 +8,9 @@ Legenda status: `[x]` selesai · `[~]` sedang dikerjakan · `[ ]` belum · `[!]`
 
 Aturan tetap untuk semua pekerjaan di spike ini:
 
-1. **Read-only.** Tidak ada yang boleh memanggil `api::apply_edit`,
-   `api::restore_backup`, atau `api::fix_notice`. Preview boleh
-   (`api::preview_edit`), menulis tidak.
+1. **Tulis hanya lewat core.** Penulisan config memakai `api::apply_edit`
+   (backup otomatis dibuat core); jangan menulis file config langsung.
+   `api::restore_backup` dan `api::fix_notice` masih belum dipakai.
 2. **Core tidak disentuh.** Semua data lewat `hakonfig_core::api`. Kalau sebuah
    fitur butuh data yang belum ada di core, catat di bagian "Butuh di core".
 3. **Satu view satu file.** `src/views/<nama>.rs` — jangan menyunting file view
@@ -40,10 +40,10 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 | F1 | Kartu provider: nama, id mono, base URL, jumlah model | [x] | `views/providers.rs` |
 | F2 | Penanda key: `✓ key tersimpan` / `env · NAMA` / `tanpa key` | [x] | `views/providers.rs` |
 | F3 | Pencarian provider (nama + id, langsung per ketikan) | [x] | `views/providers.rs` |
-| F4 | Toggle aktif/nonaktif per provider | [~] lokal saja, belum menulis | `views/providers.rs` |
-| F5 | Menu `…` per kartu: 6 aksi + panggilan core yang akan dipakai | [x] | `views/providers.rs` |
+| F4 | Toggle aktif/nonaktif per provider | [x] menulis via `EditOp::SetEnabled` | `views/providers.rs` |
+| F5 | Menu `…` per kartu: edit, kelola model, default, toggle, lupakan key, hapus | [x] | `views/providers.rs`, `src/app.rs` |
 | F6 | Filter cepat: semua / punya key / nonaktif | [ ] | `views/providers.rs` |
-| F7 | Kartu default model + tombol "Change" (picker lintas provider) | [~] tampil saja | `views/providers.rs` |
+| F7 | Kartu default model + picker model (cari, tandai default aktif) → `EditOp::SetDefault` | [x] | `views/providers.rs`, `src/app.rs` |
 | F8 | Masking key di semua tempat (`•••• 1a2b`), tidak pernah mentah | [x] | `views/providers.rs` |
 | F9 | Empty state (belum ada provider / hasil pencarian kosong) | [x] | `views/providers.rs` |
 
@@ -56,8 +56,10 @@ Aturan tetap untuk semua pekerjaan di spike ini:
 | F12 | "Test & find models": panggil endpoint provider, tampilkan ok/gagal + latensi + contoh model | [x] | `views/add.rs` |
 | F13 | Picker model: multi-pilih, cari, tandai context window + reasoning, pilih semua/kosongkan | [x] | `views/add.rs` |
 | F14 | Form lanjutan untuk Custom: id, display name, base URL, api type + validasi | [x] | `views/add.rs` |
-| F15 | Ringkasan + tombol "Pratinjau diff" yang memanggil `api::preview_edit` (bukan apply) | [x] | `views/add.rs` |
+| F15 | Ringkasan + tombol "Pratinjau diff" yang memanggil `api::preview_edit` | [x] | `views/add.rs` |
 | F16 | Stepper 1-2-3, tombol kembali, state tidak hilang saat pindah langkah | [x] | `views/add.rs` |
+| F16b | Mode edit provider: field terisi data yang ada, key kosong = pertahankan key lama, model terpasang terpilih | [x] | `views/add.rs`, `src/app.rs` |
+| F16c | Tombol Terapkan + konfirmasi overlay → `api::apply_edit`, lalu muat ulang + toast | [x] | `views/add.rs`, `src/app.rs` |
 
 ## D. Diff (pratinjau sebelum tulis)
 
