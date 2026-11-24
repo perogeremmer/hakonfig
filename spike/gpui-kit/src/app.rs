@@ -1511,7 +1511,7 @@ fn provider_actions(provider: &ProviderSummary) -> Vec<(u8, String, String)> {
         (
             0,
             "Edit provider".into(),
-            "nama, endpoint, key, dan model".into(),
+            "endpoint, key, dan model · nama/id terkunci".into(),
         ),
         (
             1,
@@ -1527,15 +1527,15 @@ fn provider_actions(provider: &ProviderSummary) -> Vec<(u8, String, String)> {
         ));
     }
     if provider.can_toggle {
-        actions.push((
-            3,
-            if provider.enabled {
-                "Nonaktifkan".to_string()
-            } else {
-                "Aktifkan".to_string()
-            },
-            "EditOp::SetEnabled · reversible".into(),
-        ));
+        let (label, hint) = if provider.enabled {
+            (
+                "Nonaktifkan",
+                "sembunyikan dari harness · bisa diaktifkan lagi",
+            )
+        } else {
+            ("Aktifkan", "tampilkan lagi di harness · config tetap utuh")
+        };
+        actions.push((3, label.to_string(), hint.to_string()));
     }
     if provider.key_stored {
         actions.push((
