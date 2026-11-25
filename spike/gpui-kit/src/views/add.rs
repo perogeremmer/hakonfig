@@ -132,6 +132,8 @@ pub struct AddView {
     synced: Vec<ModelDraft>,
     syncing: bool,
     sync_error: Option<String>,
+    /// Auto-sync hanya sekali per sesi form (bukan setiap kembali ke step 3).
+    auto_sync_done: bool,
     _sync_task: Option<Task<()>>,
 
     selected_models: HashSet<String>,
@@ -212,6 +214,7 @@ impl AddView {
             synced: Vec::new(),
             syncing: false,
             sync_error: None,
+            auto_sync_done: false,
             _sync_task: None,
             selected_models: HashSet::new(),
             preview: None,
@@ -317,6 +320,7 @@ impl AddView {
         self.synced.clear();
         self.syncing = false;
         self.sync_error = None;
+        self.auto_sync_done = false;
         self.preview = None;
         self.pending_op = None;
         self.applying = false;
@@ -339,6 +343,9 @@ impl AddView {
         self.key_input
             .update(cx, |state, cx| state.set_value("", window, cx));
         self.sync_key_placeholder(window, cx);
+        if self.step == 3 {
+            self.maybe_auto_sync(cx);
+        }
         cx.notify();
     }
 
@@ -455,6 +462,7 @@ impl AddView {
         self.synced.clear();
         self.syncing = false;
         self.sync_error = None;
+        self.auto_sync_done = false;
         self.preview = None;
         self.pending_op = None;
         self.editing = None;
@@ -465,10 +473,13 @@ impl AddView {
         self.selected_models.clear();
     }
 
-    fn goto_step3(&mut self) {
+    fn goto_step3(&mut self, cx: &mut Context<Self>) {
         self.selected_models = self.model_rows().iter().map(|m| m.id.clone()).collect();
         self.preview = None;
         self.step = 3;
+        // Daftar preset sering tertinggal dari endpoint (mis. DeepSeek chat /
+        // reasoner lama). Langsung ambil daftar asli saat halaman model dibuka.
+        self.maybe_auto_sync(cx);
     }
 
     fn run_test(&mut self, cx: &mut Context<Self>) {
@@ -500,6 +511,42 @@ impl AddView {
             .ok();
         }));
         cx.notify();
+    }
+
+    /// Auto-sync saat halaman model pertama kali dibuka, hanya bila ada
+    /// kredensial yang bisa dipakai. Gagal sync tetap menyisakan daftar preset.
+    fn maybe_auto_sync(&mut self, cx: &mut Context<Self>) {
+        if self.auto_sync_done || self.syncing {
+            return;
+        }
+        self.auto_sync_done = true;
+        let Some((id, _, _, _)) = self.provider_meta(cx) else {
+            return;
+        };
+        let keyless = self
+            .presets
+            .iter()
+            .find(|preset| preset.id == id)
+            .map(|preset| !preset.key_required)
+            .unwrap_or(false);
+        let env_value = self
+            .key_mode_env
+            .then(|| std::env::var(env_var_name(&id)).ok())
+            .flatten();
+        let editing_stored = self.editing.is_some()
+            && (!self.harness.is_empty())
+            && api::stored_key(self.harness.clone(), id.clone())
+                .ok()
+                .is_some_and(|value| !value.is_empty());
+        if !auto_sync_key_ready(
+            self.key_text.trim(),
+            env_value.as_deref(),
+            editing_stored,
+            keyless,
+        ) {
+            return;
+        }
+        self.run_sync(cx);
     }
 
     /// Ambil daftar model langsung dari endpoint provider yang sedang diisi.
@@ -1696,7 +1743,7 @@ impl AddView {
                         .when(!meta_ok, |s| s.opacity(0.5))
                         .on_click(cx.listener(|this, _, _, cx| {
                             if this.provider_meta(cx).is_some() {
-                                this.goto_step3();
+                                this.goto_step3(cx);
                                 cx.notify();
                             }
                         })),
@@ -1799,9 +1846,33 @@ impl Render for AddView {
     }
 }
 
+/// Auto-sync hanya berguna kalau endpoint bisa diautentikasi (atau memang
+/// keyless). Tanpa key, daftar preset tetap dipakai sebagai fallback.
+fn auto_sync_key_ready(
+    typed_key: &str,
+    env_key: Option<&str>,
+    editing_stored: bool,
+    keyless: bool,
+) -> bool {
+    !typed_key.trim().is_empty()
+        || env_key.is_some_and(|value| !value.trim().is_empty())
+        || editing_stored
+        || keyless
+}
+
 #[cfg(test)]
 mod tests {
-    use super::key_placeholder;
+    use super::{auto_sync_key_ready, key_placeholder};
+
+    #[test]
+    fn auto_sync_needs_a_usable_credential_or_keyless_preset() {
+        assert!(auto_sync_key_ready("sk-abc", None, false, false));
+        assert!(auto_sync_key_ready("", Some("sk-env"), false, false));
+        assert!(auto_sync_key_ready("", None, true, false));
+        assert!(auto_sync_key_ready("", None, false, true));
+        assert!(!auto_sync_key_ready("", None, false, false));
+        assert!(!auto_sync_key_ready("   ", Some("  "), false, false));
+    }
 
     #[test]
     fn key_placeholder_follows_provider_shape() {
