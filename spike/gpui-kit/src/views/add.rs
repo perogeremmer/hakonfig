@@ -234,15 +234,6 @@ impl AddView {
         }
     }
 
-    /// True bila form berisi pekerjaan yang akan hilang kalau harness berganti.
-    pub fn has_pending_work(&self, _cx: &App) -> bool {
-        self.editing.is_some()
-            || self.step >= 3
-            || !self.selected_models.is_empty()
-            || !self.synced.is_empty()
-            || !self.key_text.trim().is_empty()
-    }
-
     /// Buang seluruh isi form; dipakai saat pengguna keluar ke Providers.
     pub fn abandon(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.step = 1;

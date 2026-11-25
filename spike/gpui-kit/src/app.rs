@@ -293,12 +293,12 @@ impl App {
         if ix == self.selected {
             return;
         }
-        // Ganti harness akan mereset form Tambah/Edit. Jangan biarkan pengguna
-        // terlempar ke langkah 1 tanpa sadar kehilangan key/model yang dipilih.
-        if self.nav == Nav::Add && self.add.read(cx).has_pending_work(cx) {
+        // Selama form Tambah/Edit terbuka, harness dikunci: mengganti harness
+        // akan mereset form dan melempar pengguna ke langkah 1.
+        if self.nav == Nav::Add {
             self.toast = Some(
-                "Form provider belum selesai — selesaikan dulu, atau klik Providers \
-                 untuk membatalkannya."
+                "Form provider sedang terbuka — klik Providers untuk membatalkannya \
+                 sebelum pindah harness."
                     .to_string(),
             );
             self.toast_warn = true;
@@ -326,10 +326,10 @@ impl App {
     /// dipilih; yang belum ada ditambahkan ke daftar dan ke state.
     pub fn add_harness(&mut self, id: String, cx: &mut Context<Self>) {
         self.picker = false;
-        if self.nav == Nav::Add && self.add.read(cx).has_pending_work(cx) {
+        if self.nav == Nav::Add {
             self.toast = Some(
-                "Form provider belum selesai — selesaikan dulu, atau klik Providers \
-                 untuk membatalkannya."
+                "Form provider sedang terbuka — klik Providers untuk membatalkannya \
+                 sebelum pindah harness."
                     .to_string(),
             );
             self.toast_warn = true;
