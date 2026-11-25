@@ -821,7 +821,7 @@ impl AddView {
     fn step1(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
         let dark = palette::dark(cx);
         let q = self.search_text.trim().to_lowercase();
-        let mut grid = h_flex().flex_wrap().gap(px(10.)).items_start();
+        let mut grid = h_flex().w_full().flex_wrap().gap(px(10.)).items_start();
         let mut shown = 0usize;
         for (ix, pr) in self.presets.iter().enumerate() {
             if !q.is_empty() {
@@ -836,7 +836,10 @@ impl AddView {
         grid = grid.child(
             v_flex()
                 .id("preset-custom")
-                .w(px(230.))
+                .flex_grow(1.)
+                .flex_basis(px(220.))
+                .min_w(px(0.))
+                .max_w(px(360.))
                 .gap(px(6.))
                 .p(px(12.))
                 .rounded(px(12.))
@@ -931,7 +934,11 @@ impl AddView {
         };
         v_flex()
             .id(format!("preset-{}", pr.id))
-            .w(px(230.))
+            // Lebar mengikuti ruang: baris selalu penuh, tidak ada sisa di kanan.
+            .flex_grow(1.)
+            .flex_basis(px(220.))
+            .min_w(px(0.))
+            .max_w(px(360.))
             .gap(px(6.))
             .p(px(12.))
             .rounded(px(12.))
@@ -1003,7 +1010,7 @@ impl AddView {
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
         let dark = palette::dark(cx);
-        let mut col = v_flex().gap(px(12.)).max_w(px(560.));
+        let mut col = v_flex().w_full().gap(px(12.));
 
         if self.custom {
             let editing = self.editing.is_some();
