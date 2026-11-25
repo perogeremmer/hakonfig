@@ -1727,16 +1727,6 @@ impl AddView {
                 )
             })
             .child(div().flex_1())
-            .child(
-                div()
-                    .text_size(px(10.5))
-                    .text_color(p.ink_muted)
-                    .child(if self.harness.is_empty() {
-                        "Harness: belum dipilih".to_string()
-                    } else {
-                        format!("Harness: {}", self.harness)
-                    }),
-            )
             .when(step == 2, |s| {
                 s.child(
                     crate::palette::brand_button(p, "add-next", "Lanjut")
@@ -1791,14 +1781,7 @@ impl Render for AddView {
                                     .text_color(p.ink_muted)
                                     .child(if editing { "EDIT PROVIDER" } else { "TAMBAH PROVIDER" }),
                             )
-                            .when(editing, |s| {
-                                s.child(
-                                    div()
-                                        .text_size(px(18.))
-                                        .font_weight(FontWeight::BOLD)
-                                        .child("Ubah provider"),
-                                )
-                            }),
+
                     )
                     .child(div().flex_1()),
             )

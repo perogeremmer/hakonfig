@@ -260,10 +260,6 @@ impl App {
         list
     }
 
-    pub fn total_models(&self) -> usize {
-        self.entries.iter().map(HarnessEntry::model_count).sum()
-    }
-
     fn sync_views(&mut self, cx: &mut Context<Self>) {
         let harness = self.active_id();
         if !harness.is_empty() {
@@ -750,17 +746,6 @@ impl App {
                     ),
             )
             .child(div().flex_1())
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(p.ink_muted)
-                    .child(format!(
-                        "{} tool · {} provider · {} model",
-                        self.entries.len(),
-                        self.entries.iter().map(|e| e.provider_count).sum::<usize>(),
-                        self.total_models()
-                    )),
-            )
             .child(
                 div()
                     .id("open-settings")
