@@ -272,11 +272,6 @@ impl AddView {
         cx.notify();
     }
 
-    /// True saat form dipakai untuk provider yang sudah ada.
-    pub fn is_editing(&self) -> bool {
-        self.editing.is_some()
-    }
-
     /// Buka form dalam mode edit: field custom diisi data provider yang sudah
     /// ada, model terpasang dipilih, dan key hanya diganti kalau diisi ulang.
     pub fn begin_edit(

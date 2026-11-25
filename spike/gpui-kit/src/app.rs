@@ -685,12 +685,6 @@ impl App {
     /// Layar selain Providers dibuka dari kotak aksi di layar Providers atau
     /// dari ikon cog (Pengaturan), jadi jalan pulangnya harus selalu ada.
     fn back_bar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
-        let editing = self.nav == Nav::Add && self.add.read(cx).is_editing();
-        let label = if editing {
-            "Ubah provider"
-        } else {
-            self.nav.label()
-        };
         h_flex()
             .flex_shrink_0()
             .px(px(20.))
@@ -712,20 +706,7 @@ impl App {
                     .child("Providers")
                     .on_click(cx.listener(|this, _, window, cx| this.set_nav(Nav::Providers, window, cx))),
             )
-            .child(
-                div()
-                    .text_size(px(11.))
-                    .text_color(p.ink_muted)
-                    .child(format!("· {label}")),
-            )
             .child(div().flex_1())
-            .child(
-                div()
-                    .pr(px(4.))
-                    .text_size(px(10.5))
-                    .text_color(p.ink_muted)
-                    .child(active_hint(self.nav)),
-            )
     }
 
     fn topbar(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1594,13 +1575,4 @@ fn provider_actions(provider: &ProviderSummary) -> Vec<(u8, String, String)> {
     actions
 }
 
-/// Petunjuk singkat di kanan tab: apa yang bisa dilakukan di layar itu.
-fn active_hint(nav: Nav) -> &'static str {
-    match nav {
-        Nav::Providers => "klik … pada kartu untuk aksi",
-        Nav::Add => "3 langkah · pratinjau lalu tulis",
-        Nav::History => "restore belum aktif",
-        Nav::Settings => "tema tersimpan di sesi ini",
-    }
-}
 

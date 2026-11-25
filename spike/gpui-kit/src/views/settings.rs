@@ -1,8 +1,10 @@
-//! Layar "Pengaturan": tema dan tentang.
+//! Layar "Pengaturan": tema, bahasa, dan tentang.
 //!
-//! Read-only: tidak ada file konfigurasi yang ditulis. Skala tampilan, bahasa
-//! lokal, dan diagnostik sengaja tidak diporting ke spike — UI ini native,
-//! bukan webview, jadi zoom CSS dan i18n parsial hanya membingungkan.
+//! Read-only: tidak ada file konfigurasi yang ditulis. Skala tampilan dan
+//! diagnostik sengaja tidak diporting ke spike — UI ini native, bukan webview.
+//!
+//! Catatan bahasa: i18n global belum diporting; switch di sini hanya mengubah
+//! label pada halaman Pengaturan.
 
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::*;
@@ -10,11 +12,67 @@ use gpui_kit::*;
 
 use crate::palette::{self, Palette};
 
-pub struct SettingsView;
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum Lang {
+    #[default]
+    Id,
+    En,
+}
+
+/// Label halaman Pengaturan per bahasa.
+struct L {
+    title: &'static str,
+    subtitle: &'static str,
+    appearance: &'static str,
+    light: &'static str,
+    dark: &'static str,
+    language: &'static str,
+    about: &'static str,
+    about_source: &'static str,
+    about_note: &'static str,
+}
+
+impl Lang {
+    fn t(self) -> L {
+        match self {
+            Lang::Id => L {
+                title: "Pengaturan",
+                subtitle: "Tema, bahasa, dan informasi aplikasi.",
+                appearance: "Tampilan",
+                light: "Terang",
+                dark: "Gelap",
+                language: "Bahasa",
+                about: "Tentang",
+                about_source: "Kode sumber",
+                about_note: "Spike ini tidak menulis config harness; semua aksi menulis \
+                             tetap lewat aplikasi Hakonfig.",
+            },
+            Lang::En => L {
+                title: "Settings",
+                subtitle: "Theme, language, and app information.",
+                appearance: "Appearance",
+                light: "Light",
+                dark: "Dark",
+                language: "Language",
+                about: "About",
+                about_source: "Source code",
+                about_note: "This spike never writes harness config; all write actions stay \
+                             in the Hakonfig app.",
+            },
+        }
+    }
+}
+
+pub struct SettingsView {
+    /// Bahasa label halaman ini (lokal, bukan i18n global).
+    pub lang: Lang,
+}
 
 impl SettingsView {
     pub fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
-        Self
+        Self {
+            lang: Lang::default(),
+        }
     }
 }
 
@@ -22,21 +80,47 @@ impl Render for SettingsView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let p: Palette = palette::palette(cx);
         let dark = palette::dark(cx);
+        let l = self.lang.t();
 
         // --- Tampilan -------------------------------------------------------
         let appearance = card(&p)
-            .child(card_title("TAMPILAN", &p))
+            .child(card_title(l.appearance, &p))
             .child(
                 h_flex()
                     .gap(px(6.))
                     .items_center()
-                    .child(theme_pill("set-theme-light", "Terang", !dark, false, &p))
-                    .child(theme_pill("set-theme-dark", "Gelap", dark, true, &p)),
+                    .child(theme_pill("set-theme-light", l.light, !dark, false, &p))
+                    .child(theme_pill("set-theme-dark", l.dark, dark, true, &p)),
+            );
+
+        // --- Bahasa ---------------------------------------------------------
+        let language = card(&p)
+            .child(card_title(l.language, &p))
+            .child(
+                h_flex()
+                    .gap(px(6.))
+                    .items_center()
+                    .child(lang_pill(
+                        "set-lang-id",
+                        "Indonesia",
+                        self.lang == Lang::Id,
+                        Lang::Id,
+                        &p,
+                        cx,
+                    ))
+                    .child(lang_pill(
+                        "set-lang-en",
+                        "English",
+                        self.lang == Lang::En,
+                        Lang::En,
+                        &p,
+                        cx,
+                    )),
             );
 
         // --- Tentang --------------------------------------------------------
         let about = card(&p)
-            .child(card_title("TENTANG", &p))
+            .child(card_title(l.about, &p))
             .child(
                 h_flex()
                     .gap(px(11.))
@@ -75,16 +159,15 @@ impl Render for SettingsView {
                             ),
                     )
                     .child(chip_text(
-                        &p,
                         format!("v{}", env!("CARGO_PKG_VERSION")),
                         p.neutral_bg,
                         p.neutral_text,
                     ))
-                    .child(chip_text(&p, "MIT", p.ok_bg, p.ok_text)),
+                    .child(chip_text("MIT", p.ok_bg, p.ok_text)),
             )
             .child(div().h(px(1.)).w_full().bg(p.line))
             .child(row(
-                "Kode sumber",
+                l.about_source,
                 "github.com/perogeremmer/hakonfig".to_string(),
                 &p,
             ))
@@ -92,10 +175,7 @@ impl Render for SettingsView {
                 div()
                     .text_size(px(10.5))
                     .text_color(p.ink_muted)
-                    .child(
-                        "Spike ini tidak menulis config harness; semua aksi menulis \
-                         tetap lewat aplikasi Hakonfig.",
-                    ),
+                    .child(l.about_note),
             );
 
         v_flex()
@@ -117,16 +197,17 @@ impl Render for SettingsView {
                                 div()
                                     .text_size(px(20.))
                                     .font_weight(FontWeight::BOLD)
-                                    .child("Pengaturan"),
+                                    .child(l.title),
                             )
                             .child(
                                 div()
                                     .text_size(px(12.5))
                                     .text_color(p.ink_secondary)
-                                    .child("Tema dan informasi aplikasi."),
+                                    .child(l.subtitle),
                             ),
                     )
                     .child(appearance)
+                    .child(language)
                     .child(about),
             )
     }
@@ -179,7 +260,7 @@ fn row(label: &str, value: String, p: &Palette) -> Div {
         )
 }
 
-fn chip_text(_p: &Palette, text: impl Into<SharedString>, bg: Hsla, fg: Hsla) -> Div {
+fn chip_text(text: impl Into<SharedString>, bg: Hsla, fg: Hsla) -> Div {
     let text: SharedString = text.into();
     div()
         .px(px(7.))
@@ -222,4 +303,40 @@ fn theme_pill(
         })
         .child(label)
         .on_click(move |_, _, cx| palette::set_dark(want_dark, cx))
+}
+
+fn lang_pill(
+    id: &'static str,
+    label: &'static str,
+    active: bool,
+    lang: Lang,
+    p: &Palette,
+    cx: &mut Context<SettingsView>,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .px(px(11.))
+        .py(px(5.))
+        .rounded(px(8.))
+        .text_size(px(12.))
+        .cursor_pointer()
+        .when(active, |s| {
+            s.bg(p.brand_soft)
+                .text_color(p.brand_text)
+                .font_weight(FontWeight::SEMIBOLD)
+        })
+        .when(!active, |s| {
+            s.bg(p.surface)
+                .border_1()
+                .border_color(p.line)
+                .text_color(p.ink_secondary)
+                .hover(|s| s.border_color(p.line_strong))
+        })
+        .child(label)
+        .on_click(cx.listener(move |this, _, _, cx| {
+            if this.lang != lang {
+                this.lang = lang;
+                cx.notify();
+            }
+        }))
 }
