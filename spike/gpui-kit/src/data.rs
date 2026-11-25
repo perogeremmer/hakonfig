@@ -117,27 +117,4 @@ pub fn load_all(added: &[String]) -> (Vec<HarnessEntry>, u128) {
     (entries, started.elapsed().as_millis())
 }
 
-/// Ringkasan hasil load terakhir, dibagikan ke view lain lewat setter
-/// (`SettingsView::set_metrics`) alih-alih global GPUI.
-#[derive(Clone, Copy, Default)]
-#[allow(dead_code)] // dibaca view Pengaturan
-pub struct Metrics {
-    pub load_ms: u128,
-    pub data_ready_ms: Option<u128>,
-    pub harnesses: usize,
-    pub providers: usize,
-    pub models: usize,
-}
-
-impl Metrics {
-    pub fn of(entries: &[HarnessEntry], load_ms: u128, ready: Option<u128>) -> Self {
-        Self {
-            load_ms,
-            data_ready_ms: ready,
-            harnesses: entries.len(),
-            providers: entries.iter().map(|e| e.provider_count).sum(),
-            models: entries.iter().map(HarnessEntry::model_count).sum(),
-        }
-    }
-}
 

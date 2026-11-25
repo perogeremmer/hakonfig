@@ -17,7 +17,7 @@ use gpui_kit::*;
 use hakonfig_core::api;
 use hakonfig_core::engine::model::{EditOp, Notice, ProviderSummary};
 
-use crate::data::{catalog, load_all, load_notices, probe_versions, HarnessEntry, Metrics};
+use crate::data::{catalog, load_all, load_notices, probe_versions, HarnessEntry};
 use crate::logos;
 use crate::palette::{self, Palette};
 use crate::state;
@@ -279,14 +279,9 @@ impl App {
             });
             self._load_notices = Some(task);
         }
-        let metrics = Metrics::of(&self.entries, self.load_ms, self.data_ready_ms);
-        self.settings
-            .update(cx, |v, cx| v.set_metrics(metrics, cx));
         let id = self.active_id();
         self.add.update(cx, |v, cx| v.set_harness(id.clone(), cx));
-        self.history
-            .update(cx, |v, cx| v.set_harness(id.clone(), cx));
-        self.settings.update(cx, |v, cx| v.set_harness(id, cx));
+        self.history.update(cx, |v, cx| v.set_harness(id, cx));
     }
 
     pub fn select(&mut self, ix: usize, cx: &mut Context<Self>) {
@@ -1605,7 +1600,7 @@ fn active_hint(nav: Nav) -> &'static str {
         Nav::Providers => "klik … pada kartu untuk aksi",
         Nav::Add => "3 langkah · pratinjau lalu tulis",
         Nav::History => "restore belum aktif",
-        Nav::Settings => "tema & bahasa tersimpan di sesi",
+        Nav::Settings => "tema tersimpan di sesi ini",
     }
 }
 
