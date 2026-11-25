@@ -1737,16 +1737,14 @@ impl Render for AddView {
                                     .text_color(p.ink_muted)
                                     .child(if editing { "EDIT PROVIDER" } else { "TAMBAH PROVIDER" }),
                             )
-                            .child(
-                                div()
-                                    .text_size(px(18.))
-                                    .font_weight(FontWeight::BOLD)
-                                    .child(if editing {
-                                        "Ubah provider"
-                                    } else {
-                                        "Form tiga langkah"
-                                    }),
-                            ),
+                            .when(editing, |s| {
+                                s.child(
+                                    div()
+                                        .text_size(px(18.))
+                                        .font_weight(FontWeight::BOLD)
+                                        .child("Ubah provider"),
+                                )
+                            }),
                     )
                     .child(div().flex_1()),
             )
